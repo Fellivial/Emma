@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base Resets ──────────────────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0d0a0e;
+  color: #e8dfe6;
+  font-family: "Outfit", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 160, 191, 0.15);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 160, 191, 0.3);
+}
+
+/* ─── Selection ───────────────────────────────────────────────────────────── */
+
+::selection {
+  background: rgba(232, 160, 191, 0.25);
+  color: #fff;
+}
+
+/* ─── Focus Rings ─────────────────────────────────────────────────────────── */
+
+input:focus-visible,
+button:focus-visible {
+  outline: 1px solid rgba(232, 160, 191, 0.4);
+  outline-offset: 1px;
+}

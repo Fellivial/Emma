@@ -1,0 +1,77 @@
+"use client";
+
+import type { PersonaId, EmotionState, UserProfile } from "@/types/emma";
+import { getPersona } from "@/core/personas";
+
+const EMOTION_EMOJI: Record<string, string> = {
+  neutral: "😐", happy: "😊", sad: "😢", angry: "😠", anxious: "😰",
+  tired: "😴", excited: "🤩", frustrated: "😤", calm: "😌", stressed: "😬",
+};
+
+interface HeaderProps {
+  persona: PersonaId;
+  visionActive: boolean;
+  ttsBackend: string;
+  memoryCount: number;
+  scheduleCount: number;
+  activeUser: UserProfile;
+  currentEmotion: EmotionState | null;
+}
+
+export function Header(props: HeaderProps) {
+  const p = getPersona(props.persona);
+
+  return (
+    <header className="flex items-center justify-between px-5 py-2.5 border-b border-surface-border bg-emma-950/80 backdrop-blur-2xl shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+          <span className="font-display text-lg italic text-emma-950">E</span>
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold tracking-wider text-emma-300">EMMA</h1>
+            <span className="text-[9px] font-light text-emma-200/15 bg-emma-300/5 border border-emma-300/10 rounded px-1.5 py-0.5 uppercase tracking-wider">v1</span>
+          </div>
+          <p className="text-[10px] font-light text-emma-200/25 uppercase tracking-[0.15em]">Workspace Agent</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <Pill active={props.visionActive} color="emerald">👁️</Pill>
+        {props.memoryCount > 0 && <Pill color="purple">🧠{props.memoryCount}</Pill>}
+        {props.scheduleCount > 0 && <Pill color="blue">⏰{props.scheduleCount}</Pill>}
+        {props.currentEmotion && props.currentEmotion.confidence > 0.3 && (
+          <Pill>{EMOTION_EMOJI[props.currentEmotion.primary] || "😐"}</Pill>
+        )}
+        {/* Active user */}
+        <div className="flex items-center gap-1 text-[11px] font-light text-emma-200/30 bg-surface border border-surface-border rounded-full px-2.5 py-1"
+          style={{ borderColor: `${props.activeUser.color}20` }}
+        >
+          <span className="text-xs">{props.activeUser.avatar}</span>
+          {props.activeUser.name}
+        </div>
+        <Pill>🔊{props.ttsBackend === "elevenlabs" ? "EL" : "WS"}</Pill>
+        <div className="text-[10px] font-medium text-emma-300 bg-emma-300/10 border border-emma-300/20 rounded-full px-2.5 py-1">
+          {p.label}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Pill({ children, dot, active, color }: {
+  children: React.ReactNode; dot?: string; active?: boolean; color?: string;
+}) {
+  const colorMap: Record<string, string> = {
+    emerald: active ? "text-emerald-300/50 bg-emerald-400/5 border-emerald-400/15" : "",
+    purple: "text-purple-300/40 bg-purple-400/5 border-purple-400/10",
+    blue: active ? "text-blue-300/40 bg-blue-400/5 border-blue-400/10" : "text-emma-200/20 bg-surface border-surface-border",
+  };
+  const cls = (color && colorMap[color]) || "text-emma-200/25 bg-surface border-surface-border";
+  return (
+    <div className={`flex items-center gap-1 text-[10px] font-light rounded-full px-2 py-1 border ${cls}`}>
+      {dot && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: dot, boxShadow: `0 0 6px ${dot}` }} />}
+      {children}
+    </div>
+  );
+}
