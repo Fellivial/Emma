@@ -39,7 +39,8 @@ export type AuditResource =
   | "task"
   | "webhook"
   | "billing"
-  | "session";
+  | "session"
+  | "integration";
 
 export interface AuditEntry {
   userId: string;

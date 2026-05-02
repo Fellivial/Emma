@@ -163,7 +163,23 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        // Unhandled event — ignore
+        // Check for extra pack one-time purchase
+        if (eventName === "order_created") {
+          const orderVariantId = String(
+            event.data?.attributes?.first_order_item?.variant_id || ""
+          );
+          const extraPackVariantId = process.env.LEMONSQUEEZY_VARIANT_EXTRA_PACK;
+
+          if (orderVariantId && extraPackVariantId && orderVariantId === extraPackVariantId && userId) {
+            await supabase.from("extra_packs").insert({
+              user_id: userId,
+              tokens_granted: 500_000,
+              tokens_remaining: 500_000,
+              valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              purchase_ref: String(event.data?.id || ""),
+            });
+          }
+        }
         break;
     }
   } catch (err) {

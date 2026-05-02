@@ -51,39 +51,39 @@ describe("tool-registry", () => {
 });
 
 describe("rate-limiter", () => {
-  it("allows requests under limit", () => {
-    const result = checkRateLimit("test-client-1");
+  it("allows requests under limit", async () => {
+    const result = await checkRateLimit("test-client-1");
     expect(result.allowed).toBe(true);
     expect(result.current.tasks).toBe(0);
   });
 
-  it("tracks consumption", () => {
+  it("tracks consumption", async () => {
     const clientId = "test-client-consume-" + Date.now();
-    consumeRateLimit(clientId, 1, 5000);
-    const result = checkRateLimit(clientId);
+    await consumeRateLimit(clientId, 1, 5000);
+    const result = await checkRateLimit(clientId);
     expect(result.current.tasks).toBe(1);
     expect(result.current.tokens).toBe(5000);
   });
 
-  it("blocks when task limit exceeded", () => {
+  it("blocks when task limit exceeded", async () => {
     const clientId = "test-client-block-" + Date.now();
-    consumeRateLimit(clientId, 25, 0);
-    const result = checkRateLimit(clientId);
+    await consumeRateLimit(clientId, 25, 0);
+    const result = await checkRateLimit(clientId);
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("task_limit");
   });
 
-  it("blocks when token limit exceeded", () => {
+  it("blocks when token limit exceeded", async () => {
     const clientId = "test-client-tokens-" + Date.now();
-    consumeRateLimit(clientId, 1, 150_000);
-    const result = checkRateLimit(clientId);
+    await consumeRateLimit(clientId, 1, 150_000);
+    const result = await checkRateLimit(clientId);
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("token_limit");
   });
 
-  it("includes reset time", () => {
+  it("includes reset time", async () => {
     const clientId = "test-client-reset-" + Date.now();
-    const result = checkRateLimit(clientId);
+    const result = await checkRateLimit(clientId);
     expect(result.resetsAt).toBeGreaterThan(Date.now());
   });
 });

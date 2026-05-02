@@ -52,22 +52,38 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const signature = req.headers.get("x-emma-signature") || req.headers.get("x-webhook-signature");
 
-    if (signature) {
-      const expected = crypto
-        .createHmac("sha256", endpoint.secret)
-        .update(body)
-        .digest("hex");
+    // Signature is MANDATORY — reject if missing
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing signature" }, { status: 401 }
+      );
+    }
 
-      const sigValue = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+    const expected = crypto
+      .createHmac("sha256", endpoint.secret)
+      .update(body)
+      .digest("hex");
 
-      if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sigValue))) {
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
+    const sigValue = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+
+    // Use timing-safe comparison to prevent timing attacks
+    let signatureValid = false;
+    try {
+      signatureValid = crypto.timingSafeEqual(
+        Buffer.from(expected.padEnd(64, "0")),
+        Buffer.from(sigValue.padEnd(64, "0"))
+      );
+    } catch {
+      signatureValid = false;
+    }
+
+    if (!signatureValid || expected !== sigValue) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     // ── Rate limit check ─────────────────────────────────────────────────
     const clientId = endpoint.client_id;
-    const rateCheck = checkRateLimit(clientId);
+    const rateCheck = await checkRateLimit(clientId);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         {
@@ -112,7 +128,7 @@ export async function POST(req: NextRequest) {
     const result = await runAgentLoop(task);
 
     // ── Track rate limit ─────────────────────────────────────────────────
-    consumeRateLimit(clientId, 1, result.totalTokens);
+    await consumeRateLimit(clientId, 1, result.totalTokens);
 
     return NextResponse.json({
       taskId: result.taskId,

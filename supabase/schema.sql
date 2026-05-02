@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- EMMA Production Schema (consolidated)
--- Run this in Supabase SQL Editor → New Query → Paste → Run
+-- EMMA Production Schema (consolidated, idempotent)
+-- Safe to run multiple times — all statements use IF NOT EXISTS / IF EXISTS
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -50,9 +50,12 @@ create table if not exists public.clients (
   token_budget_monthly integer not null default 300000,
   token_budget_daily integer not null default 10714,
   message_limit_daily integer not null default 10,
+  plan_id text not null default 'free',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.clients add column if not exists plan_id text not null default 'free';
 
 create table if not exists public.client_members (
   client_id uuid references public.clients on delete cascade,
@@ -134,9 +137,16 @@ create table if not exists public.tasks (
   max_steps integer not null default 10,
   total_tokens integer not null default 0,
   summary text,
+  context_snapshot jsonb,
+  task_summary text,
+  steps_taken integer not null default 0,
   created_at timestamptz not null default now(),
   completed_at timestamptz
 );
+
+alter table public.tasks add column if not exists context_snapshot jsonb;
+alter table public.tasks add column if not exists task_summary text;
+alter table public.tasks add column if not exists steps_taken integer not null default 0;
 
 
 -- ─── 7. Action Log (tool call history) ──────────────────────────────────────
@@ -209,7 +219,7 @@ create table if not exists public.webhook_endpoints (
 );
 
 
--- ─── 11. Audit Log (append-only — no update/delete) ─────────────────────────
+-- ─── 11. Audit Log ──────────────────────────────────────────────────────────
 
 create table if not exists public.audit_log (
   id uuid default gen_random_uuid() primary key,
@@ -347,10 +357,112 @@ create table if not exists public.email_sequences (
   user_id uuid references auth.users not null,
   email text not null,
   template_id text not null,
-  status text not null default 'pending' check (status in ('pending', 'sent', 'opened', 'clicked', 'failed')),
+  status text not null default 'pending',
+  error_detail text,
   scheduled_for timestamptz not null,
   sent_at timestamptz,
   created_at timestamptz not null default now()
+);
+
+
+-- ─── 18. Rate Limit Counters ────────────────────────────────────────────────
+
+create table if not exists public.rate_limit_counters (
+  id uuid default gen_random_uuid() primary key,
+  client_id uuid not null,
+  hour_window timestamptz not null,
+  task_count integer not null default 0,
+  token_count bigint not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (client_id, hour_window)
+);
+
+
+-- ─── 19. Client Integrations ────────────────────────────────────────────────
+
+create table if not exists public.client_integrations (
+  id uuid default gen_random_uuid() primary key,
+  client_id uuid references public.clients on delete cascade not null,
+  service text not null check (service in ('gmail','google_calendar','slack','notion','hubspot')),
+  status text not null default 'disconnected' check (status in ('connected','disconnected','auth_expired','error')),
+  access_token text,
+  refresh_token text,
+  token_expires_at timestamptz,
+  account_identifier text,
+  last_used_at timestamptz,
+  last_error text,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (client_id, service)
+);
+
+create table if not exists public.oauth_states (
+  id uuid default gen_random_uuid() primary key,
+  state text unique not null,
+  client_id uuid references public.clients on delete cascade not null,
+  user_id uuid references auth.users not null,
+  service text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '10 minutes')
+);
+
+
+-- ─── 20. Usage Metering ─────────────────────────────────────────────────────
+
+create table if not exists public.usage_windows (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles on delete cascade not null,
+  window_type text not null check (window_type in ('daily','weekly','monthly')),
+  window_start timestamptz not null,
+  tokens_used bigint not null default 0,
+  messages_used integer not null default 0,
+  warning_sent boolean not null default false,
+  updated_at timestamptz not null default now(),
+  unique (user_id, window_type, window_start)
+);
+
+create table if not exists public.extra_packs (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles on delete cascade not null,
+  tokens_granted bigint not null,
+  tokens_remaining bigint not null,
+  valid_until timestamptz not null default (now() + interval '30 days'),
+  purchase_ref text,
+  created_at timestamptz not null default now()
+);
+
+
+-- ─── 21. Agent Task Summaries ───────────────────────────────────────────────
+
+create table if not exists public.agent_task_summaries (
+  id uuid default gen_random_uuid() primary key,
+  task_id text references public.tasks on delete cascade not null,
+  client_id uuid references public.clients on delete cascade,
+  user_id uuid references auth.users not null,
+  summary_text text not null,
+  context_snapshot jsonb,
+  tokens_used integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+
+-- ─── 22. Pattern Detections ─────────────────────────────────────────────────
+
+create table if not exists public.pattern_detections (
+  id uuid default gen_random_uuid() primary key,
+  client_id uuid references public.clients on delete cascade not null,
+  user_id uuid references auth.users not null,
+  pattern_type text not null check (pattern_type in ('daily_workflow','weekly_workflow','tool_sequence','trigger_time')),
+  workflow_id text,
+  tool_sequence text[],
+  recurrence jsonb not null,
+  status text not null default 'detected' check (status in ('detected','suggested','accepted','dismissed','scheduled','orphaned')),
+  suppressed_until timestamptz,
+  suggestion_text text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (client_id, user_id, pattern_type, workflow_id)
 );
 
 
@@ -377,66 +489,113 @@ alter table public.affiliate_referrals enable row level security;
 alter table public.trials enable row level security;
 alter table public.trial_events enable row level security;
 alter table public.email_sequences enable row level security;
+alter table public.client_integrations enable row level security;
+alter table public.oauth_states enable row level security;
+alter table public.usage_windows enable row level security;
+alter table public.extra_packs enable row level security;
+alter table public.agent_task_summaries enable row level security;
+alter table public.pattern_detections enable row level security;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- POLICIES (drop + create for idempotency)
+-- ═══════════════════════════════════════════════════════════════════════════
 
 -- Profiles
-create policy "Users read own profile" on public.profiles
-  for select using (auth.uid() = id);
-create policy "Users update own profile" on public.profiles
-  for update using (auth.uid() = id);
+drop policy if exists "Users read own profile" on public.profiles;
+create policy "Users read own profile" on public.profiles for select using (auth.uid() = id);
+drop policy if exists "Users update own profile" on public.profiles;
+create policy "Users update own profile" on public.profiles for update using (auth.uid() = id);
 
--- User data
-create policy "Users own memories" on public.memories
-  for all using (auth.uid() = user_id);
-create policy "Users own conversations" on public.conversations
-  for all using (auth.uid() = user_id);
-create policy "Users own messages" on public.messages
-  for all using (auth.uid() = user_id);
-create policy "Users own usage" on public.usage
-  for all using (auth.uid() = user_id);
+-- Memories
+drop policy if exists "Users own memories" on public.memories;
+create policy "Users own memories" on public.memories for all using (auth.uid() = user_id);
 
--- Clients (tenant-scoped)
-create policy "Members read own client" on public.clients
-  for select using (id in (select client_id from public.client_members where user_id = auth.uid()));
-create policy "Members read membership" on public.client_members
-  for select using (user_id = auth.uid());
+-- Conversations
+drop policy if exists "Users own conversations" on public.conversations;
+create policy "Users own conversations" on public.conversations for all using (auth.uid() = user_id);
 
--- Tasks + Actions (tenant-scoped)
-create policy "Members read tasks" on public.tasks
-  for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
-create policy "Members read actions" on public.action_log
-  for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
-create policy "Members manage approvals" on public.approvals
-  for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
-create policy "Members read schedules" on public.scheduled_tasks
-  for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
-create policy "Members read webhooks" on public.webhook_endpoints
-  for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+-- Messages
+drop policy if exists "Users own messages" on public.messages;
+create policy "Users own messages" on public.messages for all using (auth.uid() = user_id);
 
--- Audit log (append-only)
-create policy "Users read own audit" on public.audit_log
-  for select using (user_id = auth.uid()::text);
-create policy "Service inserts audit" on public.audit_log
-  for insert with check (true);
+-- Usage
+drop policy if exists "Users own usage" on public.usage;
+create policy "Users own usage" on public.usage for all using (auth.uid() = user_id);
+
+-- Clients
+drop policy if exists "Members read own client" on public.clients;
+create policy "Members read own client" on public.clients for select using (id in (select client_id from public.client_members where user_id = auth.uid()));
+drop policy if exists "Members read membership" on public.client_members;
+create policy "Members read membership" on public.client_members for select using (user_id = auth.uid());
+
+-- Tasks
+drop policy if exists "Members read tasks" on public.tasks;
+create policy "Members read tasks" on public.tasks for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Action Log
+drop policy if exists "Members read actions" on public.action_log;
+create policy "Members read actions" on public.action_log for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Approvals
+drop policy if exists "Members manage approvals" on public.approvals;
+create policy "Members manage approvals" on public.approvals for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Scheduled Tasks
+drop policy if exists "Members read schedules" on public.scheduled_tasks;
+create policy "Members read schedules" on public.scheduled_tasks for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Webhook Endpoints
+drop policy if exists "Members read webhooks" on public.webhook_endpoints;
+create policy "Members read webhooks" on public.webhook_endpoints for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Audit Log
+drop policy if exists "Users read own audit" on public.audit_log;
+create policy "Users read own audit" on public.audit_log for select using (user_id = auth.uid()::text);
+drop policy if exists "Service inserts audit" on public.audit_log;
+create policy "Service inserts audit" on public.audit_log for insert with check (true);
 
 -- Referrals
-create policy "Users see own referrals" on public.referrals
-  for select using (referrer_id = auth.uid());
-create policy "Service inserts referrals" on public.referrals
-  for insert with check (true);
+drop policy if exists "Users see own referrals" on public.referrals;
+create policy "Users see own referrals" on public.referrals for select using (referrer_id = auth.uid());
+drop policy if exists "Service inserts referrals" on public.referrals;
+create policy "Service inserts referrals" on public.referrals for insert with check (true);
 
 -- Affiliates
-create policy "Affiliates see own data" on public.affiliates
-  for select using (user_id = auth.uid());
-create policy "Affiliates see own referrals" on public.affiliate_referrals
-  for select using (affiliate_id in (select id from public.affiliates where user_id = auth.uid()));
+drop policy if exists "Affiliates see own data" on public.affiliates;
+create policy "Affiliates see own data" on public.affiliates for select using (user_id = auth.uid());
+drop policy if exists "Affiliates see own referrals" on public.affiliate_referrals;
+create policy "Affiliates see own referrals" on public.affiliate_referrals for select using (affiliate_id in (select id from public.affiliates where user_id = auth.uid()));
 
 -- Trials
-create policy "Users see own trial" on public.trials
-  for select using (user_id = auth.uid());
-create policy "Service manages trials" on public.trials
-  for all with check (true);
-create policy "Users see own trial events" on public.trial_events
-  for select using (user_id = auth.uid());
+drop policy if exists "Users see own trial" on public.trials;
+create policy "Users see own trial" on public.trials for select using (user_id = auth.uid());
+drop policy if exists "Service manages trials" on public.trials;
+create policy "Service manages trials" on public.trials for all with check (true);
+drop policy if exists "Users see own trial events" on public.trial_events;
+create policy "Users see own trial events" on public.trial_events for select using (user_id = auth.uid());
+
+-- Client Integrations
+drop policy if exists "Members manage integrations" on public.client_integrations;
+create policy "Members manage integrations" on public.client_integrations for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+drop policy if exists "Users manage own oauth states" on public.oauth_states;
+create policy "Users manage own oauth states" on public.oauth_states for all using (user_id = auth.uid());
+
+-- Usage Windows
+drop policy if exists "Users own usage windows" on public.usage_windows;
+create policy "Users own usage windows" on public.usage_windows for all using (auth.uid() = user_id);
+
+-- Extra Packs
+drop policy if exists "Users own extra packs" on public.extra_packs;
+create policy "Users own extra packs" on public.extra_packs for all using (auth.uid() = user_id);
+
+-- Agent Task Summaries
+drop policy if exists "Members read task summaries" on public.agent_task_summaries;
+create policy "Members read task summaries" on public.agent_task_summaries for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+
+-- Pattern Detections
+drop policy if exists "Members manage patterns" on public.pattern_detections;
+create policy "Members manage patterns" on public.pattern_detections for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -467,6 +626,69 @@ create index if not exists idx_trial_events_trial on public.trial_events (trial_
 create index if not exists idx_email_seq_pending on public.email_sequences (status, scheduled_for) where status = 'pending';
 create index if not exists idx_waitlist_v2_status on public.waitlist_v2 (status);
 create index if not exists idx_waitlist_v2_email on public.waitlist_v2 (email);
+create index if not exists idx_rate_limit_client_hour on public.rate_limit_counters (client_id, hour_window);
+create index if not exists idx_integrations_client on public.client_integrations (client_id, service);
+create index if not exists idx_oauth_states_state on public.oauth_states (state);
+create index if not exists idx_usage_windows_user_type on public.usage_windows (user_id, window_type, window_start desc);
+create index if not exists idx_extra_packs_user_valid on public.extra_packs (user_id, valid_until);
+create index if not exists idx_task_summaries_task on public.agent_task_summaries (task_id);
+create index if not exists idx_task_summaries_user on public.agent_task_summaries (user_id, created_at desc);
+create index if not exists idx_pattern_detections_client on public.pattern_detections (client_id, user_id, status);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- CONSTRAINTS (idempotent)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+alter table public.email_sequences add column if not exists error_detail text;
+
+alter table public.email_sequences drop constraint if exists email_sequences_status_check;
+alter table public.email_sequences add constraint email_sequences_status_check
+  check (status in ('pending','sending','sent','failed','skipped','opened','clicked'));
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- FUNCTIONS
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.increment_rate_limit(
+  p_client_id uuid,
+  p_hour_window timestamptz,
+  p_tasks integer default 1,
+  p_tokens bigint default 0
+) returns void as $$
+begin
+  insert into public.rate_limit_counters
+    (client_id, hour_window, task_count, token_count, updated_at)
+  values
+    (p_client_id, p_hour_window, p_tasks, p_tokens, now())
+  on conflict (client_id, hour_window)
+  do update set
+    task_count = rate_limit_counters.task_count + p_tasks,
+    token_count = rate_limit_counters.token_count + p_tokens,
+    updated_at = now();
+end;
+$$ language plpgsql;
+
+create or replace function public.increment_usage_window(
+  p_user_id uuid,
+  p_window_type text,
+  p_window_start timestamptz,
+  p_tokens bigint,
+  p_messages integer default 1
+) returns void as $$
+begin
+  insert into public.usage_windows
+    (user_id, window_type, window_start, tokens_used, messages_used, updated_at)
+  values
+    (p_user_id, p_window_type, p_window_start, p_tokens, p_messages, now())
+  on conflict (user_id, window_type, window_start)
+  do update set
+    tokens_used = usage_windows.tokens_used + p_tokens,
+    messages_used = usage_windows.messages_used + p_messages,
+    updated_at = now();
+end;
+$$ language plpgsql;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════

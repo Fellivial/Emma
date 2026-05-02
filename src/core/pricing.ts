@@ -97,7 +97,7 @@ export const PLANS: PlanTier[] = [
   },
   {
     id: "starter",
-    lemonVariantId: "991810",
+    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Starter",
     price: 29,
     tokenBudgetMonthly: STARTER_BUDGET,
@@ -123,7 +123,7 @@ export const PLANS: PlanTier[] = [
   },
   {
     id: "pro",
-    lemonVariantId: "1556220",
+    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Pro",
     price: 79,
     tokenBudgetMonthly: PRO_BUDGET,
@@ -155,7 +155,7 @@ export const PLANS: PlanTier[] = [
   },
   {
     id: "enterprise",
-    lemonVariantId: "1556227",
+    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Enterprise",
     price: 499,
     tokenBudgetMonthly: ENTERPRISE_BUDGET,
@@ -192,7 +192,7 @@ export const PLANS: PlanTier[] = [
 export const ADDONS: AddOn[] = [
   {
     id: "autonomous_basic",
-    lemonVariantId: "1556231",
+    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Autonomous Mode — Basic",
     price: 99,
     description: "Emma acts on her own: scheduled tasks, webhook triggers, 20 autonomous actions/hour. Approval gate for all high-risk actions.",
@@ -200,7 +200,7 @@ export const ADDONS: AddOn[] = [
   },
   {
     id: "autonomous_pro",
-    lemonVariantId: "1556232",
+    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Autonomous Mode — Pro",
     price: 199,
     description: "Everything in Basic + 50 autonomous actions/hour, priority queue, API access for external tool integrations.",

@@ -116,6 +116,9 @@ export default function SettingsPage() {
             <Link href="/refer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] text-emma-200/40 border border-surface-border hover:bg-surface transition-all">
               <Gift size={12} /> Refer
             </Link>
+            <Link href="/settings/integrations" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] text-emma-200/40 border border-surface-border hover:bg-surface transition-all">
+              🔌 Integrations
+            </Link>
             <button onClick={handleLogout} className="px-3 py-1.5 rounded-lg text-[11px] text-red-300/40 border border-red-400/10 hover:bg-red-400/5 transition-all cursor-pointer">
               Sign Out
             </button>

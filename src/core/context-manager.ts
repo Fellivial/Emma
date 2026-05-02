@@ -152,24 +152,19 @@ export function trimToFit(
   let current = [...messages];
 
   while (estimateTotalTokens(current) > budgetTokens && current.length > config.minMessagesToKeep) {
-    // Find first non-summary message to remove
+    // Find the first non-summary message to remove
+    // Never remove index 0 if it's a summary — it's the compressed history
     const removeIdx = current.findIndex(
       (m, i) =>
-        i > 0 || // Not first
-        !(typeof m.content === "string" && m.content.startsWith("[SUMMARY]"))
+        !(
+          i === 0 &&
+          typeof m.content === "string" &&
+          m.content.startsWith("[SUMMARY]")
+        )
     );
 
     if (removeIdx === -1 || current.length <= config.minMessagesToKeep) break;
-
-    // If removeIdx is 0 and it's a summary, skip to 1
-    const actualIdx = removeIdx === 0 &&
-      typeof current[0].content === "string" &&
-      current[0].content.startsWith("[SUMMARY]")
-        ? 1
-        : removeIdx;
-
-    if (actualIdx >= current.length) break;
-    current.splice(actualIdx, 1);
+    current.splice(removeIdx, 1);
   }
 
   return current;

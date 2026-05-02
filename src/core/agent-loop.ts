@@ -183,6 +183,24 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           }
 
           // ── Check risk level → approval gate ──────────────────────────
+
+          // Moderate tools: log prominently but execute immediately.
+          // Future: add per-user tier config to require approval here.
+          if (toolDef.riskLevel === "moderate") {
+            if (supabase) {
+              await supabase.from("action_log").insert({
+                task_id: task.id,
+                step_number: step,
+                action: toolName,
+                input: toolInput,
+                status: "completed",
+                risk_level: "moderate",
+                trigger_type: task.triggerType || "agent",
+              });
+            }
+            // Falls through to execution below — no pause
+          }
+
           if (toolDef.riskLevel === "dangerous") {
             // Create approval record and pause
             const approvalId = await createApproval(

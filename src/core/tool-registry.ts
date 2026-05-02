@@ -168,13 +168,35 @@ registerTool({
     required: ["to", "subject", "body"],
   },
   riskLevel: "dangerous",
-  handler: async (input) => {
-    // In production: integrate with SendGrid/Resend
-    return {
-      success: true,
-      output: `Email sent to ${input.to}: "${input.subject}"`,
-      data: input,
-    };
+  handler: async (input, context) => {
+    try {
+      const { GmailAdapter } = await import("@/core/integrations/google");
+      const adapter = new GmailAdapter();
+
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output: "Gmail integration not connected. Go to Settings → Integrations to connect Gmail.",
+        };
+      }
+
+      const result = await adapter.send(context.clientId || "", {
+        to: input.to,
+        subject: input.subject,
+        body: input.body,
+      });
+
+      return result;
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Gmail auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Email failed: ${err.message}` };
+    }
   },
 });
 
@@ -194,13 +216,37 @@ registerTool({
     required: ["title", "date", "time"],
   },
   riskLevel: "dangerous",
-  handler: async (input) => {
-    // In production: integrate with Google Calendar API
-    return {
-      success: true,
-      output: `Appointment booked: "${input.title}" on ${input.date} at ${input.time}`,
-      data: input,
-    };
+  handler: async (input, context) => {
+    try {
+      const { GoogleCalendarAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleCalendarAdapter();
+
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output: "Google Calendar integration not connected. Go to Settings → Integrations to connect.",
+        };
+      }
+
+      const result = await adapter.send(context.clientId || "", {
+        title: input.title,
+        date: input.date,
+        time: input.time,
+        duration_minutes: input.duration_minutes || 60,
+        attendees: input.attendees,
+      });
+
+      return result;
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Calendar auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Calendar failed: ${err.message}` };
+    }
   },
 });
 
@@ -217,12 +263,47 @@ registerTool({
   },
   riskLevel: "safe",
   handler: async (input, context) => {
-    // In production: query memories table
-    return {
-      success: true,
-      output: `Queried memories for category=${input.category || "all"}, keyword=${input.keyword || "none"}`,
-      data: { category: input.category, keyword: input.keyword },
-    };
+    try {
+      const { getMemoriesForUser } = await import("@/core/memory-db");
+      const memories = await getMemoriesForUser(
+        context.userId,
+        input.category as any
+      );
+
+      // Filter by keyword if provided
+      const keyword = (input.keyword as string || "").toLowerCase();
+      const filtered = keyword
+        ? memories.filter(
+            (m) =>
+              m.key.toLowerCase().includes(keyword) ||
+              m.value.toLowerCase().includes(keyword)
+          )
+        : memories;
+
+      if (filtered.length === 0) {
+        return {
+          success: true,
+          output: "No memories found matching the query.",
+          data: { count: 0, memories: [] },
+        };
+      }
+
+      const summary = filtered
+        .slice(0, 10) // Cap at 10 results to control token cost
+        .map((m) => `[${m.category}] ${m.key}: ${m.value}`)
+        .join("\n");
+
+      return {
+        success: true,
+        output: `Found ${filtered.length} memories:\n${summary}`,
+        data: { count: filtered.length, memories: filtered.slice(0, 10) },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: `Memory query failed: ${String(err)}`,
+      };
+    }
   },
 });
 

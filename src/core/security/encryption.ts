@@ -35,7 +35,19 @@ function getKey(): Buffer | null {
  */
 export function encrypt(plaintext: string): string {
   const key = getKey();
-  if (!key) return plaintext; // Graceful fallback — no key = no encryption
+  if (!key) {
+    // Warn once per process start — not per call (avoid log spam)
+    if (!(globalThis as any).__emmaEncryptionWarned) {
+      console.warn(
+        "[EMMA] WARNING: EMMA_ENCRYPTION_KEY is not set. " +
+        "Memory values and sensitive data are stored as PLAINTEXT. " +
+        "Set this env var before handling real user data. " +
+        "Generate with: openssl rand -hex 32"
+      );
+      (globalThis as any).__emmaEncryptionWarned = true;
+    }
+    return plaintext;
+  }
 
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);

@@ -26,8 +26,31 @@
     },
     "src/app/api/emma/webhook/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/emma/cron/email-sequences/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/emma/cron/scheduled-tasks/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/emma/cron/approvals-expiry/route.ts": {
+      "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/emma/cron/email-sequences",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/emma/cron/scheduled-tasks",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/emma/cron/approvals-expiry",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/emma",

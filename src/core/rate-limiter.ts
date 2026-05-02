@@ -1,9 +1,12 @@
 /**
- * Rate Limiter — prevents runaway autonomous task costs.
+ * Rate Limiter — DB-backed per-client hourly counter.
  *
- * Enforces: max N autonomous tasks per client per hour.
- * Uses in-memory counter with hourly reset.
- * Falls back to DB check for persistence across restarts.
+ * Uses Supabase as the persistent store so counters survive
+ * across Vercel serverless invocations (each request is a
+ * fresh process — in-memory Maps don't persist).
+ *
+ * When DB is unavailable (local dev, tests), falls back to an
+ * in-memory counter so the rate-limit logic still functions.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -11,29 +14,33 @@ import { createClient } from "@supabase/supabase-js";
 const DEFAULT_MAX_TASKS_PER_HOUR = 20;
 const DEFAULT_MAX_TOKENS_PER_HOUR = 100_000;
 
-// In-memory counters (fast path)
-const counters: Map<string, { tasks: number; tokens: number; resetAt: number }> = new Map();
-
-function getCounterKey(clientId: string): string {
-  return clientId;
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
 
-function getOrCreateCounter(clientId: string) {
-  const key = getCounterKey(clientId);
+function getCurrentHourWindow(): string {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  return now.toISOString();
+}
+
+// ─── In-memory fallback (for tests + local dev without DB) ────────────────
+
+const memCounters: Map<string, { tasks: number; tokens: number; resetAt: number }> = new Map();
+
+function getMemCounter(clientId: string) {
   const now = Date.now();
-  const existing = counters.get(key);
-
-  if (existing && existing.resetAt > now) {
-    return existing;
-  }
-
-  // Reset — new hour window
-  const counter = { tasks: 0, tokens: 0, resetAt: now + 3600_000 };
-  counters.set(key, counter);
+  const existing = memCounters.get(clientId);
+  if (existing && existing.resetAt > now) return existing;
+  const counter = { tasks: 0, tokens: 0, resetAt: now + 3_600_000 };
+  memCounters.set(clientId, counter);
   return counter;
 }
 
-// ─── Check ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -43,83 +50,103 @@ export interface RateLimitResult {
   resetsAt: number;
 }
 
-export function checkRateLimit(
+// ─── Check ────────────────────────────────────────────────────────────────
+
+export async function checkRateLimit(
   clientId: string,
   maxTasks: number = DEFAULT_MAX_TASKS_PER_HOUR,
   maxTokens: number = DEFAULT_MAX_TOKENS_PER_HOUR
-): RateLimitResult {
-  const counter = getOrCreateCounter(clientId);
+): Promise<RateLimitResult> {
+  const supabase = getSupabase();
+  const hourWindow = getCurrentHourWindow();
+  const resetsAt = new Date(hourWindow).getTime() + 3_600_000;
 
-  if (counter.tasks >= maxTasks) {
+  let taskCount = 0;
+  let tokenCount = 0;
+
+  if (supabase) {
+    // ── DB path (production) ──────────────────────────────────────────
+    try {
+      const { data } = await supabase
+        .from("rate_limit_counters")
+        .select("task_count, token_count")
+        .eq("client_id", clientId)
+        .eq("hour_window", hourWindow)
+        .single();
+
+      taskCount = data?.task_count || 0;
+      tokenCount = data?.token_count || 0;
+    } catch {
+      // DB error — fall through to in-memory
+      const mem = getMemCounter(clientId);
+      taskCount = mem.tasks;
+      tokenCount = mem.tokens;
+    }
+  } else {
+    // ── In-memory path (tests / local dev) ────────────────────────────
+    const mem = getMemCounter(clientId);
+    taskCount = mem.tasks;
+    tokenCount = mem.tokens;
+  }
+
+  if (taskCount >= maxTasks) {
     return {
       allowed: false,
       reason: "task_limit",
-      current: { tasks: counter.tasks, tokens: counter.tokens },
+      current: { tasks: taskCount, tokens: tokenCount },
       limits: { tasks: maxTasks, tokens: maxTokens },
-      resetsAt: counter.resetAt,
+      resetsAt,
     };
   }
 
-  if (counter.tokens >= maxTokens) {
+  if (tokenCount >= maxTokens) {
     return {
       allowed: false,
       reason: "token_limit",
-      current: { tasks: counter.tasks, tokens: counter.tokens },
+      current: { tasks: taskCount, tokens: tokenCount },
       limits: { tasks: maxTasks, tokens: maxTokens },
-      resetsAt: counter.resetAt,
+      resetsAt,
     };
   }
 
   return {
     allowed: true,
-    current: { tasks: counter.tasks, tokens: counter.tokens },
+    current: { tasks: taskCount, tokens: tokenCount },
     limits: { tasks: maxTasks, tokens: maxTokens },
-    resetsAt: counter.resetAt,
+    resetsAt,
   };
 }
 
-// ─── Consume ─────────────────────────────────────────────────────────────────
+// ─── Consume ─────────────────────────────────────────────────────────────
 
-export function consumeRateLimit(clientId: string, tasks: number = 1, tokens: number = 0): void {
-  const counter = getOrCreateCounter(clientId);
-  counter.tasks += tasks;
-  counter.tokens += tokens;
-}
+export async function consumeRateLimit(
+  clientId: string,
+  tasks: number = 1,
+  tokens: number = 0
+): Promise<void> {
+  const supabase = getSupabase();
 
-// ─── DB-backed check (for persistence across restarts) ───────────────────────
-
-export async function checkRateLimitFromDb(clientId: string): Promise<RateLimitResult> {
-  const supabase = (() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return null;
-    return createClient(url, key);
-  })();
-
-  if (!supabase) return checkRateLimit(clientId);
-
-  try {
-    const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
-
-    const { data, error } = await supabase
-      .from("action_log")
-      .select("id, token_cost")
-      .eq("client_id", clientId)
-      .gte("created_at", oneHourAgo)
-      .in("trigger_type", ["scheduled", "webhook", "agent"]);
-
-    if (error || !data) return checkRateLimit(clientId);
-
-    const taskCount = data.length;
-    const tokenCount = data.reduce((sum, row) => sum + (row.token_cost || 0), 0);
-
-    // Sync memory counter with DB
-    const counter = getOrCreateCounter(clientId);
-    counter.tasks = Math.max(counter.tasks, taskCount);
-    counter.tokens = Math.max(counter.tokens, tokenCount);
-
-    return checkRateLimit(clientId);
-  } catch {
-    return checkRateLimit(clientId);
+  if (supabase) {
+    // ── DB path ───────────────────────────────────────────────────────
+    const hourWindow = getCurrentHourWindow();
+    try {
+      await supabase.rpc("increment_rate_limit", {
+        p_client_id: clientId,
+        p_hour_window: hourWindow,
+        p_tasks: tasks,
+        p_tokens: tokens,
+      });
+    } catch (err) {
+      console.error("[RateLimit] consumeRateLimit failed:", err);
+      // Fallback to in-memory
+      const mem = getMemCounter(clientId);
+      mem.tasks += tasks;
+      mem.tokens += tokens;
+    }
+  } else {
+    // ── In-memory path ────────────────────────────────────────────────
+    const mem = getMemCounter(clientId);
+    mem.tasks += tasks;
+    mem.tokens += tokens;
   }
 }

@@ -7,6 +7,8 @@ import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
+import { checkUsage, recordUsage, markWarningSent, type EnforcementResult } from "@/core/usage-enforcer";
+import { loadClientConfigForUser } from "@/core/client-config";
 
 /**
  * Streaming brain route.
@@ -99,6 +101,41 @@ export async function POST(req: NextRequest) {
           reason: `Threat detected (${sanitised.threat}): ${sanitised.flags.join(", ")}`,
           metadata: { threat: sanitised.threat, flags: sanitised.flags },
         }).catch(() => {});
+      }
+    }
+
+    // ── Usage enforcement ─────────────────────────────────────────────────
+    let enforcementResult: EnforcementResult | null = null;
+    if (userId && userId !== "dev-user") {
+      try {
+        const clientConfig = await loadClientConfigForUser(userId);
+        const planId = (clientConfig as any)?.planId || "free";
+        const userTimezone = (body as any).userTimezone || "UTC";
+        const billingAnchorDay = (body as any).billingAnchorDay || 1;
+
+        enforcementResult = await checkUsage(userId, planId, userTimezone, billingAnchorDay);
+
+        if (enforcementResult.status === "blocked") {
+          const blockMsg = enforcementResult.message || "Mmm. You've used me a lot today. Grab some extra time?";
+          const blockBody = `data: ${JSON.stringify({
+            type: "done",
+            text: blockMsg,
+            raw: blockMsg,
+            commands: [],
+            routineId: null,
+            expression: "warm",
+            enforcement: {
+              status: "blocked",
+              upgradeUrl: enforcementResult.upgradeUrl,
+              window: enforcementResult.blockedWindow?.windowType,
+            },
+          })}\n\n`;
+          return new Response(blockBody, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          });
+        }
+      } catch {
+        // Fail open — never block due to metering bug
       }
     }
 
@@ -228,6 +265,23 @@ export async function POST(req: NextRequest) {
           // Persist usage tracking (non-blocking)
           if (userId && userId !== "dev-user") {
             incrementUsage(userId, 1, inputTokens + outputTokens).catch(() => {});
+
+            // Multi-window tracking
+            const planId = enforcementResult?.planId || "free";
+            recordUsage(
+              userId, inputTokens, outputTokens, planId,
+              (body as any).userTimezone || "UTC",
+              (body as any).billingAnchorDay || 1
+            ).catch(() => {});
+
+            // Mark warning sent if surfaced this request
+            if (enforcementResult?.status === "warning" && enforcementResult.warningWindow) {
+              markWarningSent(
+                userId,
+                enforcementResult.warningWindow.windowType,
+                enforcementResult.warningWindow.windowStart
+              ).catch(() => {});
+            }
           }
         } catch (err) {
           const errEvent = JSON.stringify({
