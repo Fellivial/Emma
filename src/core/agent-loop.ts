@@ -193,9 +193,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 step_number: step,
                 action: toolName,
                 input: toolInput,
-                status: "completed",
+                status: "moderate_auto_approved",
                 risk_level: "moderate",
-                trigger_type: task.triggerType || "agent",
+                reason: `Moderate tool "${toolName}" auto-approved`,
               });
             }
             // Falls through to execution below — no pause
