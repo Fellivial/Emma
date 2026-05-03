@@ -21,6 +21,7 @@ export interface ClientConfig {
   tokenBudgetMonthly: number;
   tokenBudgetDaily: number;
   messageLimitDaily: number;
+  planId: string;
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -35,6 +36,7 @@ const DEFAULT_CONFIG: ClientConfig = {
   tokenBudgetMonthly: 500_000,
   tokenBudgetDaily: 50_000,
   messageLimitDaily: 50,
+  planId: "free",
 };
 
 function getSupabase() {
@@ -75,6 +77,7 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       tokenBudgetMonthly: data.token_budget_monthly,
       tokenBudgetDaily: data.token_budget_daily,
       messageLimitDaily: data.message_limit_daily,
+      planId: data.plan_id || "free",
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -111,6 +114,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       tokenBudgetMonthly: c.token_budget_monthly,
       tokenBudgetDaily: c.token_budget_daily,
       messageLimitDaily: c.message_limit_daily,
+      planId: c.plan_id || "free",
     };
   } catch {
     return DEFAULT_CONFIG;

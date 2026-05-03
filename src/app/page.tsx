@@ -59,6 +59,8 @@ export default function EmmaPage() {
   const [loading, setLoading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [usageWarning, setUsageWarning] = useState<{ message: string; window: string | null } | null>(null);
+  const [usageBlocked, setUsageBlocked] = useState<{ upgradeUrl: string } | null>(null);
 
   // ── Memory (L2) ────────────────────────────────────────────────────────────
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
@@ -372,6 +374,14 @@ export default function EmmaPage() {
               );
               setApiMessages((prev) => [...prev, { role: "assistant", content: event.raw || event.text }]);
 
+              // Handle enforcement metadata
+              if (event.enforcement?.status === "warning" && event.enforcement.message) {
+                setUsageWarning({ message: event.enforcement.message, window: event.enforcement.warningWindow });
+              }
+              if (event.enforcement?.status === "blocked") {
+                setUsageBlocked({ upgradeUrl: event.enforcement.upgradeUrl || "/settings/billing?addon=extra_pack" });
+              }
+
               // Apply routine
               if (event.routineId) executeRoutineById(event.routineId, "user");
 
@@ -595,6 +605,9 @@ export default function EmmaPage() {
               contextStats={contextManager.stats}
               onTypingStart={handleTypingStart}
               onTypingStop={handleTypingStop}
+              usageWarning={usageWarning}
+              usageBlocked={usageBlocked}
+              onDismissWarning={() => setUsageWarning(null)}
             />
           </div>
 

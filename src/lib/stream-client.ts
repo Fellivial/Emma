@@ -1,11 +1,19 @@
 import type { EmmaCommand, AvatarExpression } from "@/types/emma";
 
+export interface StreamEnforcement {
+  status: string;
+  message: string | null;
+  warningWindow: string | null;
+  upgradeUrl: string | null;
+}
+
 export interface StreamDoneEvent {
   text: string;
   raw: string;
   commands: EmmaCommand[];
   routineId: string | null;
   expression: AvatarExpression | null;
+  enforcement: StreamEnforcement | null;
 }
 
 interface StreamCallbacks {
@@ -81,6 +89,7 @@ export async function streamEmmaResponse(
                 commands: event.commands || [],
                 routineId: event.routineId || null,
                 expression: event.expression || null,
+                enforcement: event.enforcement || null,
               });
               break;
 

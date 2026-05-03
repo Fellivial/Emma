@@ -11,13 +11,14 @@ interface InputBarProps {
   ttsEnabled: boolean;
   onToggleTts: () => void;
   disabled: boolean;
+  blocked?: boolean;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
 }
 
 export function InputBar({
   onSend, onVoice, voiceSupported, listening, ttsEnabled,
-  onToggleTts, disabled, onTypingStart, onTypingStop,
+  onToggleTts, disabled, blocked, onTypingStart, onTypingStop,
 }: InputBarProps) {
   const [input, setInput] = useState("");
   const typingRef = useRef(false);
@@ -90,14 +91,15 @@ export function InputBar({
         value={input}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        disabled={disabled}
-        placeholder="Talk to Emma…"
+        disabled={disabled || blocked}
+        placeholder={blocked ? "Response limit reached — get extra time to continue" : "Talk to Emma…"}
+        style={blocked ? { opacity: 0.5, pointerEvents: "none" } : undefined}
         className="flex-1 bg-surface border border-surface-border rounded-full px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/20 outline-none focus:border-emma-300/30 transition-colors"
       />
 
       <button
         onClick={handleSend}
-        disabled={!input.trim() || disabled}
+        disabled={!input.trim() || disabled || blocked}
         className="w-9 h-9 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center shrink-0 transition-opacity cursor-pointer disabled:opacity-20"
       >
         <ArrowUp size={16} className="text-emma-950" strokeWidth={2.5} />
