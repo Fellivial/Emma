@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, X, Clock, Zap, AlertTriangle, ChevronDown } from "lucide-react";
+import { ArrowLeft, Check, X, AlertTriangle, TrendingUp, ChevronRight, Repeat } from "lucide-react";
 
 interface Task {
   id: string;
@@ -36,20 +36,52 @@ interface Approval {
   created_at: string;
 }
 
+interface Pattern {
+  id: string;
+  pattern_type: "daily" | "weekly" | "tool_sequence";
+  description: string;
+  suggestion: string;
+  frequency: number;
+  example_goals: string[];
+  status: "pending" | "accepted" | "dismissed";
+  detected_at: string;
+}
+
+interface TaskSummary {
+  task_id: string;
+  summary: string;
+  generated_at: string;
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [summaries, setSummaries] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"tasks" | "actions" | "approvals">("approvals");
+  const [tab, setTab] = useState<"approvals" | "tasks" | "actions" | "insights">("approvals");
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/emma/tasks?type=all&limit=30");
-      const data = await res.json();
-      setTasks(data.tasks || []);
-      setActions(data.actions || []);
-      setApprovals(data.approvals || []);
+      const [tasksRes, patternsRes] = await Promise.all([
+        fetch("/api/emma/tasks?type=all&limit=30"),
+        fetch("/api/emma/patterns?status=pending"),
+      ]);
+      const tasksData = await tasksRes.json();
+      const patternsData = await patternsRes.json();
+
+      setTasks(tasksData.tasks || []);
+      setActions(tasksData.actions || []);
+      setApprovals(tasksData.approvals || []);
+      setPatterns(patternsData.patterns || []);
+
+      // Build summary map from task rows that have a summary field
+      const map = new Map<string, string>();
+      for (const t of (tasksData.tasks || []) as Task[]) {
+        if (t.summary) map.set(t.id, t.summary);
+      }
+      setSummaries(map);
     } catch {}
     setLoading(false);
   }, []);
@@ -63,7 +95,18 @@ export default function TasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: decision, approvalId }),
       });
-      fetchData(); // Refresh
+      fetchData();
+    } catch {}
+  };
+
+  const handlePattern = async (patternId: string, action: "accept" | "dismiss") => {
+    try {
+      await fetch("/api/emma/patterns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patternId, action }),
+      });
+      setPatterns((prev) => prev.filter((p) => p.id !== patternId));
     } catch {}
   };
 
@@ -91,6 +134,7 @@ export default function TasksPage() {
             { id: "approvals", label: "Pending Approvals", count: approvals.length },
             { id: "tasks", label: "Tasks", count: tasks.length },
             { id: "actions", label: "Action Log", count: actions.length },
+            { id: "insights", label: "Insights", count: patterns.length },
           ] as const).map((t) => (
             <button
               key={t.id}
@@ -104,7 +148,9 @@ export default function TasksPage() {
               {t.label}
               {t.count > 0 && (
                 <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] ${
-                  t.id === "approvals" && t.count > 0 ? "bg-amber-400/15 text-amber-300" : "bg-emma-200/5 text-emma-200/25"
+                  (t.id === "approvals" || t.id === "insights") && t.count > 0
+                    ? "bg-amber-400/15 text-amber-300"
+                    : "bg-emma-200/5 text-emma-200/25"
                 }`}>
                   {t.count}
                 </span>
@@ -140,7 +186,6 @@ export default function TasksPage() {
 
                       <p className="text-xs font-light text-emma-200/50 mb-2">{a.reason}</p>
 
-                      {/* Show input details */}
                       <div className="bg-black/20 rounded-lg p-3 mb-3 font-mono text-[11px] text-emma-200/30">
                         {Object.entries(a.tool_input).map(([k, v]) => (
                           <div key={k}>
@@ -178,23 +223,32 @@ export default function TasksPage() {
                   </div>
                 ) : (
                   tasks.map((t) => (
-                    <div key={t.id} className="rounded-xl border border-surface-border bg-surface p-4">
+                    <Link
+                      key={t.id}
+                      href={`/settings/tasks/${t.id}`}
+                      className="rounded-xl border border-surface-border bg-surface p-4 hover:border-emma-300/20 hover:bg-surface-hover transition-all group"
+                    >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
                           <StatusBadge status={t.status} />
                           <span className="text-xs font-light text-emma-200/60">{t.goal}</span>
                         </div>
-                        <span className="text-[10px] text-emma-200/15">{formatTime(t.created_at)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-emma-200/15">{formatTime(t.created_at)}</span>
+                          <ChevronRight size={12} className="text-emma-200/15 group-hover:text-emma-300/40 transition-colors" />
+                        </div>
                       </div>
                       <div className="flex items-center gap-3 text-[10px] text-emma-200/20">
                         <span>{t.trigger_type}</span>
                         <span>{t.steps_completed} steps</span>
                         <span>{formatTokens(t.total_tokens)} tokens</span>
                       </div>
-                      {t.summary && (
-                        <p className="text-[11px] text-emma-200/35 mt-2 font-light">{t.summary}</p>
+                      {(summaries.get(t.id) || t.summary) && (
+                        <p className="text-[11px] text-emma-200/35 mt-2 font-light line-clamp-2">
+                          {summaries.get(t.id) || t.summary}
+                        </p>
                       )}
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
@@ -220,12 +274,156 @@ export default function TasksPage() {
                 )}
               </div>
             )}
+
+            {/* ── Insights ─────────────────────────────────────────────── */}
+            {tab === "insights" && (
+              <InsightsTab
+                patterns={patterns}
+                tasks={tasks}
+                summaries={summaries}
+                onPattern={handlePattern}
+              />
+            )}
           </>
         )}
       </div>
     </div>
   );
 }
+
+// ─── Insights Tab ────────────────────────────────────────────────────────────
+
+function InsightsTab({
+  patterns,
+  tasks,
+  summaries,
+  onPattern,
+}: {
+  patterns: Pattern[];
+  tasks: Task[];
+  summaries: Map<string, string>;
+  onPattern: (id: string, action: "accept" | "dismiss") => void;
+}) {
+  const completedWithSummary = tasks.filter((t) => summaries.get(t.id));
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Pattern cards */}
+      {patterns.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={13} className="text-emma-300" />
+            <span className="text-xs font-medium text-emma-300 tracking-wider">Detected Patterns</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {patterns.map((p) => (
+              <PatternCard key={p.id} pattern={p} onAction={onPattern} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {patterns.length === 0 && completedWithSummary.length === 0 && (
+        <div className="text-center text-sm text-emma-200/20 py-12">
+          Complete a few tasks and I'll start noticing what you do repeatedly.
+        </div>
+      )}
+
+      {/* Recent task summaries */}
+      {completedWithSummary.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Repeat size={13} className="text-emma-200/30" />
+            <span className="text-xs font-medium text-emma-200/40 tracking-wider">Recent Task Memories</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {completedWithSummary.slice(0, 8).map((t) => (
+              <Link
+                key={t.id}
+                href={`/settings/tasks/${t.id}`}
+                className="rounded-xl border border-surface-border bg-surface p-3.5 hover:border-emma-300/20 transition-all group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-emma-200/40 font-light truncate mb-1">{t.goal}</p>
+                    <p className="text-xs text-emma-200/60 font-light line-clamp-2">{summaries.get(t.id)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-[10px] text-emma-200/15">{formatTime(t.created_at)}</span>
+                    <ChevronRight size={11} className="text-emma-200/15 group-hover:text-emma-300/40 transition-colors" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PatternCard({
+  pattern,
+  onAction,
+}: {
+  pattern: Pattern;
+  onAction: (id: string, action: "accept" | "dismiss") => void;
+}) {
+  const typeLabel: Record<Pattern["pattern_type"], string> = {
+    daily: "Daily habit",
+    weekly: "Weekly pattern",
+    tool_sequence: "Repeated workflow",
+  };
+
+  return (
+    <div className="rounded-xl border border-emma-300/15 bg-emma-300/3 p-4">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-7 h-7 rounded-lg bg-emma-300/10 flex items-center justify-center shrink-0 mt-0.5">
+          <TrendingUp size={13} className="text-emma-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[10px] text-emma-300/60 font-medium uppercase tracking-widest">
+              {typeLabel[pattern.pattern_type]}
+            </span>
+            <span className="text-[10px] text-emma-200/20">{pattern.frequency}×</span>
+          </div>
+          <p className="text-sm font-light text-emma-100/80">{pattern.suggestion}</p>
+        </div>
+      </div>
+
+      {pattern.example_goals.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {pattern.example_goals.slice(0, 3).map((g, i) => (
+            <span
+              key={i}
+              className="text-[10px] text-emma-200/30 bg-emma-200/5 px-2 py-0.5 rounded-full truncate max-w-[200px]"
+            >
+              {g}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => onAction(pattern.id, "accept")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emma-300/15 border border-emma-300/20 text-[11px] text-emma-300 cursor-pointer hover:bg-emma-300/20 transition-all"
+        >
+          <Check size={11} /> Schedule it
+        </button>
+        <button
+          onClick={() => onAction(pattern.id, "dismiss")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-transparent border border-surface-border text-[11px] text-emma-200/30 cursor-pointer hover:text-emma-200/50 transition-all"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared Helpers ──────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {

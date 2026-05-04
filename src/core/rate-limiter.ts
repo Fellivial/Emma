@@ -150,3 +150,21 @@ export async function consumeRateLimit(
     mem.tokens += tokens;
   }
 }
+
+// ─── Legacy sync export (non-breaking) ───────────────────────────────────
+// Some callers may use the old sync signature.
+// These now return permissive defaults — callers should migrate
+// to the async versions above.
+
+export function checkRateLimitSync(clientId: string): RateLimitResult {
+  const resetsAt = Date.now() + 3_600_000;
+  return {
+    allowed: true,
+    current: { tasks: 0, tokens: 0 },
+    limits: {
+      tasks: DEFAULT_MAX_TASKS_PER_HOUR,
+      tokens: DEFAULT_MAX_TOKENS_PER_HOUR,
+    },
+    resetsAt,
+  };
+}

@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     if (userId && userId !== "dev-user") {
       try {
         const clientConfig = await loadClientConfigForUser(userId);
-        const planId = (clientConfig as any)?.planId || "free";
+        const planId = clientConfig.planId || "free";
         const userTimezone = (body as any).userTimezone || "UTC";
         const billingAnchorDay = (body as any).billingAnchorDay || 1;
 
@@ -259,6 +259,12 @@ export async function POST(req: NextRequest) {
             routineId: routineId || null,
             expression: expression || null,
             usage: { inputTokens, outputTokens },
+            enforcement: enforcementResult ? {
+              status: enforcementResult.status,
+              message: enforcementResult.status === "warning" ? enforcementResult.message : null,
+              warningWindow: enforcementResult.warningWindow?.windowType || null,
+              upgradeUrl: enforcementResult.upgradeUrl || null,
+            } : null,
           });
           controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 

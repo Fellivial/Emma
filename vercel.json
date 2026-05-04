@@ -35,6 +35,9 @@
     },
     "src/app/api/emma/cron/approvals-expiry/route.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/emma/cron/pattern-detection/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -49,6 +52,10 @@
     {
       "path": "/api/emma/cron/approvals-expiry",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/emma/cron/pattern-detection",
+      "schedule": "0 2 * * *"
     }
   ],
   "headers": [
