@@ -383,7 +383,7 @@ create table if not exists public.rate_limit_counters (
 create table if not exists public.client_integrations (
   id uuid default gen_random_uuid() primary key,
   client_id uuid references public.clients on delete cascade not null,
-  service text not null check (service in ('gmail','google_calendar','slack','notion','hubspot')),
+  service text not null check (service in ('gmail','google_calendar','slack','notion','hubspot','elevenlabs')),
   status text not null default 'disconnected' check (status in ('connected','disconnected','auth_expired','error')),
   access_token text,
   refresh_token text,
@@ -391,6 +391,7 @@ create table if not exists public.client_integrations (
   account_identifier text,
   last_used_at timestamptz,
   last_error text,
+  voice_id text,
   metadata jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

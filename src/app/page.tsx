@@ -499,7 +499,7 @@ export default function EmmaPage() {
       <Header
         persona={persona}
         visionActive={vision.active}
-        ttsBackend={voice.ttsBackend}
+        elConnected={false}
         memoryCount={memories.length}
         scheduleCount={scheduler.schedules.filter((s) => s.enabled).length}
         activeUser={multiUser.activeUser}
