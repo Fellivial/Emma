@@ -14,10 +14,9 @@ interface UseVoiceReturn {
   listening: boolean;
   speaking: boolean;
   supported: boolean;
-  ttsBackend: TtsBackend;
   listen: () => Promise<string | null>;
-  speak: (text: string) => void;
-  fetchAudioBlob: (text: string) => Promise<Blob | null>;
+  speak: (text: string, clientId?: string) => void;
+  fetchAudioBlob: (text: string, clientId?: string) => Promise<Blob | null>;
   speakFallback: (text: string) => void;
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
@@ -33,7 +32,7 @@ interface UseVoiceReturn {
 export function useVoice(): UseVoiceReturn {
   const [mode, setMode] = useState<VoiceMode>("idle");
   const [supported, setSupported] = useState(false);
-  const [ttsBackend, setTtsBackend] = useState<TtsBackend>("elevenlabs");
+  const [ttsBackend, setTtsBackend] = useState<TtsBackend>("webspeech");
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -122,25 +121,26 @@ export function useVoice(): UseVoiceReturn {
 
   // ── Fetch ElevenLabs audio blob (for avatar lip sync) ──────────────────────
 
-  const fetchAudioBlob = useCallback(async (text: string): Promise<Blob | null> => {
-    try {
-      const res = await fetch("/api/emma/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.status === 501) {
-        setTtsBackend("webspeech");
-        backendProbed.current = true;
+  const fetchAudioBlob = useCallback(
+    async (text: string, clientId?: string): Promise<Blob | null> => {
+      try {
+        const res = await fetch("/api/emma/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, clientId }),
+        });
+        if (res.status === 501) {
+          setTtsBackend("webspeech");
+          return null;
+        }
+        if (!res.ok) return null;
+        return await res.blob();
+      } catch {
         return null;
       }
-      if (!res.ok) return null;
-      backendProbed.current = true;
-      return await res.blob();
-    } catch {
-      return null;
-    }
-  }, []);
+    },
+    []
+  );
 
   // ── Web Speech TTS (fallback) ──────────────────────────────────────────────
 
@@ -283,26 +283,33 @@ export function useVoice(): UseVoiceReturn {
 
   // ── Full speak (ElevenLabs → fallback) ─────────────────────────────────────
 
-  const speakElevenLabs = useCallback(async (text: string): Promise<boolean> => {
-    const blob = await fetchAudioBlob(text);
-    if (!blob) return false;
-    return new Promise((resolve) => {
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onplay = () => setMode("speaking");
-      audio.onended = () => { setMode("idle"); URL.revokeObjectURL(url); resolve(true); };
-      audio.onerror = () => { setMode("idle"); URL.revokeObjectURL(url); resolve(false); };
-      audio.play().catch(() => { setMode("idle"); resolve(false); });
-    });
-  }, [fetchAudioBlob]);
+  const speakElevenLabs = useCallback(
+    async (text: string, clientId?: string): Promise<boolean> => {
+      const blob = await fetchAudioBlob(text, clientId);
+      if (!blob) return false;
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onplay = () => setMode("speaking");
+        audio.onended = () => { setMode("idle"); URL.revokeObjectURL(url); resolve(true); };
+        audio.onerror = () => { setMode("idle"); URL.revokeObjectURL(url); resolve(false); };
+        audio.play().catch(() => { setMode("idle"); resolve(false); });
+      });
+    },
+    [fetchAudioBlob]
+  );
 
   const speak = useCallback(
-    (text: string) => {
-      if (ttsBackend === "webspeech") { speakFallback(text); return; }
-      speakElevenLabs(text).then((ok) => { if (!ok) speakFallback(text); });
+    (text: string, clientId?: string) => {
+      // Always try ElevenLabs if clientId provided — server 501s if no key configured
+      if (clientId) {
+        speakElevenLabs(text, clientId).then((ok) => { if (!ok) speakFallback(text); });
+        return;
+      }
+      speakFallback(text);
     },
-    [ttsBackend, speakElevenLabs, speakFallback]
+    [speakElevenLabs, speakFallback]
   );
 
   const stopSpeaking = useCallback(() => {
@@ -325,7 +332,7 @@ export function useVoice(): UseVoiceReturn {
   }, []);
 
   return {
-    mode, listening, speaking, supported, ttsBackend,
+    mode, listening, speaking, supported,
     listen, speak, fetchAudioBlob, speakFallback, stopSpeaking, setMode,
   };
 }

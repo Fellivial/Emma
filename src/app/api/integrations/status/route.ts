@@ -9,7 +9,7 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-const ALL_SERVICES = ["gmail", "google_calendar", "hubspot", "slack", "notion"];
+const ALL_SERVICES = ["elevenlabs", "gmail", "google_calendar", "hubspot", "slack", "notion"];
 
 export async function GET() {
   try {
@@ -24,7 +24,6 @@ export async function GET() {
 
     const integrations: Record<string, any> = {};
 
-    // Default all to disconnected
     for (const svc of ALL_SERVICES) {
       integrations[svc] = {
         status: "disconnected",
@@ -37,16 +36,22 @@ export async function GET() {
     if (membership) {
       const { data: rows } = await supabase
         .from("client_integrations")
-        .select("service, status, account_identifier, last_used_at, last_error")
+        .select("service, status, account_identifier, last_used_at, last_error, voice_id, metadata")
         .eq("client_id", membership.client_id);
 
       for (const row of rows || []) {
-        integrations[row.service] = {
+        const entry: Record<string, any> = {
           status: row.status,
           accountIdentifier: row.account_identifier,
           lastUsedAt: row.last_used_at,
           lastError: row.last_error,
         };
+        // ElevenLabs: include voice info
+        if (row.service === "elevenlabs") {
+          entry.voiceId = row.voice_id || null;
+          entry.voiceName = row.metadata?.voiceName || "Rachel (default)";
+        }
+        integrations[row.service] = entry;
       }
     }
 

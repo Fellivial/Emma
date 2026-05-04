@@ -52,6 +52,7 @@ export interface Plan {
   lemonVariantId: string;
   name: string;
   price: number | null;
+  byokElevenLabs: true;
   tokenBudgetMonthly: number;
   tokenBudgetWeekly: number;
   tokenBudgetDaily: number;
@@ -104,6 +105,7 @@ export const PLANS: Record<string, Plan> = {
     messageLimitWeekly: 50,
     toolsEnabled: ["chat", "tts"],
     ttsBackend: "web_speech",
+    byokElevenLabs: true,
     elevenLabsPlan: "None",
     elevenLabsCost: 0,
     features: {
@@ -144,6 +146,7 @@ export const PLANS: Record<string, Plan> = {
     messageLimitWeekly: 200,
     toolsEnabled: ["chat", "tts", "memory", "vision", "emotion_detection", "routines", "agent", "webhooks"],
     ttsBackend: "web_speech",
+    byokElevenLabs: true,
     elevenLabsPlan: "None",
     elevenLabsCost: 0,
     features: {
@@ -191,7 +194,8 @@ export const PLANS: Record<string, Plan> = {
       "chat", "tts", "memory", "vision", "emotion_detection", "routines",
       "agent", "webhooks", "api_access", "multi_user", "custom_persona", "elevenlabs",
     ],
-    ttsBackend: "elevenlabs",
+    ttsBackend: "web_speech",
+    byokElevenLabs: true,
     elevenLabsPlan: "ElevenLabs Starter",
     elevenLabsCost: 7,
     features: {
@@ -244,6 +248,7 @@ export const PLANS: Record<string, Plan> = {
       "encryption",
     ],
     ttsBackend: "elevenlabs_dedicated",
+    byokElevenLabs: true,
     elevenLabsPlan: "ElevenLabs Creator",
     elevenLabsCost: 22,
     features: {

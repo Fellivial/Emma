@@ -11,7 +11,8 @@ const EMOTION_EMOJI: Record<string, string> = {
 interface HeaderProps {
   persona: PersonaId;
   visionActive: boolean;
-  ttsBackend: string;
+  elConnected: boolean;
+  elVoiceName?: string | null;
   memoryCount: number;
   scheduleCount: number;
   activeUser: UserProfile;
@@ -50,7 +51,7 @@ export function Header(props: HeaderProps) {
           <span className="text-xs">{props.activeUser.avatar}</span>
           {props.activeUser.name}
         </div>
-        <Pill>🔊{props.ttsBackend === "elevenlabs" ? "EL" : "WS"}</Pill>
+        <Pill active={props.elConnected} color={props.elConnected ? "emerald" : undefined}>🔊{props.elConnected ? `EL · ${props.elVoiceName?.slice(0, 10) ?? ""}` : "WS"}</Pill>
         <div className="text-[10px] font-medium text-emma-300 bg-emma-300/10 border border-emma-300/20 rounded-full px-2.5 py-1">
           {p.label}
         </div>
