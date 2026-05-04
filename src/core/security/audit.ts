@@ -40,7 +40,11 @@ export type AuditResource =
   | "webhook"
   | "billing"
   | "session"
-  | "integration";
+  | "integration"
+  | "pattern"
+  | "usage"
+  | "extra_pack"
+  | "voice";
 
 export interface AuditEntry {
   userId: string;

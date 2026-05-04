@@ -17,10 +17,29 @@ function getSupabase() {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret");
-  if (!secret || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // ── Cron authentication ───────────────────────────────────────────
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.get("authorization");
+  const isLocalhost =
+    req.headers.get("host")?.includes("localhost") ||
+    req.headers.get("host")?.includes("127.0.0.1");
+
+  if (!isLocalhost) {
+    if (!cronSecret) {
+      console.error("[CRON] CRON_SECRET is not set — rejecting request");
+      return NextResponse.json(
+        { error: "Cron not configured" },
+        { status: 500 }
+      );
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
   }
+  // ─────────────────────────────────────────────────────────────────
 
   const supabase = getSupabase();
   if (!supabase) {

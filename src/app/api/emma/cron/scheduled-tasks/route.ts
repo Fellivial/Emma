@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
@@ -23,7 +23,31 @@ function getSupabase() {
  *   3. Update last_run_at and calculate next_run_at from cron expression
  *   4. Track rate limit consumption
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ── Cron authentication ───────────────────────────────────────────
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.get("authorization");
+  const isLocalhost =
+    req.headers.get("host")?.includes("localhost") ||
+    req.headers.get("host")?.includes("127.0.0.1");
+
+  if (!isLocalhost) {
+    if (!cronSecret) {
+      console.error("[CRON] CRON_SECRET is not set — rejecting request");
+      return NextResponse.json(
+        { error: "Cron not configured" },
+        { status: 500 }
+      );
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   const supabase = getSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "DB not configured" }, { status: 501 });

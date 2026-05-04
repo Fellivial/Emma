@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     // ── Usage enforcement ─────────────────────────────────────────────────
     let enforcementResult: EnforcementResult | null = null;
-    if (userId && userId !== "dev-user") {
+    if (userId) {
       try {
         const clientConfig = await loadClientConfigForUser(userId);
         const planId = clientConfig.planId || "free";
@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
           // Persist usage tracking (non-blocking)
-          if (userId && userId !== "dev-user") {
+          if (userId) {
             incrementUsage(userId, 1, inputTokens + outputTokens).catch(() => {});
 
             // Multi-window tracking
