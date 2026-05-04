@@ -17,18 +17,11 @@ interface Overview {
   totalMembers: number; totalTokens: number; totalCost: number;
 }
 
-interface Trials {
-  totalTrials: number; activeTrials: number; conversionRate: number;
-  activationRate: number; avgMessagesUsed: number;
-  topSources: Array<{ source: string; count: number }>;
-}
-
 interface Channel { channel: string; signups: number; }
 
 export default function AdminPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [trials, setTrials] = useState<Trials | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [referrals, setReferrals] = useState({ total: 0, converted: 0 });
   const [affiliates, setAffiliates] = useState({ active: 0, totalReferrals: 0, totalCommissions: 0 });
@@ -43,7 +36,6 @@ export default function AdminPage() {
         const d = await r.json();
         setClients(d.clients || []);
         setOverview(d.overview || null);
-        setTrials(d.trials || null);
         setChannels(d.channels || []);
         setReferrals(d.referrals || { total: 0, converted: 0 });
         setAffiliates(d.affiliates || { active: 0, totalReferrals: 0, totalCommissions: 0 });
@@ -72,7 +64,7 @@ export default function AdminPage() {
           <Link href="/" className="text-emma-200/30 hover:text-emma-300 transition-colors"><ArrowLeft size={18} /></Link>
           <div>
             <h1 className="text-sm font-semibold text-emma-300 tracking-wider">Growth Dashboard</h1>
-            <p className="text-[10px] text-emma-200/25">MRR · Churn · Trials · Channels · Referrals</p>
+            <p className="text-[10px] text-emma-200/25">MRR · Churn · Channels · Referrals</p>
           </div>
         </div>
       </div>
@@ -83,7 +75,7 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
 
           {/* ── Row 1: Core Metrics ──────────────────────────────────────── */}
-          <div className="grid grid-cols-6 gap-3 mb-6">
+          <div className="grid grid-cols-5 gap-3 mb-6">
             <MetricCard icon={<DollarSign size={14} />} label="MRR" value={`$${overview?.mrr?.toLocaleString() || 0}`}
               sub={overview?.mrrGrowth ? `${overview.mrrGrowth > 0 ? "+" : ""}${overview.mrrGrowth}% vs last month` : undefined}
               highlight />
@@ -91,26 +83,13 @@ export default function AdminPage() {
               sub={`${overview?.freeClients || 0} free`} />
             <MetricCard icon={<TrendingUp size={14} />} label="Churn Rate" value={`${overview?.churnRate || 0}%`}
               sub="monthly" warn={overview?.churnRate ? overview.churnRate > 10 : false} />
-            <MetricCard icon={<Zap size={14} />} label="Trial Conv." value={`${trials?.conversionRate || 0}%`}
-              sub={`${trials?.activeTrials || 0} active`} />
             <MetricCard icon={<Database size={14} />} label="API Cost" value={`$${(overview?.totalCost || 0).toFixed(2)}`}
               sub={`${fmtTokens(overview?.totalTokens || 0)} tokens`} />
             <MetricCard icon={<Users size={14} />} label="Waitlist" value={String(overview?.waitlistCount || 0)} />
           </div>
 
-          {/* ── Row 2: Trials + Channels + Referrals ─────────────────────── */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
-
-            {/* Trial Funnel */}
-            <div className="rounded-xl border border-surface-border bg-surface p-5">
-              <h3 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">Trial Funnel</h3>
-              <div className="flex flex-col gap-2">
-                <FunnelRow label="Total Trials" value={trials?.totalTrials || 0} pct={100} />
-                <FunnelRow label="Activated (sent msg)" value={Math.round(((trials?.activationRate || 0) / 100) * (trials?.totalTrials || 0))} pct={trials?.activationRate || 0} />
-                <FunnelRow label="Converted (paid)" value={Math.round(((trials?.conversionRate || 0) / 100) * (trials?.totalTrials || 0))} pct={trials?.conversionRate || 0} color="emerald" />
-              </div>
-              <div className="mt-3 text-[10px] text-emma-200/20">Avg messages used: {trials?.avgMessagesUsed || 0}</div>
-            </div>
+          {/* ── Row 2: Channels + Referrals ──────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
 
             {/* Channel Breakdown */}
             <div className="rounded-xl border border-surface-border bg-surface p-5">

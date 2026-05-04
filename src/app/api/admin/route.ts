@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { inferPlanFromBudget, getMRR, PLANS } from "@/core/pricing";
-import { getTrialAnalytics } from "@/core/trial-engine";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -93,9 +92,6 @@ export async function GET() {
       ? Math.round((oldFreeClients / prevMonthClients.length) * 100)
       : 0;
 
-    // ── Trials ────────────────────────────────────────────────────────────
-    const trialAnalytics = await getTrialAnalytics();
-
     // ── Referrals ─────────────────────────────────────────────────────────
     const { data: referrals } = await supabase
       .from("referrals").select("status, created_at")
@@ -115,20 +111,9 @@ export async function GET() {
     };
 
     // ── Channel Breakdown ─────────────────────────────────────────────────
-    // Source data from trials + waitlist
-    const { data: trialSources } = await supabase
-      .from("trials").select("source");
     const { data: waitlistSources } = await supabase
       .from("waitlist").select("email");
-
-    const channelCounts: Record<string, number> = {};
-    for (const t of trialSources || []) {
-      const src = t.source || "organic";
-      channelCounts[src] = (channelCounts[src] || 0) + 1;
-    }
-    const channels = Object.entries(channelCounts)
-      .map(([channel, signups]) => ({ channel, signups }))
-      .sort((a, b) => b.signups - a.signups);
+    const channels: Array<{ channel: string; signups: number }> = [];
 
     // ── Waitlist ──────────────────────────────────────────────────────────
     const waitlistCount = waitlistSources?.length || 0;
@@ -154,7 +139,6 @@ export async function GET() {
         totalTokens: enrichedClients.reduce((s, c) => s + c.monthlyTokens, 0),
         totalCost: enrichedClients.reduce((s, c) => s + c.estimatedCost, 0),
       },
-      trials: trialAnalytics,
       referrals: referralStats,
       affiliates: affiliateStats,
       channels,
