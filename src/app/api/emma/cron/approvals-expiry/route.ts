@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -20,7 +20,31 @@ function getSupabase() {
  *   2. Set the parent action_log entry to 'rejected'
  *   3. Look up the parent task — if it's 'awaiting_approval', fail it
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ── Cron authentication ───────────────────────────────────────────
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.get("authorization");
+  const isLocalhost =
+    req.headers.get("host")?.includes("localhost") ||
+    req.headers.get("host")?.includes("127.0.0.1");
+
+  if (!isLocalhost) {
+    if (!cronSecret) {
+      console.error("[CRON] CRON_SECRET is not set — rejecting request");
+      return NextResponse.json(
+        { error: "Cron not configured" },
+        { status: 500 }
+      );
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   const supabase = getSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "DB not configured" }, { status: 501 });

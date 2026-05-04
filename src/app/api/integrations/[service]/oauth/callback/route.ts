@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { encrypt } from "@/core/security/encryption";
 import { audit } from "@/core/security/audit";
+import { getClientIp } from "@/lib/get-client-ip";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -101,6 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       action: "write",
       resource: "integration",
       reason: `${service} connected (${accountEmail})`,
+      ip: getClientIp(req),
     }).catch(() => {});
 
     return NextResponse.redirect(`${appUrl}/settings/integrations?connected=${service}`);

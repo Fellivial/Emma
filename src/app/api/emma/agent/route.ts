@@ -3,6 +3,8 @@ import { getUser } from "@/lib/supabase/server";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { getTool } from "@/core/tool-registry";
 import { createClient } from "@supabase/supabase-js";
+import { audit } from "@/core/security/audit";
+import { getClientIp } from "@/lib/get-client-ip";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,7 +30,12 @@ export async function POST(req: NextRequest) {
       const user = await getUser();
       userId = user?.id || null;
     } catch {}
-    if (!userId) userId = "dev-user";
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     const body = (await req.json()) as AgentRequest;
     const supabase = getSupabase();
@@ -112,6 +119,15 @@ export async function POST(req: NextRequest) {
           decided_at: new Date().toISOString(),
         }).eq("id", body.approvalId);
 
+        audit({
+          userId,
+          action: "approve",
+          resource: "approval",
+          resourceId: body.approvalId,
+          reason: "User approved agent action",
+          ip: getClientIp(req),
+        }).catch(() => {});
+
         // Execute the tool
         const toolDef = getTool(approval.action);
         if (toolDef) {
@@ -162,6 +178,15 @@ export async function POST(req: NextRequest) {
           decided_by: userId,
           decided_at: new Date().toISOString(),
         }).eq("id", body.approvalId);
+
+        audit({
+          userId,
+          action: "reject",
+          resource: "approval",
+          resourceId: body.approvalId,
+          reason: "User rejected agent action",
+          ip: getClientIp(req),
+        }).catch(() => {});
 
         await supabase.from("action_log").update({
           status: "rejected",

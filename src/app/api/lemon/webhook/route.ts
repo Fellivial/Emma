@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
 import { getPlanByLemonVariant, FREE_TIER_CONFIG } from "@/core/pricing";
+import { audit } from "@/core/security/audit";
+import { getClientIp } from "@/lib/get-client-ip";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -92,6 +94,14 @@ export async function POST(req: NextRequest) {
               tools_enabled: plan.toolsEnabled,
               updated_at: new Date().toISOString(),
             }).eq("id", membership.client_id);
+
+            audit({
+              userId,
+              action: "write",
+              resource: "billing",
+              reason: `${eventName}: plan activated (variant ${variantId})`,
+              ip: getClientIp(req),
+            }).catch(() => {});
           }
         }
         break;
@@ -152,6 +162,14 @@ export async function POST(req: NextRequest) {
               valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               purchase_ref: String(event.data?.id || ""),
             });
+
+            audit({
+              userId,
+              action: "write",
+              resource: "extra_pack",
+              reason: "Extra Response Pack purchased",
+              ip: getClientIp(req),
+            }).catch(() => {});
           }
         }
         break;

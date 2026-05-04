@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
+import { getClientIp } from "@/lib/get-client-ip";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     }).eq("client_id", membership.client_id).eq("service", service);
 
-    audit({ userId: user.id, action: "delete", resource: "integration", reason: `${service} disconnected` }).catch(() => {});
+    audit({ userId: user.id, action: "delete", resource: "integration", reason: `${service} disconnected`, ip: getClientIp(req) }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

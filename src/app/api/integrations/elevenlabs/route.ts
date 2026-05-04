@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { encrypt, decrypt } from "@/core/security/encryption";
 import { audit } from "@/core/security/audit";
 import { getUser } from "@/lib/supabase/server";
+import { getClientIp } from "@/lib/get-client-ip";
 
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 
@@ -99,8 +100,9 @@ export async function POST(req: NextRequest) {
     audit({
       userId: user.id,
       action: "write",
-      resource: "integration",
+      resource: "voice",
       reason: "elevenlabs connected",
+      ip: getClientIp(req),
     }).catch(() => {});
 
     return NextResponse.json({
@@ -186,8 +188,9 @@ export async function PATCH(req: NextRequest) {
     audit({
       userId: user.id,
       action: "write",
-      resource: "integration",
+      resource: "voice",
       reason: "elevenlabs voice updated",
+      ip: getClientIp(req),
     }).catch(() => {});
 
     return NextResponse.json({ success: true, voiceName: verifiedVoiceName });

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
 import { renderEmail, generateUnsubscribeUrl, type EmailContext } from "@/core/email-templates";
@@ -22,7 +22,31 @@ function getSupabase() {
  *   5. Send via Resend
  *   6. Mark sent or failed
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ── Cron authentication ───────────────────────────────────────────
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.get("authorization");
+  const isLocalhost =
+    req.headers.get("host")?.includes("localhost") ||
+    req.headers.get("host")?.includes("127.0.0.1");
+
+  if (!isLocalhost) {
+    if (!cronSecret) {
+      console.error("[CRON] CRON_SECRET is not set — rejecting request");
+      return NextResponse.json(
+        { error: "Cron not configured" },
+        { status: 500 }
+      );
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   const supabase = getSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "DB not configured" }, { status: 501 });
