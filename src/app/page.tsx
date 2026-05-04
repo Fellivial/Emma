@@ -40,7 +40,6 @@ import { streamEmmaResponse, type StreamDoneEvent } from "@/lib/stream-client";
 import { Header } from "@/components/Header";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NotificationToast } from "@/components/NotificationToast";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { AvatarCanvas } from "@/components/AvatarCanvas";
 import { VisionPanel } from "@/components/VisionPanel";
 import { MemoryPanel } from "@/components/MemoryPanel";
@@ -512,8 +511,6 @@ export default function EmmaPage() {
         onAction={notifications.handleAction}
         onDismiss={notifications.dismiss}
       />
-
-      <UpgradePrompt enabled={true} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar — vision, memory, routines, schedules, timeline, users */}

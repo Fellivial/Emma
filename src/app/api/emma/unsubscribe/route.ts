@@ -55,26 +55,6 @@ export async function GET(req: NextRequest) {
 
     cancelled = count || 0;
 
-    // Log trial event
-    try {
-      // Find user's active trial
-      const { data: trial } = await supabase
-        .from("trials")
-        .select("id")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (trial) {
-        await supabase.from("trial_events").insert({
-          trial_id: trial.id,
-          user_id: uid,
-          event: "unsubscribed",
-          metadata: { cancelled_emails: cancelled },
-        });
-      }
-    } catch {}
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

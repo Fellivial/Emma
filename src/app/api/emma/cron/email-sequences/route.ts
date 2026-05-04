@@ -110,36 +110,17 @@ export async function GET() {
         }
 
         // ── 3. Build context ──────────────────────────────────────────
-        // Get trial data
-        const { data: trial } = await supabase
-          .from("trials")
-          .select("expires_at, messages_used, messages_limit, plan_id")
-          .eq("id", row.trial_id)
-          .single();
-
-        // Get user name
         const { data: profile } = await supabase
           .from("profiles")
           .select("name")
           .eq("id", row.user_id)
           .single();
 
-        const expiresAt = trial?.expires_at ? new Date(trial.expires_at) : new Date();
-        const daysRemaining = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
-        const messagesUsed = trial?.messages_used || 0;
-        const messagesLimit = trial?.messages_limit || 500;
-        const percentUsed = messagesLimit > 0 ? Math.round((messagesUsed / messagesLimit) * 100) : 0;
-
         const context: EmailContext = {
           name: profile?.name || "there",
           email: row.email,
-          daysRemaining,
-          messagesUsed,
-          messagesLimit,
-          percentUsed,
           upgradeUrl: `${appUrl}/settings/billing?ref=email_${row.template_id}`,
           unsubscribeUrl: generateUnsubscribeUrl(row.user_id),
-          trialExpiresAt: expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         };
 
         // ── 4. Render template ────────────────────────────────────────

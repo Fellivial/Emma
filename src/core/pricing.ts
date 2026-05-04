@@ -22,13 +22,36 @@
  * Limits: whichever cap hits first (daily, weekly, monthly).
  *   80% → soft warning in-persona
  *   100% → hard block + Extra Response pack offer
+ *
+ * Autonomous mode:
+ *   Free    → 0 actions/hr (disabled)
+ *   Starter → 3 actions/hr (limited)
+ *   Pro     → 50 actions/hr (full)
+ *   Enterprise → unlimited (9999)
  */
 
-export interface PlanTier {
+export interface PlanFeatures {
+  chat: boolean;
+  memory: boolean;
+  vision: boolean;
+  emotionDetection: boolean;
+  routines: boolean;
+  autonomous: boolean;
+  webhooks: boolean;
+  scheduledTasks: boolean;
+  apiAccess: boolean;
+  multiUser: boolean;
+  customPersona: boolean;
+  elevenlabs: boolean;
+  encryption: boolean;
+  prioritySupport: boolean;
+}
+
+export interface Plan {
   id: string;
   lemonVariantId: string;
   name: string;
-  price: number;
+  price: number | null;
   tokenBudgetMonthly: number;
   tokenBudgetWeekly: number;
   tokenBudgetDaily: number;
@@ -38,7 +61,11 @@ export interface PlanTier {
   ttsBackend: "web_speech" | "elevenlabs" | "elevenlabs_dedicated";
   elevenLabsPlan: string;
   elevenLabsCost: number;
-  features: string[];
+  features: PlanFeatures;
+  autonomy: {
+    actionsPerHour: number;
+  };
+  featureList: string[];
   maxUsers: number;
   popular?: boolean;
   enterprise?: boolean;
@@ -47,14 +74,8 @@ export interface PlanTier {
   subtitle?: string;
 }
 
-export interface AddOn {
-  id: string;
-  lemonVariantId: string;
-  name: string;
-  price: number;
-  description: string;
-  featureFlags: string[];
-}
+/** @deprecated Use Plan instead */
+export type PlanTier = Plan;
 
 function derive(monthly: number): { tokenBudgetWeekly: number; tokenBudgetDaily: number } {
   const tokenBudgetWeekly = Math.floor(monthly / 4);
@@ -69,10 +90,10 @@ const STARTER_BUDGET    = 1_000_000;
 const PRO_BUDGET        = 2_000_000;
 const ENTERPRISE_BUDGET = 999_999_999;
 
-// ─── Plan Tiers ──────────────────────────────────────────────────────────────
+// ─── Plan Map ─────────────────────────────────────────────────────────────────
 
-export const PLANS: PlanTier[] = [
-  {
+export const PLANS: Record<string, Plan> = {
+  free: {
     id: "free",
     lemonVariantId: "",
     name: "Free",
@@ -85,17 +106,34 @@ export const PLANS: PlanTier[] = [
     ttsBackend: "web_speech",
     elevenLabsPlan: "None",
     elevenLabsCost: 0,
-    features: [
+    features: {
+      chat: true,
+      memory: false,
+      vision: false,
+      emotionDetection: false,
+      routines: false,
+      autonomous: false,
+      webhooks: false,
+      scheduledTasks: false,
+      apiAccess: false,
+      multiUser: false,
+      customPersona: false,
+      elevenlabs: false,
+      encryption: false,
+      prioritySupport: false,
+    },
+    autonomy: { actionsPerHour: 0 },
+    featureList: [
       "Chat with Emma",
       "Voice TTS / STT (Web Speech)",
       "300K tokens/month",
       "10 messages/day · 50/week",
-      "14-day inactivity expiry",
     ],
     maxUsers: 1,
     subtitle: "Try Emma",
   },
-  {
+
+  starter: {
     id: "starter",
     lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Starter",
@@ -104,24 +142,43 @@ export const PLANS: PlanTier[] = [
     ...derive(STARTER_BUDGET),
     messageLimitDaily: 40,
     messageLimitWeekly: 200,
-    toolsEnabled: ["chat", "tts", "memory", "vision", "emotion_detection", "routines"],
+    toolsEnabled: ["chat", "tts", "memory", "vision", "emotion_detection", "routines", "agent", "webhooks"],
     ttsBackend: "web_speech",
     elevenLabsPlan: "None",
     elevenLabsCost: 0,
-    features: [
+    features: {
+      chat: true,
+      memory: true,
+      vision: true,
+      emotionDetection: true,
+      routines: true,
+      autonomous: true,
+      webhooks: true,
+      scheduledTasks: true,
+      apiAccess: false,
+      multiUser: false,
+      customPersona: false,
+      elevenlabs: false,
+      encryption: false,
+      prioritySupport: false,
+    },
+    autonomy: { actionsPerHour: 3 },
+    featureList: [
       "Everything in Free",
       "Persistent memory",
       "Screen & camera vision",
       "Emotion detection",
       "Routines & schedules",
+      "Autonomous mode (3 actions/hr) — New",
+      "Webhooks & scheduled tasks — New",
       "1M tokens/month",
       "40 messages/day · 200/week",
-      "Web Speech TTS (no ElevenLabs cost)",
     ],
     maxUsers: 1,
     subtitle: "For regular individuals",
   },
-  {
+
+  pro: {
     id: "pro",
     lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Pro",
@@ -132,13 +189,31 @@ export const PLANS: PlanTier[] = [
     messageLimitWeekly: 400,
     toolsEnabled: [
       "chat", "tts", "memory", "vision", "emotion_detection", "routines",
-      "api_access", "multi_user", "custom_persona", "elevenlabs",
+      "agent", "webhooks", "api_access", "multi_user", "custom_persona", "elevenlabs",
     ],
     ttsBackend: "elevenlabs",
     elevenLabsPlan: "ElevenLabs Starter",
     elevenLabsCost: 7,
-    features: [
+    features: {
+      chat: true,
+      memory: true,
+      vision: true,
+      emotionDetection: true,
+      routines: true,
+      autonomous: true,
+      webhooks: true,
+      scheduledTasks: true,
+      apiAccess: true,
+      multiUser: true,
+      customPersona: true,
+      elevenlabs: true,
+      encryption: false,
+      prioritySupport: true,
+    },
+    autonomy: { actionsPerHour: 50 },
+    featureList: [
       "Everything in Starter",
+      "Full autonomous mode (50 actions/hr)",
       "ElevenLabs TTS (high quality)",
       "Custom persona config",
       "API access",
@@ -153,27 +228,45 @@ export const PLANS: PlanTier[] = [
     badge: "Recommended",
     subtitle: "Full Emma experience",
   },
-  {
+
+  enterprise: {
     id: "enterprise",
     lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
     name: "Enterprise",
-    price: 499,
+    price: null,
     tokenBudgetMonthly: ENTERPRISE_BUDGET,
     ...derive(ENTERPRISE_BUDGET),
     messageLimitDaily: 999999,
     messageLimitWeekly: 999999,
     toolsEnabled: [
       "chat", "tts", "memory", "vision", "emotion_detection", "routines",
-      "api_access", "multi_user", "custom_persona", "elevenlabs",
-      "agent", "webhooks", "encryption",
+      "agent", "webhooks", "api_access", "multi_user", "custom_persona", "elevenlabs",
+      "encryption",
     ],
     ttsBackend: "elevenlabs_dedicated",
     elevenLabsPlan: "ElevenLabs Creator",
     elevenLabsCost: 22,
-    features: [
+    features: {
+      chat: true,
+      memory: true,
+      vision: true,
+      emotionDetection: true,
+      routines: true,
+      autonomous: true,
+      webhooks: true,
+      scheduledTasks: true,
+      apiAccess: true,
+      multiUser: true,
+      customPersona: true,
+      elevenlabs: true,
+      encryption: true,
+      prioritySupport: true,
+    },
+    autonomy: { actionsPerHour: 9999 },
+    featureList: [
       "Everything in Pro",
       "ElevenLabs (dedicated)",
-      "Autonomous agent (included)",
+      "Unlimited autonomous actions",
       "Custom integrations",
       "99.9% SLA",
       "Unlimited tokens & messages",
@@ -185,28 +278,17 @@ export const PLANS: PlanTier[] = [
     badge: "Custom",
     subtitle: "For organizations",
   },
-];
+};
 
-// ─── Add-ons ─────────────────────────────────────────────────────────────────
+// ─── Extra Pack ───────────────────────────────────────────────────────────────
 
-export const ADDONS: AddOn[] = [
-  {
-    id: "autonomous_basic",
-    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
-    name: "Autonomous Mode — Basic",
-    price: 99,
-    description: "Emma acts on her own: scheduled tasks, webhook triggers, 20 autonomous actions/hour. Approval gate for all high-risk actions.",
-    featureFlags: ["agent", "webhooks"],
-  },
-  {
-    id: "autonomous_pro",
-    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
-    name: "Autonomous Mode — Pro",
-    price: 199,
-    description: "Everything in Basic + 50 autonomous actions/hour, priority queue, API access for external tool integrations.",
-    featureFlags: ["agent", "webhooks", "api_access"],
-  },
-];
+export const EXTRA_PACK = {
+  id: "extra_pack_500",
+  name: "Extra Response Pack",
+  price: 9,
+  tokens: 500_000,
+  description: "Add 500K tokens on top of your monthly budget. Never run out mid-conversation.",
+};
 
 // ─── In-Persona Limit Messages ───────────────────────────────────────────────
 
@@ -215,37 +297,29 @@ export const LIMIT_BLOCK_MESSAGE = "Mmm. You've used me a lot today. Grab some e
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function getPlan(planId: string): PlanTier | undefined {
-  return PLANS.find((p) => p.id === planId);
+export function getPlan(planId: string): Plan {
+  return PLANS[planId] ?? PLANS.free;
 }
 
-export function getPlanByLemonVariant(variantId: string): PlanTier | undefined {
-  return PLANS.find((p) => p.lemonVariantId === variantId);
-}
-
-export function getAddOn(addOnId: string): AddOn | undefined {
-  return ADDONS.find((a) => a.id === addOnId);
-}
-
-export function getAddOnByLemonVariant(variantId: string): AddOn | undefined {
-  return ADDONS.find((a) => a.lemonVariantId === variantId);
+export function getPlanByLemonVariant(variantId: string): Plan | undefined {
+  return Object.values(PLANS).find((p) => p.lemonVariantId === variantId);
 }
 
 export function inferPlanFromBudget(budget: number): string {
-  if (budget >= 100_000_000) return "Enterprise";
-  if (budget >= PRO_BUDGET) return "Pro";
-  if (budget >= STARTER_BUDGET) return "Starter";
-  return "Free";
+  if (budget >= 100_000_000) return "enterprise";
+  if (budget >= PRO_BUDGET) return "pro";
+  if (budget >= STARTER_BUDGET) return "starter";
+  return "free";
 }
 
 export function getMRR(planName: string): number {
-  const plan = PLANS.find((p) => p.name === planName);
-  return plan?.price || 0;
+  const id = planName.toLowerCase();
+  return PLANS[id]?.price ?? 0;
 }
 
 export function hasElevenLabs(planId: string): boolean {
   const plan = getPlan(planId);
-  return plan?.ttsBackend === "elevenlabs" || plan?.ttsBackend === "elevenlabs_dedicated";
+  return plan.ttsBackend === "elevenlabs" || plan.ttsBackend === "elevenlabs_dedicated";
 }
 
 export const FREE_TIER_CONFIG = {

@@ -691,6 +691,14 @@ end;
 $$ language plpgsql;
 
 
+-- ─── Deprecation Notes ────────────────────────────────────────────────────────
+--
+-- client_addons table: DEPRECATED as of pricing v2.
+--   Autonomous mode is now gated by plan tier (starter → 3/hr, pro → 50/hr).
+--   The autonomous_basic and autonomous_pro add-ons have been removed.
+--   This table is kept for historical data only — do not write new rows.
+--   Migration: autonomous access is checked via addon-enforcer.ts using plan.features.autonomous.
+--
 -- ═══════════════════════════════════════════════════════════════════════════
 -- SEED DATA
 -- ═══════════════════════════════════════════════════════════════════════════
