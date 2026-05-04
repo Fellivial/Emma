@@ -5,9 +5,22 @@ import tsPlugin from "typescript-eslint";
 export default [
   {
     ignores: ["node_modules", ".next", "dist"],
+     linterOptions: {
+      reportUnusedDisableDirectives: true,
+    },
   },
   js.configs.recommended,
   ...tsPlugin.configs.recommended,
+   {
+    languageOptions: {
+      parserOptions: {
+        project: true,
+      },
+    },
+  },
+
+  nextPlugin.configs["core-web-vitals"],
+  
   {
     plugins: {
       "@next/next": nextPlugin,
