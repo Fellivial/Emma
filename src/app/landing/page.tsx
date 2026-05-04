@@ -141,7 +141,7 @@ const VERTEX_SHADER = `
 
     vec4 mvPos    = modelViewMatrix * vec4(pos, 1.0);
     gl_Position   = projectionMatrix * mvPos;
-    gl_PointSize  = aSize * (420.0 / -mvPos.z);
+    gl_PointSize  = aSize * (160.0 / -mvPos.z);
   }
 `;
 
@@ -178,6 +178,12 @@ export default function LandingPage() {
   const targetSectionRef  = useRef(0);
   const mouseRef          = useRef({ nx: 0, ny: 0 });
 
+  // Allow scrolling on the landing page (globals.css sets overflow:hidden for the app)
+  useEffect(() => {
+    document.body.style.overflow = "auto";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   const TOTAL_SECTIONS = 5;
 
   // ── Three.js scene ───────────────────────────────────────────────────────
@@ -201,7 +207,7 @@ export default function LandingPage() {
       camera.position.z = 8;
 
       // — Particles —
-      const COUNT  = 3800;
+      const COUNT  = 2600;
       const basePos = new Float32Array(COUNT * 3);
       const phases  = new Float32Array(COUNT);
       const sizes   = new Float32Array(COUNT);
@@ -215,7 +221,7 @@ export default function LandingPage() {
         basePos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * disk;
         basePos[i * 3 + 2] = r * Math.cos(phi) * 0.55;
         phases[i] = Math.random() * Math.PI * 2;
-        sizes[i]  = 0.4 + Math.random() * 1.8;
+        sizes[i]  = 0.3 + Math.random() * 0.9;
       }
 
       const geo = new THREE.BufferGeometry();
@@ -231,7 +237,7 @@ export default function LandingPage() {
           uTime:    { value: 0 },
           uSection: { value: 0 },
           uMouse:   { value: new THREE.Vector2(0, 0) },
-          uOpacity: { value: 0.65 },
+          uOpacity: { value: 0.38 },
         },
         blending:    THREE.AdditiveBlending,
         depthWrite:  false,
