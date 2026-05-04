@@ -28,7 +28,15 @@ export async function GET(req: NextRequest) {
       .single();
 
     const clientId = membership?.client_id;
-    if (!clientId) return NextResponse.json({ tasks: [], actions: [], approvals: [] });
+    if (!clientId) return NextResponse.json({ tasks: [], actions: [], approvals: [], planId: "free" });
+
+    // Fetch plan_id for gating checks
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("plan_id")
+      .eq("id", clientId)
+      .single();
+    const planId: string = clientRow?.plan_id || "free";
 
     const type = req.nextUrl.searchParams.get("type") || "all";
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "20", 10);
@@ -69,7 +77,7 @@ export async function GET(req: NextRequest) {
       result.approvals = data || [];
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, planId });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

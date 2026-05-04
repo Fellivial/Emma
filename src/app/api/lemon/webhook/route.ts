@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
-import { getPlanByLemonVariant, getAddOnByLemonVariant, FREE_TIER_CONFIG } from "@/core/pricing";
+import { getPlanByLemonVariant, FREE_TIER_CONFIG } from "@/core/pricing";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -75,9 +75,7 @@ export async function POST(req: NextRequest) {
         const status = attrs?.status; // active, on_trial, paused, past_due, cancelled, expired
         const isActive = status === "active" || status === "on_trial";
 
-        // Check if it's a base plan or an add-on
         const plan = getPlanByLemonVariant(variantId);
-        const addOn = getAddOnByLemonVariant(variantId);
 
         if (plan && isActive) {
           const { data: membership } = await supabase
@@ -92,30 +90,6 @@ export async function POST(req: NextRequest) {
               token_budget_daily: plan.tokenBudgetDaily,
               message_limit_daily: plan.messageLimitDaily,
               tools_enabled: plan.toolsEnabled,
-              updated_at: new Date().toISOString(),
-            }).eq("id", membership.client_id);
-          }
-        }
-
-        // Handle add-on (merge features into existing tools)
-        if (addOn && isActive) {
-          const { data: membership } = await supabase
-            .from("client_members")
-            .select("client_id")
-            .eq("user_id", userId)
-            .single();
-
-          if (membership) {
-            const { data: client } = await supabase
-              .from("clients")
-              .select("tools_enabled")
-              .eq("id", membership.client_id)
-              .single();
-
-            const existing = client?.tools_enabled || [];
-            const merged = [...new Set([...existing, ...addOn.featureFlags])];
-            await supabase.from("clients").update({
-              tools_enabled: merged,
               updated_at: new Date().toISOString(),
             }).eq("id", membership.client_id);
           }

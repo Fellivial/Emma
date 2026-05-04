@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Zap, Shield } from "lucide-react";
-import { PLANS, ADDONS, type PlanTier, type AddOn } from "@/core/pricing";
+import { ArrowLeft, Check, Shield, Package } from "lucide-react";
+import { PLANS, EXTRA_PACK, type Plan } from "@/core/pricing";
 
 export default function BillingPage() {
   const [currentPlan] = useState("free");
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleSubscribe = async (variantId: string) => {
-    if (!variantId) return; // Free tier has no variant
+    if (!variantId) return;
     setLoading(variantId);
     try {
       const res = await fetch("/api/lemon/checkout", {
@@ -24,6 +24,23 @@ export default function BillingPage() {
     setLoading(null);
   };
 
+  const handleExtraPack = async () => {
+    setLoading("extra_pack");
+    try {
+      const res = await fetch("/api/lemon/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: process.env.NEXT_PUBLIC_LEMON_EXTRA_PACK_VARIANT }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch {}
+    setLoading(null);
+  };
+
+  const plans = Object.values(PLANS).filter((p) => !p.enterprise);
+  const enterprise = PLANS.enterprise;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emma-950 via-emma-900 to-emma-950 font-sans text-emma-100">
       <div className="border-b border-surface-border bg-emma-950/80 backdrop-blur-xl">
@@ -33,15 +50,15 @@ export default function BillingPage() {
           </Link>
           <div>
             <h1 className="text-sm font-semibold text-emma-300 tracking-wider">Billing</h1>
-            <p className="text-[10px] text-emma-200/25">Plans, add-ons, and enterprise</p>
+            <p className="text-[10px] text-emma-200/25">Plans and responses</p>
           </div>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Plan tiers */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-10">
-          {PLANS.map((plan) => (
+        {/* Plan tiers (Free, Starter, Pro) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {plans.map((plan) => (
             <PlanCard
               key={plan.id}
               plan={plan}
@@ -52,28 +69,20 @@ export default function BillingPage() {
           ))}
         </div>
 
-        {/* Add-ons */}
-        <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-4">Add-ons</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">
-          {ADDONS.map((addon) => (
-            <AddOnCard
-              key={addon.id}
-              addon={addon}
-              loading={loading === addon.lemonVariantId}
-              onSubscribe={() => handleSubscribe(addon.lemonVariantId)}
-            />
-          ))}
-        </div>
-
         {/* Enterprise CTA */}
-        <div className="rounded-2xl border border-emma-300/15 bg-emma-300/3 p-6 flex items-center justify-between">
+        <div className="rounded-2xl border border-emma-300/15 bg-emma-300/3 p-5 flex items-center justify-between mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Shield size={16} className="text-emma-300" />
-              <h3 className="text-sm font-medium text-emma-200/70">Need a custom setup?</h3>
+              <Shield size={15} className="text-emma-300" />
+              <h3 className="text-sm font-medium text-emma-200/70">Enterprise</h3>
+              {enterprise.badge && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emma-300/10 border border-emma-300/20 text-emma-300">
+                  {enterprise.badge}
+                </span>
+              )}
             </div>
             <p className="text-xs font-light text-emma-200/30">
-              Dedicated instance, custom SLA, integrations, white-label — let's talk.
+              Unlimited autonomous actions · 99.9% SLA · White-label · Dedicated support
             </p>
           </div>
           <a
@@ -82,6 +91,29 @@ export default function BillingPage() {
           >
             Contact Sales
           </a>
+        </div>
+
+        {/* Extra Response Pack */}
+        <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-4">Extras</h2>
+        <div className="rounded-2xl border border-surface-border bg-surface p-5 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-400/8 border border-amber-400/15 flex items-center justify-center shrink-0">
+            <Package size={16} className="text-amber-300" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-sm font-medium text-emma-200/65">{EXTRA_PACK.name}</h3>
+              <span className="text-xs font-light text-emma-300">${EXTRA_PACK.price}</span>
+            </div>
+            <div className="text-[10px] text-emma-200/20 mt-0.5">{formatTokens(EXTRA_PACK.tokens)} tokens · one-time · valid 30 days</div>
+            <p className="text-[11px] font-light text-emma-200/30 mt-1.5 leading-relaxed">{EXTRA_PACK.description}</p>
+          </div>
+          <button
+            onClick={handleExtraPack}
+            disabled={loading === "extra_pack"}
+            className="px-4 py-2 rounded-lg bg-surface border border-surface-border text-[11px] text-emma-200/50 hover:bg-surface-hover cursor-pointer transition-all shrink-0 disabled:opacity-50"
+          >
+            {loading === "extra_pack" ? "…" : "Buy"}
+          </button>
         </div>
 
         <p className="text-center text-[11px] text-emma-200/15 mt-6">
@@ -93,28 +125,24 @@ export default function BillingPage() {
 }
 
 function PlanCard({ plan, isCurrent, loading, onSubscribe }: {
-  plan: PlanTier; isCurrent: boolean; loading: boolean; onSubscribe: () => void;
+  plan: Plan; isCurrent: boolean; loading: boolean; onSubscribe: () => void;
 }) {
   return (
     <div className={`rounded-2xl border p-5 flex flex-col transition-all ${
-      plan.enterprise
-        ? "border-emma-300/25 bg-emma-300/5"
-        : plan.popular
+      plan.popular
         ? "border-emma-300/20 bg-emma-300/3"
         : "border-surface-border bg-surface"
     }`}>
       {plan.badge && (
-        <div className={`text-[10px] font-medium rounded-full px-2.5 py-0.5 self-start mb-2 ${
-          plan.enterprise ? "text-emma-300 bg-emma-300/10" : "text-emma-300 bg-emma-300/10"
-        }`}>{plan.badge}</div>
+        <div className="text-[10px] font-medium rounded-full px-2.5 py-0.5 self-start mb-2 text-emma-300 bg-emma-300/10">
+          {plan.badge}
+        </div>
       )}
 
       <h3 className="text-base font-medium text-emma-200/75">{plan.name}</h3>
       <div className="flex items-baseline gap-1 mt-1 mb-0.5">
         {plan.price === 0 ? (
           <span className="text-2xl font-light text-emma-100">Free</span>
-        ) : plan.contactSales ? (
-          <span className="text-lg font-light text-emma-300">Contact us</span>
         ) : (
           <>
             <span className="text-2xl font-light text-emma-300">${plan.price}</span>
@@ -128,11 +156,21 @@ function PlanCard({ plan, isCurrent, loading, onSubscribe }: {
       </div>
 
       <ul className="flex-1 flex flex-col gap-1.5 mb-4">
-        {plan.features.map((f, i) => (
-          <li key={i} className="flex items-start gap-1.5 text-[11px] font-light text-emma-200/45">
-            <Check size={10} className="text-emma-300/40 shrink-0 mt-0.5" /> {f}
-          </li>
-        ))}
+        {plan.featureList.map((f, i) => {
+          const isNew = f.includes("— New");
+          const label = f.replace(" — New", "");
+          return (
+            <li key={i} className="flex items-start gap-1.5 text-[11px] font-light text-emma-200/45">
+              <Check size={10} className="text-emma-300/40 shrink-0 mt-0.5" />
+              {label}
+              {isNew && (
+                <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-300/70 border border-emerald-400/15 shrink-0">
+                  New
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <button
@@ -141,38 +179,14 @@ function PlanCard({ plan, isCurrent, loading, onSubscribe }: {
         className={`w-full py-2 rounded-xl text-xs font-medium transition-all cursor-pointer disabled:cursor-default ${
           isCurrent
             ? "bg-emma-200/5 border border-emma-200/10 text-emma-200/20"
-            : plan.popular || plan.enterprise
+            : plan.popular
             ? "bg-gradient-to-r from-emma-300 to-emma-400 text-emma-950 hover:opacity-90"
             : plan.price === 0
             ? "bg-emma-200/5 border border-emma-200/10 text-emma-200/30"
             : "bg-surface border border-surface-border text-emma-200/50 hover:bg-surface-hover"
         }`}
       >
-        {isCurrent ? "Current" : loading ? "…" : plan.contactSales ? "Contact Sales" : plan.price === 0 ? "Current Plan" : "Upgrade"}
-      </button>
-    </div>
-  );
-}
-
-function AddOnCard({ addon, loading, onSubscribe }: {
-  addon: AddOn; loading: boolean; onSubscribe: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-surface-border bg-surface p-5 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-xl bg-amber-400/8 border border-amber-400/15 flex items-center justify-center shrink-0">
-        <Zap size={16} className="text-amber-300" />
-      </div>
-      <div className="flex-1">
-        <h3 className="text-sm font-medium text-emma-200/65">{addon.name}</h3>
-        <div className="text-xs text-emma-200/25 mt-0.5">+${addon.price}/mo on top of base plan</div>
-        <p className="text-[11px] font-light text-emma-200/30 mt-1.5 leading-relaxed">{addon.description}</p>
-      </div>
-      <button
-        onClick={onSubscribe}
-        disabled={loading}
-        className="px-4 py-2 rounded-lg bg-surface border border-surface-border text-[11px] text-emma-200/50 hover:bg-surface-hover cursor-pointer transition-all shrink-0"
-      >
-        {loading ? "…" : "Add"}
+        {isCurrent ? "Current" : loading ? "…" : plan.price === 0 ? "Current Plan" : "Upgrade"}
       </button>
     </div>
   );

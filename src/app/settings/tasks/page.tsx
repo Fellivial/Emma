@@ -60,6 +60,7 @@ export default function TasksPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [summaries, setSummaries] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [planId, setPlanId] = useState<string>("free");
   const [tab, setTab] = useState<"approvals" | "tasks" | "actions" | "insights">("approvals");
 
   const fetchData = useCallback(async () => {
@@ -75,6 +76,7 @@ export default function TasksPage() {
       setActions(tasksData.actions || []);
       setApprovals(tasksData.approvals || []);
       setPatterns(patternsData.patterns || []);
+      setPlanId(tasksData.planId || "free");
 
       // Build summary map from task rows that have a summary field
       const map = new Map<string, string>();
@@ -128,6 +130,27 @@ export default function TasksPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-6">
+        {/* Free-plan gate */}
+        {!loading && planId === "free" && (
+          <div className="rounded-2xl border border-emma-300/15 bg-emma-300/3 p-8 flex flex-col items-center text-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-full bg-emma-300/10 flex items-center justify-center">
+              <Repeat size={20} className="text-emma-300/60" />
+            </div>
+            <div>
+              <h2 className="text-sm font-medium text-emma-200/70 mb-1">Autonomous mode is a Starter feature</h2>
+              <p className="text-xs font-light text-emma-200/30 max-w-sm">
+                Upgrade to Starter to unlock scheduled tasks, webhooks, and up to 3 autonomous actions per hour.
+              </p>
+            </div>
+            <a
+              href="/settings/billing"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 hover:opacity-90 transition-opacity"
+            >
+              Upgrade to Starter — $29/mo
+            </a>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-surface-border">
           {([

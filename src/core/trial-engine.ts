@@ -103,9 +103,6 @@ export async function createTrial(
   // Log signup event
   await logTrialEvent(data.id, userId, "signup", { email, source: options?.source });
 
-  // Schedule email sequence
-  await scheduleEmailSequence(data.id, userId, email);
-
   // Create client with Starter features (trial)
   if (plan) {
     const { data: client } = await supabase.from("clients").insert({

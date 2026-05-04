@@ -14,6 +14,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { getPlan } from "@/core/pricing";
 
 // ─── Flag Definitions ────────────────────────────────────────────────────────
 
@@ -53,42 +54,46 @@ const FLAGS: Record<string, FeatureFlag> = {
 const clientFeaturesCache: Map<string, { features: string[]; loadedAt: number }> = new Map();
 const CACHE_TTL = 60_000; // 1 minute
 
-async function getClientFeatures(clientId: string): Promise<string[]> {
+async function getClientFeatures(clientId: string): Promise<{ toolsEnabled: string[]; planId: string }> {
   const cached = clientFeaturesCache.get(clientId);
   if (cached && Date.now() - cached.loadedAt < CACHE_TTL) {
-    return cached.features;
+    return { toolsEnabled: cached.features, planId: "" };
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return [];
+  if (!url || !key) return { toolsEnabled: [], planId: "" };
 
   try {
     const supabase = createClient(url, key);
     const { data } = await supabase
       .from("clients")
-      .select("tools_enabled")
+      .select("tools_enabled, plan_id")
       .eq("id", clientId)
       .single();
 
-    const features = data?.tools_enabled || [];
-    clientFeaturesCache.set(clientId, { features, loadedAt: Date.now() });
-    return features;
+    const toolsEnabled = data?.tools_enabled || [];
+    clientFeaturesCache.set(clientId, { features: toolsEnabled, loadedAt: Date.now() });
+    return { toolsEnabled, planId: data?.plan_id || "" };
   } catch {
-    return [];
+    return { toolsEnabled: [], planId: "" };
   }
 }
 
 // ─── Check Functions ─────────────────────────────────────────────────────────
 
+// Flags that are gated by plan tier rather than client DB config
+const PLAN_GATED_FLAGS = new Set(["agent", "webhooks", "api_access"]);
+
 /**
  * Check if a feature is enabled.
  *
- * Priority: env override > client DB config > default
+ * Priority: env override > plan features (for plan-gated flags) > client DB config > default
  */
 export async function isFeatureEnabled(
   flag: string,
-  clientId?: string
+  clientId?: string,
+  planId?: string
 ): Promise<boolean> {
   // 1. Environment override (EMMA_FF_VISION=true)
   const envKey = `EMMA_FF_${flag.toUpperCase()}`;
@@ -96,16 +101,30 @@ export async function isFeatureEnabled(
   if (envValue === "true") return true;
   if (envValue === "false") return false;
 
-  // 2. Client DB config
-  if (clientId) {
-    const features = await getClientFeatures(clientId);
-    if (features.includes(flag)) return true;
-
-    // If client has features configured but this flag isn't in the list
-    if (features.length > 0 && FLAGS[flag]?.requiresOptIn) return false;
+  // 2. Plan-gated flags: check plan features object
+  if (PLAN_GATED_FLAGS.has(flag)) {
+    let resolvedPlanId = planId;
+    if (!resolvedPlanId && clientId) {
+      const { planId: dbPlanId } = await getClientFeatures(clientId);
+      resolvedPlanId = dbPlanId;
+    }
+    if (resolvedPlanId) {
+      const plan = getPlan(resolvedPlanId);
+      if (flag === "agent" || flag === "webhooks") return plan.features.autonomous;
+      if (flag === "api_access") return plan.features.apiAccess;
+    }
   }
 
-  // 3. Hardcoded default
+  // 3. Client DB config
+  if (clientId) {
+    const { toolsEnabled } = await getClientFeatures(clientId);
+    if (toolsEnabled.includes(flag)) return true;
+
+    // If client has features configured but this flag isn't in the list
+    if (toolsEnabled.length > 0 && FLAGS[flag]?.requiresOptIn) return false;
+  }
+
+  // 4. Hardcoded default
   return FLAGS[flag]?.default ?? false;
 }
 
