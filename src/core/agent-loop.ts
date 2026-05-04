@@ -20,6 +20,15 @@ import {
 } from "@/core/tool-registry";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
+import {
+  type TaskContext,
+  initContext,
+  updateContext,
+  resolveInputVariables,
+  persistContext,
+  loadContext,
+} from "@/core/task-context";
+import { summarizeTask } from "@/core/task-summarizer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +60,7 @@ export interface AgentResult {
   steps: AgentStepResult[];
   summary: string;
   totalTokens: number;
+  contextSnapshot?: TaskContext;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -86,6 +96,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   let totalTokens = 0;
   let taskCompleted = false;
   let taskSummary = "";
+
+  // Load or initialize intra-task context (survives approval pauses)
+  let ctx: TaskContext = await loadContext(task.id);
 
   // Update task status to running
   if (supabase) {
@@ -232,6 +245,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               steps,
               summary: `Paused at step ${step}: "${toolName}" requires approval`,
               totalTokens,
+              contextSnapshot: ctx,
             };
           }
 
@@ -242,15 +256,26 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             taskId: task.id,
           };
 
+          // Resolve {{variables}} from scratchpad before execution
+          const resolvedInput = resolveInputVariables(toolInput, ctx);
+
           let toolResult;
           try {
-            toolResult = await toolDef.handler(toolInput, toolContext);
+            toolResult = await toolDef.handler(resolvedInput, toolContext);
           } catch (err) {
             toolResult = { success: false, output: `Tool error: ${String(err)}` };
           }
 
+          // Detect output_var convention: tool may return { outputVar, output }
+          const outputVar: string | undefined =
+            (toolResult as any).outputVar ?? undefined;
+
+          // Update intra-task scratchpad and persist (fire-and-forget)
+          ctx = updateContext(ctx, step, toolName, toolResult.output, outputVar);
+          persistContext(ctx);
+
           const stepResult: AgentStepResult = {
-            step, toolName, input: toolInput,
+            step, toolName, input: resolvedInput,
             output: toolResult.output,
             riskLevel: toolDef.riskLevel,
             status: toolResult.success ? "completed" : "failed",
@@ -317,12 +342,16 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     }).eq("id", task.id);
   }
 
+  // Fire-and-forget: generate Haiku summary and persist to agent_task_summaries
+  summarizeTask(task.id, task.goal, ctx, finalStatus).catch(() => {});
+
   return {
     taskId: task.id,
     status: finalStatus,
     steps,
     summary: finalSummary,
     totalTokens,
+    contextSnapshot: ctx,
   };
 }
 
