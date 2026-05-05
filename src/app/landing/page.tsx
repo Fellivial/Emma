@@ -173,6 +173,8 @@ export default function LandingPage() {
   const [hoveredPillar, setHoveredPillar] = useState<number | null>(null);
   const [pillarVisible, setPillarVisible] = useState<boolean[]>([false, false, false, false, false]);
   const [showSignIn, setShowSignIn]   = useState(false);
+  const [avatarExpression, setAvatarExpression] = useState("😌");
+  const [mounted, setMounted]         = useState(false);
 
   const smoothSectionRef  = useRef(0);
   const targetSectionRef  = useRef(0);
@@ -181,7 +183,23 @@ export default function LandingPage() {
   // Allow scrolling on the landing page (globals.css sets overflow:hidden for the app)
   useEffect(() => {
     document.body.style.overflow = "auto";
-    return () => { document.body.style.overflow = ""; };
+    // Entrance animation
+    const t = setTimeout(() => setMounted(true), 60);
+    return () => {
+      document.body.style.overflow = "";
+      clearTimeout(t);
+    };
+  }, []);
+
+  // Cycle idle expressions on the avatar
+  useEffect(() => {
+    const IDLE = ["😌", "🥰", "😌", "😏", "😌", "🥰"];
+    let i = 0;
+    const timer = setInterval(() => {
+      i = (i + 1) % IDLE.length;
+      setAvatarExpression(IDLE[i]);
+    }, 6000);
+    return () => clearInterval(timer);
   }, []);
 
   const TOTAL_SECTIONS = 5;
@@ -574,21 +592,93 @@ export default function LandingPage() {
                   <span className="text-[9px] tracking-[0.2em] uppercase" style={{ color: "rgba(110,231,183,0.5)" }}>Live</span>
                 </div>
 
-                {/* Live2D placeholder */}
+                {/* Animated Emma avatar — placeholder mode */}
                 <div
-                  className="w-full h-full flex items-center justify-center"
-                  style={{ background: "rgba(240,234,240,0.015)", border: "1px solid rgba(240,234,240,0.06)", borderRadius: "3px" }}
+                  className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
+                  style={{ borderRadius: "3px", background: "radial-gradient(ellipse 90% 70% at 50% 38%, rgba(201,104,130,0.06), transparent)" }}
                 >
-                  <div className="text-center">
-                    <div className="font-display font-light leading-none mb-2" style={{ fontSize: "200px", color: "rgba(201,104,130,0.07)", lineHeight: "1" }}>
-                      E
+                  {/* Floating avatar cluster */}
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{ width: "200px", height: "200px", animation: "emmaFloat 6s ease-in-out infinite" }}
+                  >
+                    {/* Concentric breathing rings */}
+                    <div className="absolute inset-0 rounded-full" style={{ border: "1px solid rgba(201,104,130,0.07)", animation: "emmaBreath 5s ease-in-out infinite" }} />
+                    <div className="absolute rounded-full" style={{ inset: "22px", border: "1px solid rgba(201,104,130,0.11)", animation: "emmaBreath 4.5s ease-in-out infinite", animationDelay: "-1.6s" }} />
+                    <div className="absolute rounded-full" style={{ inset: "44px", border: "1px solid rgba(201,104,130,0.17)", animation: "emmaBreath 4s ease-in-out infinite", animationDelay: "-0.9s" }} />
+                    {/* Glow blob */}
+                    <div className="absolute rounded-full" style={{ inset: "60px", background: "rgba(201,104,130,0.22)", filter: "blur(22px)", animation: "emmaBreath 3.5s ease-in-out infinite" }} />
+                    {/* Face circle */}
+                    <div
+                      className="relative z-10 flex items-center justify-center rounded-full flex-shrink-0"
+                      style={{
+                        width: "84px", height: "84px",
+                        background: "linear-gradient(145deg, rgba(201,104,130,0.22), rgba(138,53,80,0.12))",
+                        border: "1px solid rgba(201,104,130,0.32)",
+                        boxShadow: "0 0 28px rgba(201,104,130,0.16), inset 0 1px 0 rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <span
+                        key={avatarExpression}
+                        style={{ fontSize: "40px", animation: "emmaExprChange 0.6s ease", filter: "drop-shadow(0 0 10px rgba(201,104,130,0.38))" }}
+                      >
+                        {avatarExpression}
+                      </span>
                     </div>
-                    <p className="text-[9px] tracking-[0.2em] uppercase" style={{ color: "rgba(240,234,240,0.08)" }}>
-                      Live2D viewport — 3:4
-                    </p>
+                  </div>
+
+                  {/* Name + status */}
+                  <div className="flex flex-col items-center mt-7 relative z-10">
+                    <span
+                      className="font-display italic"
+                      style={{ fontSize: "20px", letterSpacing: "0.05em", color: "rgba(201,104,130,0.72)" }}
+                    >
+                      Emma
+                    </span>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span
+                        className="inline-block rounded-full"
+                        style={{ width: "5px", height: "5px", background: "rgba(110,231,183,0.65)", boxShadow: "0 0 8px rgba(110,231,183,0.50)", animation: "pulse 2.5s ease-in-out infinite" }}
+                      />
+                      <span
+                        style={{ fontFamily: "'Outfit', sans-serif", fontSize: "9px", letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(240,234,240,0.22)" }}
+                      >
+                        Idle · Ready
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Placeholder mode badge */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: "8px", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(240,234,240,0.08)" }}>
+                      Placeholder Mode
+                    </span>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Scroll cue — inside hero so it fades with section transition */}
+          <div
+            style={{
+              position: "absolute", bottom: "28px", left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
+              pointerEvents: "none",
+              opacity: mounted ? 1 : 0,
+              transition: "opacity 0.8s ease 1.6s",
+            }}
+          >
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: "8px", letterSpacing: "0.35em", color: "rgba(240,234,240,0.18)", textTransform: "uppercase" }}>
+              Scroll
+            </span>
+            <div style={{ width: "1px", height: "36px", overflow: "hidden", position: "relative" }}>
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(to bottom, rgba(201,104,130,0.55), transparent)",
+                animation: "scrollLine 2.2s ease-in-out infinite",
+              }} />
             </div>
           </div>
         </section>
