@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Public routes — no auth required
-  const publicPaths = ["/login", "/auth/callback", "/landing", "/api/waitlist", "/api/emma/webhook", "/waitlist", "/api/emma/unsubscribe"];
+  const publicPaths = ["/", "/login", "/auth/callback", "/landing", "/api/waitlist", "/api/emma/webhook", "/waitlist", "/api/emma/unsubscribe"];
   const isPublic = publicPaths.some((p) => request.nextUrl.pathname.startsWith(p));
 
   // API routes — auth checked inside each route
@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
   // Authenticated user hitting /login → redirect to app
   if (user && request.nextUrl.pathname === "/login") {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
+    redirectUrl.pathname = "/app";
     return NextResponse.redirect(redirectUrl);
   }
 
