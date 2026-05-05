@@ -26,6 +26,10 @@ const config: Config = {
       fontFamily: {
         sans: ["Outfit", "system-ui", "sans-serif"],
         display: ["Cormorant Garamond", "Georgia", "serif"],
+        "l-display": ["var(--font-l-display)", "sans-serif"],
+        "l-cond": ["var(--font-l-cond)", "sans-serif"],
+        "l-body": ["var(--font-l-body)", "system-ui", "sans-serif"],
+        "l-mono": ["var(--font-l-mono)", "monospace"],
       },
       animation: {
         "fade-in": "fadeIn 0.3s ease forwards",

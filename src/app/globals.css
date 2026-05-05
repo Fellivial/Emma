@@ -14,7 +14,7 @@ body {
   background: #0d0a0e;
   color: #e8dfe6;
   font-family: "Outfit", system-ui, sans-serif;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────────────────────── */
@@ -67,6 +67,76 @@ body {
 @keyframes heroFadeIn {
   from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Landing page design system ─────────────────────────────────────────── */
+
+:root {
+  --l-bg:           #111113;
+  --l-surface:      #161619;
+  --l-surface2:     #1e1e22;
+  --l-accent:       #e8547a;
+  --l-accent-dark:  #1a0610;
+  --l-text:         #f2f0ea;
+  --l-muted:        rgba(242, 240, 234, 0.60);
+  --l-muted2:       rgba(242, 240, 234, 0.28);
+  --l-border:       rgba(255, 255, 255, 0.09);
+  --l-border2:      rgba(255, 255, 255, 0.16);
+  --l-green:        #22c55e;
+  --l-red:          #ef4444;
+}
+
+/* ─── Landing keyframes ───────────────────────────────────────────────────── */
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes lBarGrow {
+  from { width: 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ─── Landing focus rings ─────────────────────────────────────────────────── */
+
+.l-interactive:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .ticker-track {
+    animation-play-state: paused !important;
+  }
+
+  .radar-sweep {
+    animation-play-state: paused !important;
+  }
 }
 
 /* ─── Selection ───────────────────────────────────────────────────────────── */

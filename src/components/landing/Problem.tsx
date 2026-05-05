@@ -131,41 +131,29 @@ export default function Problem() {
         padding: "80px 40px",
       }}
     >
-      {/* Header — centered like the reference */}
-      <div style={{ marginBottom: "48px", textAlign: "center" }}>
-        <div
+      {/* Header */}
+      <div style={{ marginBottom: "48px" }}>
+        <p
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            border: "1px solid var(--l-border2)",
-            padding: "4px 12px",
-            marginBottom: "28px",
+            fontFamily: "var(--font-l-mono)",
+            fontSize: "10px",
+            textTransform: "uppercase",
+            letterSpacing: "0.16em",
+            color: "var(--l-accent)",
+            marginBottom: "12px",
           }}
         >
-          <span style={{ color: "var(--l-accent)", fontSize: "13px", lineHeight: 1 }}>×</span>
-          <span
-            style={{
-              fontFamily: "var(--font-l-mono)",
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.16em",
-              color: "var(--l-accent)",
-            }}
-          >
-            The Problem
-          </span>
-        </div>
+          The Problem
+        </p>
         <h2
           style={{
             fontFamily: "var(--font-l-cond)",
             fontWeight: 900,
-            fontSize: "clamp(36px, 5vw, 64px)",
+            fontSize: "clamp(32px, 4vw, 52px)",
             textTransform: "uppercase",
             color: "var(--l-text)",
-            lineHeight: 1.0,
-            maxWidth: "880px",
-            margin: "0 auto",
+            lineHeight: 1.05,
+            maxWidth: "640px",
           }}
         >
           The market has parts.
