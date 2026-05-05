@@ -36,6 +36,39 @@ body {
   background: rgba(232, 160, 191, 0.3);
 }
 
+/* ─── Landing page avatar animations ────────────────────────────────────────── */
+
+@keyframes emmaBreath {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.65; }
+}
+
+@keyframes emmaFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+
+@keyframes emmaExprChange {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(201,104,130,0.35)); }
+  50% { transform: scale(1.12); filter: drop-shadow(0 0 18px rgba(201,104,130,0.55)); }
+}
+
+@keyframes scrollLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  30%, 60% { opacity: 1; transform: translateY(0); }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes scrollCueIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes heroFadeIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Selection ───────────────────────────────────────────────────────────── */
 
 ::selection {
