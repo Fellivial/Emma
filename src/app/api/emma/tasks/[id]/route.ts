@@ -23,7 +23,7 @@ function getSupabase() {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getUser();
   if (!user) {
@@ -33,7 +33,7 @@ export async function GET(
   const supabase = getSupabase();
   if (!supabase) return NextResponse.json({ error: "No DB" }, { status: 500 });
 
-  const taskId = params.id;
+  const { id: taskId } = await params;
 
   const { data: task, error: taskErr } = await supabase
     .from("tasks")

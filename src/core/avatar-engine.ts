@@ -274,10 +274,11 @@ export function useAvatar(): UseAvatarReturn {
       appRef.current = app;
 
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const model = await Live2DModel.from("/live2d/emma/emma.model3.json", {
           autoInteract: true,
           autoUpdate: true,
-        });
+        }) as any;
 
         model.anchor.set(0.5, 0.5);
         model.scale.set(0.25);
