@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { MODEL_BRAIN } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
@@ -334,6 +335,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[EMMA API] Unexpected error:", err);
     return new Response(JSON.stringify({ error: getPersonaErrorMessage(500) }), {
       status: 500,

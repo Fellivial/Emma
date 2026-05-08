@@ -11,11 +11,13 @@
  * Server-side only — runs in API routes.
  */
 
+import * as Sentry from "@sentry/nextjs";
 import { MODEL_BRAIN } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
 import { getMcpServersForClient } from "@/core/integrations/mcp";
+import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import {
   startChain,
   addStep,
@@ -95,6 +97,19 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       status: "failed",
       steps: [],
       summary: "API key not set",
+      totalTokens: 0,
+    };
+  }
+
+  // ── Per-client rate limit check ──────────────────────────────────────────
+  const rateLimitKey = task.clientId || task.userId;
+  const rateLimit = await checkRateLimit(rateLimitKey);
+  if (!rateLimit.allowed) {
+    return {
+      taskId: task.id,
+      status: "failed",
+      steps: [],
+      summary: `Rate limit exceeded (${rateLimit.reason === "token_limit" ? "token" : "task"} limit). Resets at ${new Date(rateLimit.resetsAt).toISOString()}.`,
       totalTokens: 0,
     };
   }
@@ -389,6 +404,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         taskSummary = textOutput || "Task completed (no tool calls needed)";
       }
     } catch (err) {
+      Sentry.captureException(err, { extra: { taskId: task.id, step } });
       steps.push({
         step,
         toolName: "error",
@@ -427,6 +443,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       })
       .eq("id", task.id);
   }
+
+  // Record this task run against the rate limit counter
+  consumeRateLimit(rateLimitKey, 1, totalTokens).catch(() => {});
 
   // Fire-and-forget: generate Haiku summary and persist to agent_task_summaries
   summarizeTask(task.id, task.goal, ctx, finalStatus).catch(() => {});

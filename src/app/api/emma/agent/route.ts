@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
@@ -256,6 +257,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[Agent API] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
