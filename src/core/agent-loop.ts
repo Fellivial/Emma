@@ -12,15 +12,17 @@
  */
 
 import { MODEL_BRAIN } from "@/core/models";
-import {
-  getTool,
-  getToolsForClaude,
-  type ToolContext,
-  type RiskLevel,
-} from "@/core/tool-registry";
+import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
 import { getMcpServersForClient } from "@/core/integrations/mcp";
+import {
+  startChain,
+  addStep,
+  completeChain,
+  persistChain,
+  type ProvenanceChain,
+} from "@/core/provenance";
 import {
   type TaskContext,
   initContext,
@@ -88,12 +90,19 @@ Rules:
 export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { taskId: task.id, status: "failed", steps: [], summary: "API key not set", totalTokens: 0 };
+    return {
+      taskId: task.id,
+      status: "failed",
+      steps: [],
+      summary: "API key not set",
+      totalTokens: 0,
+    };
   }
 
   const supabase = getSupabase();
   const tools = getToolsForClaude();
   const mcpServers = await getMcpServersForClient(task.clientId);
+  let provChain: ProvenanceChain = startChain(task.id, task.goal);
   const steps: AgentStepResult[] = [];
   let totalTokens = 0;
   let taskCompleted = false;
@@ -104,10 +113,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 
   // Update task status to running
   if (supabase) {
-    await supabase.from("tasks").update({
-      status: "running",
-      started_at: new Date().toISOString(),
-    }).eq("id", task.id);
+    await supabase
+      .from("tasks")
+      .update({
+        status: "running",
+        started_at: new Date().toISOString(),
+      })
+      .eq("id", task.id);
   }
 
   // Build conversation for the agent
@@ -140,7 +152,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             system: AGENT_SYSTEM,
             messages,
             tools,
-            mcp_servers: mcpServers,
+            ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           }),
         },
         { maxRetries: 2 }
@@ -149,10 +161,14 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       if (!res.ok) {
         const err = await res.text();
         steps.push({
-          step, toolName: "error", input: {},
+          step,
+          toolName: "error",
+          input: {},
           output: `API error: ${res.status}`,
-          riskLevel: "safe", status: "failed",
-          tokenCost: 0, durationMs: Date.now() - stepStart,
+          riskLevel: "safe",
+          status: "failed",
+          tokenCost: 0,
+          durationMs: Date.now() - stepStart,
         });
         break;
       }
@@ -182,9 +198,12 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           if (!toolDef) {
             // Unknown tool
             const stepResult: AgentStepResult = {
-              step, toolName, input: toolInput,
+              step,
+              toolName,
+              input: toolInput,
               output: `Tool "${toolName}" not found`,
-              riskLevel: "safe", status: "failed",
+              riskLevel: "safe",
+              status: "failed",
               tokenCost: inputTokens + outputTokens,
               durationMs: Date.now() - stepStart,
             };
@@ -193,7 +212,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             messages.push({ role: "assistant", content: contentBlocks });
             messages.push({
               role: "user",
-              content: [{ type: "tool_result", tool_use_id: toolId, content: `Error: Tool "${toolName}" not found` }],
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: toolId,
+                  content: `Error: Tool "${toolName}" not found`,
+                },
+              ],
             });
             continue;
           }
@@ -220,13 +245,21 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           if (toolDef.riskLevel === "dangerous") {
             // Create approval record and pause
             const approvalId = await createApproval(
-              supabase, task, step, toolName, toolInput, toolDef.riskLevel
+              supabase,
+              task,
+              step,
+              toolName,
+              toolInput,
+              toolDef.riskLevel
             );
 
             const stepResult: AgentStepResult = {
-              step, toolName, input: toolInput,
+              step,
+              toolName,
+              input: toolInput,
               output: `Awaiting approval (${approvalId || "no-db"})`,
-              riskLevel: toolDef.riskLevel, status: "awaiting_approval",
+              riskLevel: toolDef.riskLevel,
+              status: "awaiting_approval",
               tokenCost: inputTokens + outputTokens,
               durationMs: Date.now() - stepStart,
             };
@@ -235,12 +268,30 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 
             // Update task to awaiting_approval
             if (supabase) {
-              await supabase.from("tasks").update({
-                status: "awaiting_approval",
-                steps_taken: step,
-                token_cost: totalTokens,
-              }).eq("id", task.id);
+              await supabase
+                .from("tasks")
+                .update({
+                  status: "awaiting_approval",
+                  steps_taken: step,
+                  token_cost: totalTokens,
+                })
+                .eq("id", task.id);
             }
+
+            // Record the paused step in provenance before early return
+            provChain = addStep(provChain, {
+              stepNumber: step,
+              action: toolName,
+              input: toolInput,
+              output: stepResult.output,
+              source: "human_approved",
+              verified: false,
+              timestamp: Date.now(),
+              durationMs: stepResult.durationMs,
+            });
+
+            // Persist provenance at pause point (fire-and-forget)
+            persistChain(completeChain(provChain, "awaiting_approval")).catch(() => {});
 
             return {
               taskId: task.id,
@@ -270,15 +321,16 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           }
 
           // Detect output_var convention: tool may return { outputVar, output }
-          const outputVar: string | undefined =
-            (toolResult as any).outputVar ?? undefined;
+          const outputVar: string | undefined = (toolResult as any).outputVar ?? undefined;
 
           // Update intra-task scratchpad and persist (fire-and-forget)
           ctx = updateContext(ctx, step, toolName, toolResult.output, outputVar);
           persistContext(ctx);
 
           const stepResult: AgentStepResult = {
-            step, toolName, input: resolvedInput,
+            step,
+            toolName,
+            input: resolvedInput,
             output: toolResult.output,
             riskLevel: toolDef.riskLevel,
             status: toolResult.success ? "completed" : "failed",
@@ -287,6 +339,18 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           };
           steps.push(stepResult);
           await logAction(supabase, task.id, stepResult);
+
+          // Append to provenance chain
+          provChain = addStep(provChain, {
+            stepNumber: step,
+            action: toolName,
+            input: resolvedInput,
+            output: toolResult.output,
+            source: toolDef.riskLevel === "dangerous" ? "human_approved" : "automated",
+            verified: stepResult.status === "completed",
+            timestamp: Date.now(),
+            durationMs: stepResult.durationMs,
+          });
 
           // Check if task is complete
           if (toolName === "complete_task") {
@@ -299,11 +363,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           messages.push({ role: "assistant", content: contentBlocks });
           messages.push({
             role: "user",
-            content: [{
-              type: "tool_result",
-              tool_use_id: toolId,
-              content: toolResult.output,
-            }],
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: toolId,
+                content: toolResult.output,
+              },
+            ],
           });
         }
       }
@@ -320,33 +386,50 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       }
     } catch (err) {
       steps.push({
-        step, toolName: "error", input: {},
+        step,
+        toolName: "error",
+        input: {},
         output: `Loop error: ${String(err)}`,
-        riskLevel: "safe", status: "failed",
-        tokenCost: 0, durationMs: Date.now() - stepStart,
+        riskLevel: "safe",
+        status: "failed",
+        tokenCost: 0,
+        durationMs: Date.now() - stepStart,
       });
       break;
     }
   }
 
   // ── Finalize task ────────────────────────────────────────────────────────
-  const finalStatus = taskCompleted ? "completed" : (steps.length >= task.maxSteps ? "failed" : "failed");
-  const finalSummary = taskSummary || (steps.length >= task.maxSteps
-    ? `Max steps (${task.maxSteps}) reached without completion`
-    : "Task ended without completion");
+  const finalStatus = taskCompleted
+    ? "completed"
+    : steps.length >= task.maxSteps
+      ? "failed"
+      : "failed";
+  const finalSummary =
+    taskSummary ||
+    (steps.length >= task.maxSteps
+      ? `Max steps (${task.maxSteps}) reached without completion`
+      : "Task ended without completion");
 
   if (supabase) {
-    await supabase.from("tasks").update({
-      status: finalStatus,
-      result: finalSummary,
-      steps_taken: steps.length,
-      token_cost: totalTokens,
-      completed_at: new Date().toISOString(),
-    }).eq("id", task.id);
+    await supabase
+      .from("tasks")
+      .update({
+        status: finalStatus,
+        result: finalSummary,
+        steps_taken: steps.length,
+        token_cost: totalTokens,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", task.id);
   }
 
   // Fire-and-forget: generate Haiku summary and persist to agent_task_summaries
   summarizeTask(task.id, task.goal, ctx, finalStatus).catch(() => {});
+
+  // Fire-and-forget: finalize and persist provenance chain
+  provChain = completeChain(provChain, finalStatus);
+  persistChain(provChain).catch(() => {});
 
   return {
     taskId: task.id,
@@ -371,38 +454,42 @@ async function createApproval(
   if (!supabase) return null;
 
   // Create action log entry first
-  const { data: logEntry } = await supabase.from("action_log").insert({
-    task_id: task.id,
-    step_number: step,
-    action: toolName,
-    input: toolInput,
-    status: "awaiting_approval",
-    risk_level: riskLevel,
-  }).select("id").single();
+  const { data: logEntry } = await supabase
+    .from("action_log")
+    .insert({
+      task_id: task.id,
+      step_number: step,
+      action: toolName,
+      input: toolInput,
+      status: "awaiting_approval",
+      risk_level: riskLevel,
+    })
+    .select("id")
+    .single();
 
   if (!logEntry) return null;
 
   // Create approval record
-  const { data: approval } = await supabase.from("approvals").insert({
-    task_id: task.id,
-    action_log_id: logEntry.id,
-    user_id: task.userId,
-    action: toolName,
-    input: toolInput,
-    risk_level: riskLevel,
-    reason: `Autonomous action "${toolName}" requires your approval before execution`,
-  }).select("id").single();
+  const { data: approval } = await supabase
+    .from("approvals")
+    .insert({
+      task_id: task.id,
+      action_log_id: logEntry.id,
+      user_id: task.userId,
+      action: toolName,
+      input: toolInput,
+      risk_level: riskLevel,
+      reason: `Autonomous action "${toolName}" requires your approval before execution`,
+    })
+    .select("id")
+    .single();
 
   return approval?.id || null;
 }
 
 // ─── Action Logging ──────────────────────────────────────────────────────────
 
-async function logAction(
-  supabase: any,
-  taskId: string,
-  step: AgentStepResult
-): Promise<void> {
+async function logAction(supabase: any, taskId: string, step: AgentStepResult): Promise<void> {
   if (!supabase) return;
 
   await supabase.from("action_log").insert({
