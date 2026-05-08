@@ -4,6 +4,67 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 
+interface DayBucket {
+  day: string;
+  tokens: number;
+  messages: number;
+}
+
+function WeeklyChart({ data }: { data: DayBucket[] }) {
+  if (!data.length) return null;
+  const maxTokens = Math.max(...data.map((d) => d.tokens), 1);
+  const W = 280;
+  const H = 64;
+  const BAR_W = 28;
+  const GAP = (W - data.length * BAR_W) / (data.length + 1);
+  const TODAY = new Date().toLocaleDateString("en-US", { weekday: "short" });
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs font-medium text-emma-200/40 tracking-wider">Last 7 Days</span>
+        <span className="text-[10px] text-emma-200/20">tokens per day</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full" style={{ maxHeight: 88 }}>
+        {data.map((d, i) => {
+          const x = GAP + i * (BAR_W + GAP);
+          const barH = Math.max(3, (d.tokens / maxTokens) * H);
+          const y = H - barH;
+          const isToday = d.day.slice(0, 3) === TODAY.slice(0, 3);
+          return (
+            <g key={d.day}>
+              <rect
+                x={x}
+                y={y}
+                width={BAR_W}
+                height={barH}
+                rx={5}
+                fill={
+                  isToday
+                    ? "rgba(232,160,191,0.5)"
+                    : d.tokens === 0
+                      ? "rgba(232,160,191,0.04)"
+                      : "rgba(232,160,191,0.18)"
+                }
+              />
+              <text
+                x={x + BAR_W / 2}
+                y={H + 14}
+                textAnchor="middle"
+                fontSize={9}
+                fill={isToday ? "rgba(232,160,191,0.6)" : "rgba(232,160,191,0.2)"}
+                fontFamily="Outfit, sans-serif"
+              >
+                {d.day.slice(0, 3)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 interface WindowUsage {
   windowType: string;
   tokensUsed: number;
@@ -24,6 +85,7 @@ interface UsageData {
 
 export default function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
+  const [history, setHistory] = useState<DayBucket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +94,14 @@ export default function UsagePage() {
       .then((d) => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // 7-day history — gracefully ignored if endpoint not present
+    fetch("/api/emma/usage/history?days=7")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.history) setHistory(d.history);
+      })
+      .catch(() => {});
   }, []);
 
   const windows = data
@@ -151,6 +221,9 @@ export default function UsagePage() {
               );
             })}
           </div>
+
+          {/* 7-day bar chart */}
+          <WeeklyChart data={history} />
 
           {/* Extra Pack section */}
           {showExtraPack && (
