@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type KeyboardEvent } from "react";
-import { Mic, Volume2, VolumeX, ArrowUp } from "lucide-react";
+import { Mic, Eye, Volume2, VolumeX, ArrowUp } from "lucide-react";
 
 interface InputBarProps {
   onSend: (text: string) => void;
@@ -14,6 +14,8 @@ interface InputBarProps {
   blocked?: boolean;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
+  visionActive?: boolean;
+  onVisionToggle?: () => void;
 }
 
 export function InputBar({
@@ -27,6 +29,8 @@ export function InputBar({
   blocked,
   onTypingStart,
   onTypingStop,
+  visionActive,
+  onVisionToggle,
 }: InputBarProps) {
   const [input, setInput] = useState("");
   const typingRef = useRef(false);
@@ -92,6 +96,21 @@ export function InputBar({
           }`}
         >
           <Mic size={16} />
+        </button>
+      )}
+
+      {onVisionToggle && (
+        <button
+          onClick={onVisionToggle}
+          aria-label={visionActive ? "Disable vision" : "Enable vision"}
+          aria-pressed={!!visionActive}
+          className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+            visionActive
+              ? "bg-emerald-400/8 border-emerald-400/20 text-emerald-300/70"
+              : "bg-transparent border-surface-border text-emma-200/30 hover:text-emma-200/50"
+          }`}
+        >
+          <Eye size={15} />
         </button>
       )}
 
