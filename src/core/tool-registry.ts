@@ -132,7 +132,8 @@ registerTool({
       }
 
       const data = await res.json();
-      const results: any[] = data.web?.results || [];
+      const results: Array<{ title: string; url: string; description?: string }> =
+        data.web?.results || [];
 
       if (results.length === 0) {
         return { success: true, output: "No results found.", data: { results: [] } };
@@ -433,7 +434,7 @@ registerTool({
       },
       note: { type: "string", description: "Activity details or notes" },
     },
-    required: ["contact_id"],
+    required: ["contact_id", "note"],
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -442,7 +443,7 @@ registerTool({
       const { accessToken } = await getIntegrationTokens(context.clientId || "", "hubspot");
 
       const activityType = (input.activity_type as string) || "note";
-      const noteBody = `[${activityType.toUpperCase()}] ${(input.note as string) || ""}`.trim();
+      const noteBody = `[${activityType.toUpperCase()}] ${input.note as string}`.trim();
 
       const res = await fetch("https://api.hubapi.com/crm/v3/objects/notes", {
         method: "POST",
