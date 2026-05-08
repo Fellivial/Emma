@@ -496,6 +496,362 @@ registerTool({
   },
 });
 
+// Tool: slack_send_message — Send a Slack message (moderate)
+registerTool({
+  name: "slack_send_message",
+  description:
+    "Send a message to a Slack channel or thread. Requires Slack integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel: { type: "string", description: "Slack channel ID or name (e.g. #general)" },
+      message: { type: "string", description: "Message text to send" },
+      thread_ts: {
+        type: "string",
+        description: "Thread timestamp to reply in a thread (optional)",
+      },
+    },
+    required: ["channel", "message"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { SlackAdapter } = await import("@/core/integrations/slack");
+      const adapter = new SlackAdapter();
+
+      if (!(await adapter.validate(context.clientId || ""))) {
+        return {
+          success: false,
+          output: "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
+        };
+      }
+
+      return adapter.send(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return { success: false, output: "Slack auth expired. Go to Settings → Integrations to reconnect." };
+      }
+      return { success: false, output: `Slack send failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: notion_create_page — Create a Notion page (moderate)
+registerTool({
+  name: "notion_create_page",
+  description: "Create a new page in Notion under a parent page. Requires Notion integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      parent_page_id: { type: "string", description: "ID of the parent Notion page" },
+      title: { type: "string", description: "Page title" },
+      content: { type: "string", description: "Page body content (optional)" },
+    },
+    required: ["parent_page_id", "title"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { NotionAdapter } = await import("@/core/integrations/notion");
+      const adapter = new NotionAdapter();
+
+      if (!(await adapter.validate(context.clientId || ""))) {
+        return {
+          success: false,
+          output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
+        };
+      }
+
+      return adapter.createPage(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return { success: false, output: "Notion auth expired. Go to Settings → Integrations to reconnect." };
+      }
+      return { success: false, output: `Notion create page failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: notion_update_page — Update an existing Notion page (moderate)
+registerTool({
+  name: "notion_update_page",
+  description:
+    "Update the title or append content to an existing Notion page. Requires Notion integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      page_id: { type: "string", description: "ID of the Notion page to update" },
+      title: { type: "string", description: "New page title (optional)" },
+      content: { type: "string", description: "Content to append to the page (optional)" },
+    },
+    required: ["page_id"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { NotionAdapter } = await import("@/core/integrations/notion");
+      const adapter = new NotionAdapter();
+
+      if (!(await adapter.validate(context.clientId || ""))) {
+        return {
+          success: false,
+          output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
+        };
+      }
+
+      return adapter.updatePage(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return { success: false, output: "Notion auth expired. Go to Settings → Integrations to reconnect." };
+      }
+      return { success: false, output: `Notion update page failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: send_sms — Send an SMS via Twilio (DANGEROUS — always requires approval)
+registerTool({
+  name: "send_sms",
+  description: "Send an SMS message to a phone number via Twilio. REQUIRES APPROVAL.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      to: { type: "string", description: "Recipient phone number in E.164 format (e.g. +15551234567)" },
+      message: { type: "string", description: "SMS message body" },
+    },
+    required: ["to", "message"],
+  },
+  riskLevel: "dangerous",
+  handler: async (input) => {
+    try {
+      const { TwilioAdapter } = await import("@/core/integrations/twilio");
+      const adapter = new TwilioAdapter();
+      return adapter.sendSms(input);
+    } catch (err: any) {
+      return { success: false, output: `SMS failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: send_whatsapp — Send a WhatsApp message via Twilio (DANGEROUS — always requires approval)
+registerTool({
+  name: "send_whatsapp",
+  description: "Send a WhatsApp message to a phone number via Twilio. REQUIRES APPROVAL.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      to: {
+        type: "string",
+        description: "Recipient phone number in E.164 format (e.g. +15551234567)",
+      },
+      message: { type: "string", description: "WhatsApp message body" },
+    },
+    required: ["to", "message"],
+  },
+  riskLevel: "dangerous",
+  handler: async (input) => {
+    try {
+      const { TwilioAdapter } = await import("@/core/integrations/twilio");
+      const adapter = new TwilioAdapter();
+      return adapter.sendWhatsApp(input);
+    } catch (err: any) {
+      return { success: false, output: `WhatsApp failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: generate_docx — Generate a DOCX document (safe)
+registerTool({
+  name: "generate_docx",
+  description: "Generate a Microsoft Word (.docx) document with a title and content body.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: { type: "string", description: "Output filename (without extension)" },
+      title: { type: "string", description: "Document title (heading 1)" },
+      content: { type: "string", description: "Document body text (newlines become paragraphs)" },
+    },
+    required: ["filename", "title", "content"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { generateDocx } = await import("@/core/integrations/docgen");
+      const result = await generateDocx(
+        context.taskId,
+        input.filename as string,
+        input.title as string,
+        input.content as string
+      );
+      return result;
+    } catch (err: any) {
+      return { success: false, output: `DOCX failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: generate_pdf — Generate a PDF document (safe)
+registerTool({
+  name: "generate_pdf",
+  description: "Generate a PDF document with a title and content body.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: { type: "string", description: "Output filename (without extension)" },
+      title: { type: "string", description: "Document title" },
+      content: { type: "string", description: "Document body text" },
+    },
+    required: ["filename", "title", "content"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { generatePdf } = await import("@/core/integrations/docgen");
+      const result = await generatePdf(
+        context.taskId,
+        input.filename as string,
+        input.title as string,
+        input.content as string
+      );
+      return result;
+    } catch (err: any) {
+      return { success: false, output: `PDF failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: trigger_webhook — Send an outbound webhook POST (moderate)
+registerTool({
+  name: "trigger_webhook",
+  description:
+    "Send a POST request to an external HTTPS webhook URL with a JSON payload.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      url: { type: "string", description: "Webhook URL (must start with https://)" },
+      payload: {
+        type: "object",
+        description: "JSON payload to send in the request body",
+      },
+    },
+    required: ["url", "payload"],
+  },
+  riskLevel: "moderate",
+  handler: async (input) => {
+    const url = input.url as string;
+    if (!url.startsWith("https://")) {
+      return { success: false, output: "Webhook URL must use HTTPS." };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input.payload),
+        signal: controller.signal,
+      });
+
+      const body = await res.text();
+      return {
+        success: res.ok,
+        output: `Webhook responded ${res.status}: ${body.slice(0, 500)}`,
+        data: { status: res.status },
+      };
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return { success: false, output: "Webhook timed out after 10 seconds." };
+      }
+      return { success: false, output: `Webhook failed: ${err.message}` };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+});
+
+// Tool: hubspot_create_deal — Create a CRM deal (moderate)
+registerTool({
+  name: "hubspot_create_deal",
+  description: "Create a new deal in HubSpot CRM. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      dealname: { type: "string", description: "Deal name" },
+      amount: { type: "string", description: "Deal amount (e.g. '50000')" },
+      pipeline: { type: "string", description: "Pipeline ID (default: 'default')" },
+      dealstage: { type: "string", description: "Deal stage ID (e.g. 'appointmentscheduled')" },
+      contact_id: { type: "string", description: "HubSpot contact ID to associate with this deal" },
+    },
+    required: ["dealname"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+
+      if (!(await adapter.validate(context.clientId || ""))) {
+        return {
+          success: false,
+          output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+
+      return adapter.createDeal(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return { success: false, output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot." };
+      }
+      if (err.name === "IntegrationAuthExpiredError") {
+        return { success: false, output: "HubSpot auth expired. Go to Settings → Integrations to reconnect." };
+      }
+      return { success: false, output: `HubSpot create deal failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: hubspot_update_deal_stage — Update a deal's pipeline stage (moderate)
+registerTool({
+  name: "hubspot_update_deal_stage",
+  description:
+    "Update the pipeline stage of an existing HubSpot deal. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      deal_id: { type: "string", description: "HubSpot deal ID" },
+      dealstage: { type: "string", description: "New deal stage ID (e.g. 'closedwon')" },
+      amount: { type: "string", description: "Updated deal amount (optional)" },
+    },
+    required: ["deal_id", "dealstage"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+
+      if (!(await adapter.validate(context.clientId || ""))) {
+        return {
+          success: false,
+          output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+
+      return adapter.updateDealStage(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return { success: false, output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot." };
+      }
+      if (err.name === "IntegrationAuthExpiredError") {
+        return { success: false, output: "HubSpot auth expired. Go to Settings → Integrations to reconnect." };
+      }
+      return { success: false, output: `HubSpot update deal stage failed: ${err.message}` };
+    }
+  },
+});
+
 // Tool: complete_task — Signal that the task is finished (safe)
 registerTool({
   name: "complete_task",
