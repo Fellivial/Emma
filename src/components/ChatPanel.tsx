@@ -67,7 +67,7 @@ export function ChatPanel({
 
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [messages, loading, usageWarning, usageBlocked]);
 

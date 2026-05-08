@@ -9,6 +9,34 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+type DbRow = Record<string, unknown>;
+
+function mapTask(row: DbRow) {
+  return {
+    id: row.id,
+    goal: row.goal,
+    status: row.status,
+    triggerType: row.trigger_type,
+    stepsTaken: row.steps_taken ?? 0,
+    totalTokens: row.token_cost ?? 0,
+    createdAt: row.created_at ? new Date(row.created_at as string).getTime() : 0,
+    completedAt: row.completed_at ? new Date(row.completed_at as string).getTime() : undefined,
+    currentTool: row.current_tool ?? undefined,
+  };
+}
+
+function mapApproval(row: DbRow) {
+  return {
+    approvalId: row.id,
+    taskId: row.task_id,
+    tool: row.action,
+    riskLevel: "dangerous" as const,
+    inputs: (row.input as Record<string, string>) ?? {},
+    reason: (row.reason as string) ?? "",
+    expiresAt: row.expires_at ? new Date(row.expires_at as string).getTime() : Date.now() + 3_600_000,
+  };
+}
+
 /**
  * GET /api/emma/tasks?type=tasks|actions|approvals&limit=20
  */
@@ -51,7 +79,7 @@ export async function GET(req: NextRequest) {
         .eq("client_id", clientId)
         .order("created_at", { ascending: false })
         .limit(limit);
-      result.tasks = data || [];
+      result.tasks = (data || []).map(mapTask);
     }
 
     // Action log
@@ -74,7 +102,7 @@ export async function GET(req: NextRequest) {
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(limit);
-      result.approvals = data || [];
+      result.approvals = (data || []).map(mapApproval);
     }
 
     return NextResponse.json({ ...result, planId });

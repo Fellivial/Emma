@@ -286,10 +286,11 @@ export default function EmmaPage() {
 
   // ── Autonomous tasks polling (15s) ────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     const loadTasks = async () => {
       try {
-        const res = await fetch("/api/emma/tasks?limit=6");
-        if (res.ok) {
+        const res = await fetch("/api/emma/tasks?type=tasks&limit=6");
+        if (res.ok && !cancelled) {
           const data = await res.json();
           if (data.tasks) setAutonomousTasks(data.tasks);
         }
@@ -297,15 +298,16 @@ export default function EmmaPage() {
     };
     loadTasks();
     const id = setInterval(loadTasks, 15_000);
-    return () => clearInterval(id);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   // ── Approvals polling (30s) ────────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     const loadApprovals = async () => {
       try {
-        const res = await fetch("/api/emma/suggestions");
-        if (res.ok) {
+        const res = await fetch("/api/emma/tasks?type=approvals");
+        if (res.ok && !cancelled) {
           const data = await res.json();
           if (data.approvals) setPendingApprovals(data.approvals);
         }
@@ -313,25 +315,25 @@ export default function EmmaPage() {
     };
     loadApprovals();
     const id = setInterval(loadApprovals, 30_000);
-    return () => clearInterval(id);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   const handleApprove = useCallback(async (approvalId: string) => {
-    await fetch("/api/emma/suggestions", {
+    const res = await fetch("/api/emma/agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "approve", approvalId }),
     });
-    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+    if (res.ok) setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
   }, []);
 
   const handleCancelApproval = useCallback(async (approvalId: string) => {
-    await fetch("/api/emma/suggestions", {
+    const res = await fetch("/api/emma/agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel", approvalId }),
+      body: JSON.stringify({ action: "reject", approvalId }),
     });
-    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+    if (res.ok) setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
   }, []);
 
   const handleViewTask = useCallback((taskId: string) => {

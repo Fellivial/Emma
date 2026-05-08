@@ -102,9 +102,10 @@ export function InputBar({
       {onVisionToggle && (
         <button
           onClick={onVisionToggle}
+          disabled={disabled}
           aria-label={visionActive ? "Disable vision" : "Enable vision"}
           aria-pressed={!!visionActive}
-          className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+          className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer disabled:opacity-30 ${
             visionActive
               ? "bg-emerald-400/8 border-emerald-400/20 text-emerald-300/70"
               : "bg-transparent border-surface-border text-emma-200/30 hover:text-emma-200/50"
