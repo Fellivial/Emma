@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Save } from "lucide-react";
-
-type AutonomyTier = 1 | 2 | 3;
+import type { AutonomyTier } from "@/types/emma";
 
 interface Config {
   name: string;

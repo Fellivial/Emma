@@ -8,6 +8,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import type { AutonomyTier } from "@/types/emma";
 
 export interface ClientConfig {
   id: string;
@@ -22,6 +23,9 @@ export interface ClientConfig {
   tokenBudgetDaily: number;
   messageLimitDaily: number;
   planId: string;
+  // DB columns required: autonomy_tier integer default 2, proactive_vision boolean default false
+  autonomyTier: AutonomyTier;
+  proactiveVision: boolean;
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -37,6 +41,8 @@ const DEFAULT_CONFIG: ClientConfig = {
   tokenBudgetDaily: 50_000,
   messageLimitDaily: 50,
   planId: "free",
+  autonomyTier: 2,
+  proactiveVision: false,
 };
 
 function getSupabase() {
@@ -78,6 +84,8 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       tokenBudgetDaily: data.token_budget_daily,
       messageLimitDaily: data.message_limit_daily,
       planId: data.plan_id || "free",
+      autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
+      proactiveVision: data.proactive_vision ?? false,
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -115,6 +123,8 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       tokenBudgetDaily: c.token_budget_daily,
       messageLimitDaily: c.message_limit_daily,
       planId: c.plan_id || "free",
+      autonomyTier: (c.autonomy_tier as AutonomyTier) ?? 2,
+      proactiveVision: c.proactive_vision ?? false,
     };
   } catch {
     return DEFAULT_CONFIG;

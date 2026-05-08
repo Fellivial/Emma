@@ -90,6 +90,8 @@ export async function POST(req: NextRequest) {
           persona_greeting: vertical?.persona_greeting || body.personaGreeting || null,
           voice_id: body.voiceId || null,
           tools_enabled: vertical?.tools_enabled || undefined,
+          autonomy_tier: body.autonomyTier ?? 2,
+          proactive_vision: body.proactiveVision ?? false,
         })
         .select("id")
         .single();
@@ -120,6 +122,8 @@ export async function POST(req: NextRequest) {
     if (body.personaPrompt !== undefined) updates.persona_prompt = body.personaPrompt;
     if (body.personaGreeting !== undefined) updates.persona_greeting = body.personaGreeting;
     if (body.voiceId !== undefined) updates.voice_id = body.voiceId;
+    if (body.autonomyTier !== undefined) updates.autonomy_tier = body.autonomyTier;
+    if (body.proactiveVision !== undefined) updates.proactive_vision = body.proactiveVision;
 
     const { error: updateErr } = await supabase
       .from("clients")

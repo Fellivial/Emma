@@ -290,9 +290,12 @@ export default function WorkflowsPage() {
 
       {/* ── Inline Editor ────────────────────────────────────────────────── */}
       {draft && (
-        <div className="rounded-2xl border border-emma-300/20 bg-emma-300/3 mb-8 overflow-hidden">
+        <div
+          className="rounded-2xl border border-emma-300/20 bg-emma-300/3 mb-8 flex flex-col"
+          style={{ maxHeight: "calc(100vh - 180px)" }}
+        >
           {/* Editor header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-emma-300/10">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-emma-300/10 shrink-0">
             <h2 className="text-sm font-medium text-emma-200/70">
               {editingId === "new" ? "New Workflow" : `Edit — ${draft.name || "Untitled"}`}
             </h2>
@@ -304,7 +307,7 @@ export default function WorkflowsPage() {
             </button>
           </div>
 
-          <div className="p-6 flex flex-col gap-6">
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
             {/* Name */}
             <div>
               <label className="text-[10px] text-emma-200/30 uppercase tracking-widest block mb-2">
@@ -521,8 +524,8 @@ export default function WorkflowsPage() {
             </div>
           </div>
 
-          {/* Sticky action bar */}
-          <div className="sticky bottom-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-emma-300/10 bg-emma-950/85 backdrop-blur-xl">
+          {/* Action bar — pinned at bottom via flex layout, no sticky needed */}
+          <div className="shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-emma-300/10 bg-emma-950/85 backdrop-blur-xl">
             <div className="flex items-center gap-2">
               <button
                 onClick={saveDraft}

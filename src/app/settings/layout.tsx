@@ -121,7 +121,6 @@ const NAV_ITEMS = [
 ];
 
 const BREADCRUMB_MAP: Record<string, string> = {
-  "/settings": "Profile",
   "/settings/profile": "Profile",
   "/settings/usage": "Usage",
   "/settings/billing": "Billing",
@@ -129,6 +128,10 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/tasks": "Tasks",
   "/settings/workflows": "Workflows",
 };
+
+// Workflows folds into Tasks on mobile; keep this list explicit so reordering NAV_ITEMS doesn't break it.
+const MOBILE_NAV_IDS = ["profile", "usage", "billing", "integrations", "tasks"];
+const MOBILE_NAV = NAV_ITEMS.filter((item) => MOBILE_NAV_IDS.includes(item.id));
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -143,8 +146,6 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     if (item.exact) return pathname === item.href;
     return pathname === item.href || pathname.startsWith(item.href + "/");
   };
-
-  const MOBILE_NAV = NAV_ITEMS.slice(0, 5); // Profile, Usage, Billing, Integrations, Tasks (Workflows folds in)
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0d0a0e] font-sans text-emma-100">
