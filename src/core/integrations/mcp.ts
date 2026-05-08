@@ -35,7 +35,10 @@ export async function getMcpServersForClient(clientId?: string): Promise<McpServ
     if (error || !data) return [];
 
     return data
-      .filter((row: { service: string; mcp_url: string | null }) => typeof row.mcp_url === "string" && row.mcp_url.length > 0)
+      .filter(
+        (row: { service: string; mcp_url: string | null }) =>
+          typeof row.mcp_url === "string" && row.mcp_url.length > 0
+      )
       .map((row: { service: string; mcp_url: string }) => ({
         type: "url" as const,
         url: row.mcp_url,

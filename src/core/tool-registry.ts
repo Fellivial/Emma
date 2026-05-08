@@ -70,12 +70,17 @@ export function getToolsForClaude(): Array<{
 // Tool: generate_summary — Summarize information (safe)
 registerTool({
   name: "generate_summary",
-  description: "Generate a text summary or briefing from available context (memories, recent events, device states)",
+  description:
+    "Generate a text summary or briefing from available context (memories, recent events, device states)",
   inputSchema: {
     type: "object",
     properties: {
       topic: { type: "string", description: "What to summarize" },
-      style: { type: "string", enum: ["brief", "detailed", "bullet_points"], description: "Summary style" },
+      style: {
+        type: "string",
+        enum: ["brief", "detailed", "bullet_points"],
+        description: "Summary style",
+      },
     },
     required: ["topic"],
   },
@@ -89,7 +94,7 @@ registerTool({
   },
 });
 
-// Tool: set_device — Control a smart home device (safe)
+// Tool: web_search — Search the web via Brave Search API (safe)
 registerTool({
   name: "web_search",
   description: "Search the web for current information on behalf of the user",
@@ -102,18 +107,58 @@ registerTool({
   },
   riskLevel: "safe",
   handler: async (input) => {
-    return {
-      success: true,
-      output: `Search results for: ${input.query}`,
-      data: input,
-    };
+    const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+    if (!apiKey) {
+      return {
+        success: false,
+        output: "Web search unavailable: BRAVE_SEARCH_API_KEY environment variable is not set.",
+      };
+    }
+
+    try {
+      const url = new URL("https://api.search.brave.com/res/v1/web/search");
+      url.searchParams.set("q", input.query as string);
+      url.searchParams.set("count", "5");
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json",
+          "X-Subscription-Token": apiKey,
+        },
+      });
+
+      if (!res.ok) {
+        return { success: false, output: `Search API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const results: any[] = data.web?.results || [];
+
+      if (results.length === 0) {
+        return { success: true, output: "No results found.", data: { results: [] } };
+      }
+
+      const formatted = results
+        .slice(0, 5)
+        .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description || ""}`)
+        .join("\n\n");
+
+      return {
+        success: true,
+        output: `Search results for "${input.query}":\n\n${formatted}`,
+        data: { results: results.slice(0, 5) },
+      };
+    } catch (err) {
+      return { success: false, output: `Search failed: ${String(err)}` };
+    }
   },
 });
 
 // Tool: run_workflow — Execute a predefined workflow routine (moderate)
 registerTool({
   name: "run_workflow",
-  description: "Execute a named workflow routine (e.g., 'morning_standup', 'inbox_triage', 'focus_mode')",
+  description:
+    "Execute a named workflow routine (e.g., 'morning_standup', 'inbox_triage', 'focus_mode')",
   inputSchema: {
     type: "object",
     properties: {
@@ -177,7 +222,8 @@ registerTool({
       if (!isConfigured) {
         return {
           success: false,
-          output: "Gmail integration not connected. Go to Settings → Integrations to connect Gmail.",
+          output:
+            "Gmail integration not connected. Go to Settings → Integrations to connect Gmail.",
         };
       }
 
@@ -225,7 +271,8 @@ registerTool({
       if (!isConfigured) {
         return {
           success: false,
-          output: "Google Calendar integration not connected. Go to Settings → Integrations to connect.",
+          output:
+            "Google Calendar integration not connected. Go to Settings → Integrations to connect.",
         };
       }
 
@@ -257,7 +304,10 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      category: { type: "string", enum: ["preference", "routine", "personal", "episodic", "environment"] },
+      category: {
+        type: "string",
+        enum: ["preference", "routine", "personal", "episodic", "environment"],
+      },
       keyword: { type: "string", description: "Keyword to search for" },
     },
   },
@@ -265,18 +315,13 @@ registerTool({
   handler: async (input, context) => {
     try {
       const { getMemoriesForUser } = await import("@/core/memory-db");
-      const memories = await getMemoriesForUser(
-        context.userId,
-        input.category as any
-      );
+      const memories = await getMemoriesForUser(context.userId, input.category as any);
 
       // Filter by keyword if provided
-      const keyword = (input.keyword as string || "").toLowerCase();
+      const keyword = ((input.keyword as string) || "").toLowerCase();
       const filtered = keyword
         ? memories.filter(
-            (m) =>
-              m.key.toLowerCase().includes(keyword) ||
-              m.value.toLowerCase().includes(keyword)
+            (m) => m.key.toLowerCase().includes(keyword) || m.value.toLowerCase().includes(keyword)
           )
         : memories;
 
@@ -303,6 +348,149 @@ registerTool({
         success: false,
         output: `Memory query failed: ${String(err)}`,
       };
+    }
+  },
+});
+
+// Tool: hubspot_create_contact — Create a CRM contact (moderate)
+registerTool({
+  name: "hubspot_create_contact",
+  description: "Create a new contact in HubSpot CRM. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      email: { type: "string", description: "Contact email address" },
+      firstname: { type: "string" },
+      lastname: { type: "string" },
+      company: { type: "string" },
+      phone: { type: "string" },
+    },
+    required: ["email"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { getIntegrationTokens } = await import("@/core/integrations/adapter");
+      const { accessToken } = await getIntegrationTokens(context.clientId || "", "hubspot");
+
+      const properties: Record<string, string> = { email: input.email as string };
+      if (input.firstname) properties.firstname = input.firstname as string;
+      if (input.lastname) properties.lastname = input.lastname as string;
+      if (input.company) properties.company = input.company as string;
+      if (input.phone) properties.phone = input.phone as string;
+
+      const res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ properties }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
+      }
+
+      const data = await res.json();
+      return {
+        success: true,
+        output: `Contact created with ID: ${data.id}`,
+        data: { contactId: data.id, email: input.email },
+      };
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return {
+          success: false,
+          output:
+            "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `HubSpot create contact failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: hubspot_log_activity — Log a note/activity against a contact (moderate)
+registerTool({
+  name: "hubspot_log_activity",
+  description: "Log an activity or note against a HubSpot contact. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      contact_id: { type: "string", description: "HubSpot contact ID" },
+      activity_type: {
+        type: "string",
+        enum: ["call", "email", "meeting"],
+        description: "Type of activity",
+      },
+      note: { type: "string", description: "Activity details or notes" },
+    },
+    required: ["contact_id"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { getIntegrationTokens } = await import("@/core/integrations/adapter");
+      const { accessToken } = await getIntegrationTokens(context.clientId || "", "hubspot");
+
+      const activityType = (input.activity_type as string) || "note";
+      const noteBody = `[${activityType.toUpperCase()}] ${(input.note as string) || ""}`.trim();
+
+      const res = await fetch("https://api.hubapi.com/crm/v3/objects/notes", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          properties: {
+            hs_note_body: noteBody,
+            hs_timestamp: Date.now().toString(),
+          },
+          associations: [
+            {
+              to: { id: input.contact_id as string },
+              // 202 = HUBSPOT_DEFINED contact association type for notes
+              types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 202 }],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
+      }
+
+      const data = await res.json();
+      return {
+        success: true,
+        output: `Activity logged successfully (note ID: ${data.id})`,
+        data: { noteId: data.id, contactId: input.contact_id, activityType },
+      };
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return {
+          success: false,
+          output:
+            "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `HubSpot log activity failed: ${err.message}` };
     }
   },
 });
