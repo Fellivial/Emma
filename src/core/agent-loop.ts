@@ -27,7 +27,6 @@ import {
 } from "@/core/provenance";
 import {
   type TaskContext,
-  initContext,
   updateContext,
   resolveInputVariables,
   persistContext,
@@ -314,6 +313,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               task.userId,
               task.clientId
             ).catch(() => {});
+
+            // Count this paused run against the rate limit
+            consumeRateLimit(rateLimitKey, 1, totalTokens).catch(() => {});
 
             return {
               taskId: task.id,

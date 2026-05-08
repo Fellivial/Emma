@@ -32,10 +32,7 @@ export async function POST(req: NextRequest) {
       userId = user?.id || null;
     } catch {}
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = (await req.json()) as AgentRequest;
@@ -48,34 +45,21 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "No goal provided" }, { status: 400 });
         }
 
-        // Rate limit check: max 20 tasks per hour per user
-        if (supabase) {
-          const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
-          const { count } = await supabase
-            .from("tasks")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .gte("created_at", oneHourAgo);
-
-          if ((count || 0) >= 20) {
-            return NextResponse.json(
-              { error: "Rate limit: max 20 autonomous tasks per hour" },
-              { status: 429 }
-            );
-          }
-        }
-
         // Create task record
         let taskId = `task-${Date.now()}`;
         if (supabase) {
-          const { data: taskRow } = await supabase.from("tasks").insert({
-            user_id: userId,
-            trigger_type: "manual",
-            trigger_source: body.triggerSource || "user_request",
-            goal: body.goal,
-            status: "pending",
-            max_steps: 10,
-          }).select("id").single();
+          const { data: taskRow } = await supabase
+            .from("tasks")
+            .insert({
+              user_id: userId,
+              trigger_type: "manual",
+              trigger_source: body.triggerSource || "user_request",
+              goal: body.goal,
+              status: "pending",
+              max_steps: 10,
+            })
+            .select("id")
+            .single();
 
           if (taskRow) taskId = taskRow.id;
         }
@@ -110,15 +94,21 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (!approval || approval.status !== "pending") {
-          return NextResponse.json({ error: "Approval not found or already decided" }, { status: 404 });
+          return NextResponse.json(
+            { error: "Approval not found or already decided" },
+            { status: 404 }
+          );
         }
 
         // Mark as approved
-        await supabase.from("approvals").update({
-          status: "approved",
-          decided_by: userId,
-          decided_at: new Date().toISOString(),
-        }).eq("id", body.approvalId);
+        await supabase
+          .from("approvals")
+          .update({
+            status: "approved",
+            decided_by: userId,
+            decided_at: new Date().toISOString(),
+          })
+          .eq("id", body.approvalId);
 
         audit({
           userId,
@@ -138,11 +128,14 @@ export async function POST(req: NextRequest) {
           });
 
           // Update action log
-          await supabase.from("action_log").update({
-            status: "completed",
-            output: { text: result.output },
-            completed_at: new Date().toISOString(),
-          }).eq("id", approval.action_log_id);
+          await supabase
+            .from("action_log")
+            .update({
+              status: "completed",
+              output: { text: result.output },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", approval.action_log_id);
 
           // Resume the agent loop from where it paused
           const task = approval.tasks;
@@ -153,6 +146,7 @@ export async function POST(req: NextRequest) {
               goal: task.goal,
               context: `Previous steps completed. The tool "${approval.action}" was approved and executed with result: ${result.output}. Continue from where you left off.`,
               userId,
+              clientId: task.client_id ?? undefined,
               maxSteps: task.max_steps - task.steps_taken,
               triggerType: task.trigger_type,
               triggerSource: task.trigger_source,
@@ -174,11 +168,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
 
-        await supabase.from("approvals").update({
-          status: "rejected",
-          decided_by: userId,
-          decided_at: new Date().toISOString(),
-        }).eq("id", body.approvalId);
+        await supabase
+          .from("approvals")
+          .update({
+            status: "rejected",
+            decided_by: userId,
+            decided_at: new Date().toISOString(),
+          })
+          .eq("id", body.approvalId);
 
         audit({
           userId,
@@ -189,10 +186,13 @@ export async function POST(req: NextRequest) {
           ip: getClientIp(req),
         }).catch(() => {});
 
-        await supabase.from("action_log").update({
-          status: "rejected",
-          completed_at: new Date().toISOString(),
-        }).eq("id", body.approvalId);
+        await supabase
+          .from("action_log")
+          .update({
+            status: "rejected",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", body.approvalId);
 
         // Mark task as cancelled
         const { data: approval } = await supabase
@@ -202,11 +202,14 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (approval) {
-          await supabase.from("tasks").update({
-            status: "cancelled",
-            result: "Task cancelled — action was rejected by user",
-            completed_at: new Date().toISOString(),
-          }).eq("id", approval.task_id);
+          await supabase
+            .from("tasks")
+            .update({
+              status: "cancelled",
+              result: "Task cancelled — action was rejected by user",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", approval.task_id);
         }
 
         return NextResponse.json({ approval: "rejected" });
@@ -237,7 +240,9 @@ export async function POST(req: NextRequest) {
         const limit = body.limit || 20;
         const { data: tasks } = await supabase
           .from("tasks")
-          .select("id, trigger_type, trigger_source, goal, status, result, steps_taken, token_cost, created_at, completed_at")
+          .select(
+            "id, trigger_type, trigger_source, goal, status, result, steps_taken, token_cost, created_at, completed_at"
+          )
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(limit);

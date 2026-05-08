@@ -316,6 +316,7 @@ export async function POST(req: NextRequest) {
             }
           }
         } catch (err) {
+          Sentry.captureException(err);
           const errEvent = JSON.stringify({
             type: "error",
             text: getPersonaErrorMessage(500),
