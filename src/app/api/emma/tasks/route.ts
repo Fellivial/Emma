@@ -33,7 +33,9 @@ function mapApproval(row: DbRow) {
     riskLevel: "dangerous" as const,
     inputs: (row.input as Record<string, string>) ?? {},
     reason: (row.reason as string) ?? "",
-    expiresAt: row.expires_at ? new Date(row.expires_at as string).getTime() : Date.now() + 3_600_000,
+    expiresAt: row.expires_at
+      ? new Date(row.expires_at as string).getTime()
+      : Date.now() + 3_600_000,
   };
 }
 
@@ -56,7 +58,8 @@ export async function GET(req: NextRequest) {
       .single();
 
     const clientId = membership?.client_id;
-    if (!clientId) return NextResponse.json({ tasks: [], actions: [], approvals: [], planId: "free" });
+    if (!clientId)
+      return NextResponse.json({ tasks: [], actions: [], approvals: [], planId: "free" });
 
     // Fetch plan_id for gating checks
     const { data: clientRow } = await supabase

@@ -29,7 +29,7 @@ const STEP_META: Record<
   {
     label: string;
     emoji: string;
-    fields: { key: string; label: string; placeholder: string; multiline?: boolean }[];
+    fields: { key: string; label: string; placeholder: string; hint?: string; multiline?: boolean }[];
   }
 > = {
   ai_response: {
@@ -40,6 +40,7 @@ const STEP_META: Record<
         key: "prompt",
         label: "Prompt",
         placeholder: "Summarise the latest news about {{topic}}",
+        hint: "Use {{variables}} to inject data from previous steps or the trigger payload.",
         multiline: true,
       },
     ],
@@ -48,20 +49,41 @@ const STEP_META: Record<
     label: "HTTP Request",
     emoji: "🌐",
     fields: [
-      { key: "url", label: "URL", placeholder: "https://api.example.com/data" },
-      { key: "method", label: "Method", placeholder: "GET" },
+      {
+        key: "url",
+        label: "URL",
+        placeholder: "https://api.example.com/data",
+        hint: "Full URL including https://. The JSON response body is available as {{http_request.output}}.",
+      },
+      {
+        key: "method",
+        label: "Method",
+        placeholder: "GET",
+        hint: "GET, POST, PUT, DELETE, or PATCH.",
+      },
     ],
   },
   send_email: {
     label: "Send Email",
     emoji: "📧",
     fields: [
-      { key: "to", label: "To", placeholder: "user@example.com" },
-      { key: "subject", label: "Subject", placeholder: "Daily digest — {{date}}" },
+      {
+        key: "to",
+        label: "To",
+        placeholder: "user@example.com",
+        hint: "Separate multiple addresses with commas. Supports {{variables}}.",
+      },
+      {
+        key: "subject",
+        label: "Subject",
+        placeholder: "Daily digest — {{date}}",
+        hint: "Use {{variables}} for dynamic content in the subject line.",
+      },
       {
         key: "body",
         label: "Body",
         placeholder: "{{ai_response.output}}",
+        hint: "Plain text or HTML. Use {{ai_response.output}} to include the previous AI step's result.",
         multiline: true,
       },
     ],
@@ -74,13 +96,21 @@ const STEP_META: Record<
         key: "expression",
         label: "Expression",
         placeholder: "{{http_request.status}} == 200",
+        hint: "If this evaluates to false, subsequent steps are skipped.",
       },
     ],
   },
   wait: {
     label: "Wait",
     emoji: "⏱",
-    fields: [{ key: "minutes", label: "Minutes", placeholder: "5" }],
+    fields: [
+      {
+        key: "minutes",
+        label: "Minutes",
+        placeholder: "5",
+        hint: "Execution pauses before the next step. Maximum 1440 (24 hours).",
+      },
+    ],
   },
 };
 
@@ -175,7 +205,7 @@ const MOCK_WORKFLOWS: Workflow[] = [
 ];
 
 function makeStep(type: StepType): Step {
-  return { id: Math.random().toString(36).slice(2), type, config: {} };
+  return { id: crypto.randomUUID(), type, config: {} };
 }
 
 function cronHuman(expr: string): string {
@@ -220,10 +250,7 @@ export default function WorkflowsPage() {
   const saveDraft = () => {
     if (!draft || !draft.name.trim()) return;
     if (editingId === "new") {
-      setWorkflows((prev) => [
-        ...prev,
-        { ...draft, id: Math.random().toString(36).slice(2) },
-      ]);
+      setWorkflows((prev) => [...prev, { ...draft, id: crypto.randomUUID() }]);
     } else {
       setWorkflows((prev) => prev.map((w) => (w.id === editingId ? { ...draft } : w)));
     }
@@ -319,13 +346,19 @@ export default function WorkflowsPage() {
                 placeholder="e.g. Morning Brief"
                 className="w-full bg-emma-200/3 border border-emma-200/10 rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
               />
+              <p className="text-[11px] text-emma-200/20 mt-1.5">
+                A short label that appears in the workflow list.
+              </p>
             </div>
 
             {/* Trigger */}
             <div>
-              <label className="text-[10px] text-emma-200/30 uppercase tracking-widest block mb-3">
+              <label className="text-[10px] text-emma-200/30 uppercase tracking-widest block mb-1.5">
                 Trigger
               </label>
+              <p className="text-[11px] text-emma-200/20 mb-3">
+                When this workflow starts running.
+              </p>
               <div className="flex gap-2 mb-4">
                 {(["scheduled", "webhook", "manual"] as TriggerType[]).map((t) => (
                   <button
@@ -367,10 +400,16 @@ export default function WorkflowsPage() {
                         value={draft.cronExpression}
                         onChange={(e) => setDraft({ ...draft, cronExpression: e.target.value })}
                         placeholder="0 9 * * *"
+                        title="Format: minute hour day month weekday — e.g. 0 9 * * 1-5 = weekdays at 9 AM"
                         className="flex-1 bg-transparent border border-emma-200/10 rounded-lg px-3 py-2 text-xs font-mono text-emma-200/60 placeholder:text-emma-200/15 outline-none focus:border-emma-300/20"
                       />
                     )}
                   </div>
+                  {cronPreset === "custom" && (
+                    <p className="text-[11px] text-emma-200/20">
+                      Format: <span className="font-mono text-emma-200/35">minute hour day month weekday</span>. All times are UTC.
+                    </p>
+                  )}
                   {draft.cronExpression && (
                     <p className="text-[11px] text-emma-200/30">
                       <span className="text-emma-300/50">Runs:</span>{" "}
@@ -383,8 +422,8 @@ export default function WorkflowsPage() {
               {draft.trigger === "webhook" && (
                 <div className="rounded-xl border border-emma-200/8 bg-emma-200/3 p-4">
                   <p className="text-[11px] text-emma-200/30 mb-2">
-                    A unique webhook URL will be generated on save. POST any JSON payload to
-                    trigger this workflow.
+                    A unique webhook URL will be generated on save. POST any JSON payload to trigger
+                    this workflow.
                   </p>
                   <div className="font-mono text-[11px] text-emma-300/40 bg-black/20 rounded-lg px-3 py-2">
                     POST /api/emma/webhook/&#123;workflow-id&#125;
@@ -401,9 +440,7 @@ export default function WorkflowsPage() {
 
               {draft.steps.length === 0 && (
                 <div className="rounded-xl border border-dashed border-emma-200/10 p-6 text-center mb-3">
-                  <p className="text-xs text-emma-200/20">
-                    Add steps below to build the workflow
-                  </p>
+                  <p className="text-xs text-emma-200/20">Add steps below to build the workflow</p>
                 </div>
               )}
 
@@ -447,6 +484,9 @@ export default function WorkflowsPage() {
                                 placeholder={field.placeholder}
                                 className="w-full bg-transparent border border-emma-200/8 rounded-lg px-3 py-2 text-xs text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/20 resize-y min-h-[72px] font-light"
                               />
+                              {field.hint && (
+                                <p className="text-[10px] text-emma-200/20 mt-1">{field.hint}</p>
+                              )}
                             </div>
                           ) : (
                             <div key={field.key}>
@@ -461,6 +501,9 @@ export default function WorkflowsPage() {
                                 placeholder={field.placeholder}
                                 className="w-full bg-transparent border border-emma-200/8 rounded-lg px-3 py-2 text-xs text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/20 font-light"
                               />
+                              {field.hint && (
+                                <p className="text-[10px] text-emma-200/20 mt-1">{field.hint}</p>
+                              )}
                             </div>
                           )
                         )}
@@ -497,9 +540,12 @@ export default function WorkflowsPage() {
 
             {/* Fallback */}
             <div>
-              <label className="text-[10px] text-emma-200/30 uppercase tracking-widest block mb-3">
+              <label className="text-[10px] text-emma-200/30 uppercase tracking-widest block mb-1.5">
                 On Failure
               </label>
+              <p className="text-[11px] text-emma-200/20 mb-3">
+                What Emma does when a step throws an error or returns unexpected output.
+              </p>
               <div className="flex gap-2">
                 {(
                   [
@@ -581,9 +627,7 @@ export default function WorkflowsPage() {
               } ${editingId === w.id ? "bg-emma-300/3" : ""}`}
             >
               <div className="min-w-0">
-                <span className="text-sm font-light text-emma-200/70 truncate block">
-                  {w.name}
-                </span>
+                <span className="text-sm font-light text-emma-200/70 truncate block">{w.name}</span>
                 {w.trigger === "scheduled" && w.cronExpression && (
                   <span className="text-[10px] text-emma-200/20 block mt-0.5">
                     {cronHuman(w.cronExpression)}

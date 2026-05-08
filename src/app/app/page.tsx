@@ -294,11 +294,16 @@ export default function EmmaPage() {
           const data = await res.json();
           if (data.tasks) setAutonomousTasks(data.tasks);
         }
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     };
     loadTasks();
     const id = setInterval(loadTasks, 15_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   // ── Approvals polling (30s) ────────────────────────────────────────────────
@@ -311,11 +316,16 @@ export default function EmmaPage() {
           const data = await res.json();
           if (data.approvals) setPendingApprovals(data.approvals);
         }
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     };
     loadApprovals();
     const id = setInterval(loadApprovals, 30_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   const handleApprove = useCallback(async (approvalId: string) => {
@@ -745,10 +755,7 @@ export default function EmmaPage() {
           style={{ width: "clamp(200px, 18%, 256px)" }}
         >
           {/* Autonomous tasks */}
-          <AutonomousTasksPanel
-            tasks={autonomousTasks}
-            onViewTask={handleViewTask}
-          />
+          <AutonomousTasksPanel tasks={autonomousTasks} onViewTask={handleViewTask} />
 
           {/* Memory */}
           <SideSection label="Memory" count={memories.length}>

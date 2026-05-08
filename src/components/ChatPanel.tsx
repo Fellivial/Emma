@@ -67,7 +67,10 @@ export function ChatPanel({
 
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [messages, loading, usageWarning, usageBlocked]);
 
@@ -80,18 +83,19 @@ export function ChatPanel({
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
-        {pendingApprovals && pendingApprovals.map((approval) => (
-          <ApprovalBubble
-            key={approval.approvalId}
-            approvalId={approval.approvalId}
-            tool={approval.tool}
-            inputs={approval.inputs}
-            reason={approval.reason}
-            expiresAt={approval.expiresAt}
-            onConfirm={onApprove ?? (() => Promise.resolve())}
-            onCancel={onCancelApproval ?? (() => Promise.resolve())}
-          />
-        ))}
+        {pendingApprovals &&
+          pendingApprovals.map((approval) => (
+            <ApprovalBubble
+              key={approval.approvalId}
+              approvalId={approval.approvalId}
+              tool={approval.tool}
+              inputs={approval.inputs}
+              reason={approval.reason}
+              expiresAt={approval.expiresAt}
+              onConfirm={onApprove ?? (() => Promise.resolve())}
+              onCancel={onCancelApproval ?? (() => Promise.resolve())}
+            />
+          ))}
         {loading && <TypingIndicator />}
 
         {/* Usage warning — amber left-border annotation below last bubble */}

@@ -15,9 +15,9 @@ export interface ClientConfig {
   slug: string;
   name: string;
   personaName: string;
-  personaPrompt: string | null;     // null = use default Mommy prompt
-  personaGreeting: string | null;   // null = use greeting engine
-  voiceId: string | null;           // null = use default Rachel
+  personaPrompt: string | null; // null = use default Mommy prompt
+  personaGreeting: string | null; // null = use greeting engine
+  voiceId: string | null; // null = use default Rachel
   toolsEnabled: string[];
   tokenBudgetMonthly: number;
   tokenBudgetDaily: number;
@@ -63,11 +63,7 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
   if (!supabase) return DEFAULT_CONFIG;
 
   try {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("slug", slug)
-      .single();
+    const { data, error } = await supabase.from("clients").select("*").eq("slug", slug).single();
 
     if (error || !data) return DEFAULT_CONFIG;
 
@@ -109,7 +105,22 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
 
     if (error || !data || !data.clients) return DEFAULT_CONFIG;
 
-    const c = data.clients as any;
+    const c = data.clients as unknown as {
+      id: string;
+      slug: string;
+      name: string;
+      persona_name: string;
+      persona_prompt: string | null;
+      persona_greeting: string | null;
+      voice_id: string | null;
+      tools_enabled: string[] | null;
+      token_budget_monthly: number;
+      token_budget_daily: number;
+      message_limit_daily: number;
+      plan_id: string | null;
+      autonomy_tier: number | null;
+      proactive_vision: boolean | null;
+    };
     return {
       id: c.id,
       slug: c.slug,
@@ -167,7 +178,8 @@ export async function checkUsageLimits(
       .gte("date", monthStartStr);
 
     const monthlyTokens = (monthlyData || []).reduce(
-      (sum: number, row: any) => sum + (row.token_count || 0), 0
+      (sum: number, row: any) => sum + (row.token_count || 0),
+      0
     );
 
     // Check limits
