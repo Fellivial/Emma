@@ -26,6 +26,7 @@ export interface ClientConfig {
   // DB columns required: autonomy_tier integer default 2, proactive_vision boolean default false
   autonomyTier: AutonomyTier;
   proactiveVision: boolean;
+  verticalId: string | null;
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -43,6 +44,7 @@ const DEFAULT_CONFIG: ClientConfig = {
   planId: "free",
   autonomyTier: 2,
   proactiveVision: false,
+  verticalId: null,
 };
 
 function getSupabase() {
@@ -82,6 +84,7 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       planId: data.plan_id || "free",
       autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: data.proactive_vision ?? false,
+      verticalId: data.vertical_id ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -120,6 +123,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       plan_id: string | null;
       autonomy_tier: number | null;
       proactive_vision: boolean | null;
+      vertical_id: string | null;
     };
     return {
       id: c.id,
@@ -136,6 +140,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       planId: c.plan_id || "free",
       autonomyTier: (c.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: c.proactive_vision ?? false,
+      verticalId: c.vertical_id ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;

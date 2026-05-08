@@ -20,6 +20,7 @@ import {
 } from "@/core/tool-registry";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
+import { getMcpServersForClient } from "@/core/integrations/mcp";
 import {
   type TaskContext,
   initContext,
@@ -92,6 +93,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 
   const supabase = getSupabase();
   const tools = getToolsForClaude();
+  const mcpServers = await getMcpServersForClient(task.clientId);
   const steps: AgentStepResult[] = [];
   let totalTokens = 0;
   let taskCompleted = false;
@@ -138,6 +140,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             system: AGENT_SYSTEM,
             messages,
             tools,
+            mcp_servers: mcpServers,
           }),
         },
         { maxRetries: 2 }
