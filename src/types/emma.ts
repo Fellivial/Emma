@@ -24,12 +24,28 @@ export const EMPTY_DEVICE_GRAPH: DeviceGraph = {};
 // ─── Avatar Types (L5 — Live2D) ──────────────────────────────────────────────
 
 export type AvatarExpression =
-  | "neutral" | "smirk" | "warm" | "concerned" | "amused"
-  | "skeptical" | "listening" | "flirty" | "sad" | "idle_bored";
+  | "neutral"
+  | "smirk"
+  | "warm"
+  | "concerned"
+  | "amused"
+  | "skeptical"
+  | "listening"
+  | "flirty"
+  | "sad"
+  | "idle_bored";
 
 export const AVATAR_EXPRESSIONS: AvatarExpression[] = [
-  "neutral", "smirk", "warm", "concerned", "amused",
-  "skeptical", "listening", "flirty", "sad", "idle_bored",
+  "neutral",
+  "smirk",
+  "warm",
+  "concerned",
+  "amused",
+  "skeptical",
+  "listening",
+  "flirty",
+  "sad",
+  "idle_bored",
 ];
 
 export type AvatarLayout = "side" | "overlay" | "pip";
@@ -149,8 +165,7 @@ export interface MemoryEntry {
   userId?: string;
 }
 
-export type MemoryCategory =
-  | "preference" | "routine" | "personal" | "episodic" | "environment";
+export type MemoryCategory = "preference" | "routine" | "personal" | "episodic" | "environment";
 
 export interface MemoryStore {
   entries: MemoryEntry[];
@@ -190,8 +205,14 @@ export interface RoutineTrigger {
 
 // ─── ElevenLabs Types (L2) ──────────────────────────────────────────────────
 
-export interface TtsRequest { text: string; voiceId?: string }
-export interface TtsResponse { audioUrl?: string; error?: string }
+export interface TtsRequest {
+  text: string;
+  voiceId?: string;
+}
+export interface TtsResponse {
+  audioUrl?: string;
+  error?: string;
+}
 
 // ─── Scheduler Types (L3) ───────────────────────────────────────────────────
 
@@ -229,7 +250,13 @@ export interface ApprovalDetails {
 export interface AutonomousTask {
   id: string;
   goal: string;
-  status: "running" | "completed" | "failed" | "awaiting_approval" | "awaiting_suggestion" | "max_steps_reached";
+  status:
+    | "running"
+    | "completed"
+    | "failed"
+    | "awaiting_approval"
+    | "awaiting_suggestion"
+    | "max_steps_reached";
   triggerType: "manual" | "scheduled" | "webhook";
   stepsTaken: number;
   totalTokens: number;
@@ -253,7 +280,13 @@ export interface EmmaNotification {
 }
 
 export type NotificationType =
-  | "auto_action" | "suggestion" | "alert" | "anomaly" | "system" | "emotion" | "approval";
+  | "auto_action"
+  | "suggestion"
+  | "alert"
+  | "anomaly"
+  | "system"
+  | "emotion"
+  | "approval";
 
 export interface NotificationAction {
   label: string;
@@ -278,10 +311,18 @@ export interface TimelineEntry {
 }
 
 export type TimelineEventType =
-  | "device_command" | "routine_executed" | "schedule_triggered"
-  | "memory_extracted" | "vision_analysis" | "notification_sent"
-  | "user_message" | "system_event" | "emotion_detected"
-  | "user_switched" | "routine_run" | "workflow_triggered";
+  | "device_command"
+  | "routine_executed"
+  | "schedule_triggered"
+  | "memory_extracted"
+  | "vision_analysis"
+  | "notification_sent"
+  | "user_message"
+  | "system_event"
+  | "emotion_detected"
+  | "user_switched"
+  | "routine_run"
+  | "workflow_triggered";
 
 export type TimelineSource = "user" | "scheduler" | "proactive" | "system";
 
@@ -290,12 +331,12 @@ export type TimelineSource = "user" | "scheduler" | "proactive" | "system";
 export interface UserProfile {
   id: string;
   name: string;
-  avatar: string;          // Emoji avatar
-  color: string;           // Accent color hex
+  avatar: string; // Emoji avatar
+  color: string; // Accent color hex
   role: "admin" | "member" | "guest";
   preferences: UserPreferences;
   autonomyOverrides?: Partial<Record<string, AutonomyTier>>;
-  voiceId?: string;        // For voice fingerprinting (future)
+  voiceId?: string; // For voice fingerprinting (future)
   createdAt: number;
 }
 
@@ -321,16 +362,24 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
 
 export interface EmotionState {
   primary: EmotionLabel;
-  confidence: number;       // 0-1
-  valence: number;          // -1 (negative) to 1 (positive)
-  arousal: number;          // 0 (calm) to 1 (excited)
+  confidence: number; // 0-1
+  valence: number; // -1 (negative) to 1 (positive)
+  arousal: number; // 0 (calm) to 1 (excited)
   source: "voice" | "vision" | "text" | "combined";
   timestamp: number;
 }
 
 export type EmotionLabel =
-  | "neutral" | "happy" | "sad" | "angry" | "anxious"
-  | "tired" | "excited" | "frustrated" | "calm" | "stressed";
+  | "neutral"
+  | "happy"
+  | "sad"
+  | "angry"
+  | "anxious"
+  | "tired"
+  | "excited"
+  | "frustrated"
+  | "calm"
+  | "stressed";
 
 export interface EmotionAnalysis {
   voiceSentiment?: { label: EmotionLabel; confidence: number };

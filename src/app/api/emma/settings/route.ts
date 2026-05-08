@@ -45,16 +45,54 @@ export async function GET() {
       usage.dailyMessages = dailyData?.message_count || 0;
       usage.dailyTokens = dailyData?.token_count || 0;
       usage.monthlyTokens = (monthlyData || []).reduce(
-        (sum: number, r: any) => sum + (r.token_count || 0), 0
+        (sum: number, r: any) => sum + (r.token_count || 0),
+        0
       );
       // Estimate cost: ~$3/M input + ~$15/M output, rough average $6/M
       usage.monthlyCost = Math.round((usage.monthlyTokens / 1_000_000) * 6 * 100) / 100;
     }
 
-    return NextResponse.json({ config, usage, verticals: getAllVerticals().map(v => ({ id: v.id, name: v.name, icon: v.icon, description: v.description })) });
+    return NextResponse.json({
+      config,
+      usage,
+      verticals: getAllVerticals().map((v) => ({
+        id: v.id,
+        name: v.name,
+        icon: v.icon,
+        description: v.description,
+      })),
+    });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
+}
+
+const VALID_AUTONOMY_TIERS = new Set([1, 2, 3]);
+
+function parseSettingsBody(raw: unknown): {
+  name?: string;
+  personaName?: string;
+  personaPrompt?: string;
+  personaGreeting?: string;
+  voiceId?: string;
+  autonomyTier?: 1 | 2 | 3;
+  proactiveVision?: boolean;
+  verticalId?: string;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const b = raw as Record<string, unknown>;
+  const out: ReturnType<typeof parseSettingsBody> = {};
+  if (typeof b.name === "string") out.name = b.name.slice(0, 200);
+  if (typeof b.personaName === "string") out.personaName = b.personaName.slice(0, 100);
+  if (typeof b.personaPrompt === "string") out.personaPrompt = b.personaPrompt.slice(0, 4000);
+  if (typeof b.personaGreeting === "string") out.personaGreeting = b.personaGreeting.slice(0, 500);
+  if (typeof b.voiceId === "string") out.voiceId = b.voiceId.slice(0, 100);
+  if (typeof b.autonomyTier === "number" && VALID_AUTONOMY_TIERS.has(b.autonomyTier)) {
+    out.autonomyTier = b.autonomyTier as 1 | 2 | 3;
+  }
+  if (typeof b.proactiveVision === "boolean") out.proactiveVision = b.proactiveVision;
+  if (typeof b.verticalId === "string") out.verticalId = b.verticalId;
+  return out;
 }
 
 // POST — update client config
@@ -66,7 +104,7 @@ export async function POST(req: NextRequest) {
     const supabase = getServiceSupabase();
     if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 500 });
 
-    const body = await req.json();
+    const body = parseSettingsBody(await req.json());
 
     // Find user's client
     const { data: membership } = await supabase
@@ -106,7 +144,13 @@ export async function POST(req: NextRequest) {
         role: "owner",
       });
 
-      audit({ userId: user.id, action: "write", resource: "client_config", resourceId: newClient.id, reason: "Initial client creation" }).catch(() => {});
+      audit({
+        userId: user.id,
+        action: "write",
+        resource: "client_config",
+        resourceId: newClient.id,
+        reason: "Initial client creation",
+      }).catch((e) => console.error("[audit]", e));
       return NextResponse.json({ success: true, clientId: newClient.id });
     }
 
@@ -134,7 +178,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
     }
 
-    audit({ userId: user.id, action: "write", resource: "client_config", resourceId: membership.client_id, reason: `Config update: ${Object.keys(updates).filter(k => k !== "updated_at").join(", ")}` }).catch(() => {});
+    audit({
+      userId: user.id,
+      action: "write",
+      resource: "client_config",
+      resourceId: membership.client_id,
+      reason: `Config update: ${Object.keys(updates)
+        .filter((k) => k !== "updated_at")
+        .join(", ")}`,
+    }).catch((e) => console.error("[audit]", e));
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

@@ -63,6 +63,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -91,16 +92,24 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const res = await fetch("/api/emma/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
-      if (res.ok) setSaved(true);
-    } catch (_e) {}
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSaveError(data.error || `Save failed (${res.status})`);
+      }
+    } catch (_e) {
+      setSaveError("Network error — changes not saved");
+    }
     setSaving(false);
-    setTimeout(() => setSaved(false), 3000);
   };
 
   const handleLogout = async () => {
@@ -157,7 +166,9 @@ export default function ProfilePage() {
                 >
                   {opt.label}
                 </div>
-                <div className="text-[10px] font-medium text-emma-300/50 mb-1.5">{opt.headline}</div>
+                <div className="text-[10px] font-medium text-emma-300/50 mb-1.5">
+                  {opt.headline}
+                </div>
                 <p className="text-[11px] font-light text-emma-200/30 leading-relaxed">
                   {opt.description}
                 </p>
@@ -267,6 +278,7 @@ export default function ProfilePage() {
         {saved && (
           <span className="text-xs text-emerald-400/60">✓ Saved — takes effect next session</span>
         )}
+        {saveError && <span className="text-xs text-red-400/60">{saveError}</span>}
         <button
           onClick={handleLogout}
           className="ml-auto text-[11px] text-emma-200/20 hover:text-red-300/50 transition-colors cursor-pointer"

@@ -32,8 +32,22 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
             const barH = 12 + ((i * 7 + 3) % 5) * 8; // varied ghost heights
             return (
               <g key={day}>
-                <rect x={x} y={H - barH} width={BAR_W} height={barH} rx={5} fill="rgba(232,160,191,0.04)" />
-                <text x={x + BAR_W / 2} y={H + 14} textAnchor="middle" fontSize={9} fill="rgba(232,160,191,0.1)" fontFamily="Outfit, sans-serif">
+                <rect
+                  x={x}
+                  y={H - barH}
+                  width={BAR_W}
+                  height={barH}
+                  rx={5}
+                  fill="rgba(232,160,191,0.04)"
+                />
+                <text
+                  x={x + BAR_W / 2}
+                  y={H + 14}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="rgba(232,160,191,0.1)"
+                  fontFamily="Outfit, sans-serif"
+                >
                   {day}
                 </text>
               </g>
@@ -121,7 +135,9 @@ export default function UsagePage() {
     fetch("/api/emma/usage")
       .then((r) => r.json())
       .then((d) => setData(d))
-      .catch(() => { /* graceful degradation */ })
+      .catch(() => {
+        /* graceful degradation */
+      })
       .finally(() => setLoading(false));
 
     // 7-day history — gracefully ignored if endpoint not present
@@ -130,7 +146,9 @@ export default function UsagePage() {
       .then((d) => {
         if (d?.history) setHistory(d.history);
       })
-      .catch(() => { /* graceful degradation */ })
+      .catch(() => {
+        /* graceful degradation */
+      })
       .finally(() => setHistoryLoading(false));
   }, []);
 
