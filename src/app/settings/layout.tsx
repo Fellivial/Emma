@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   {
     id: "profile",
     label: "Profile",
-    href: "/settings",
+    href: "/settings/profile",
     exact: true,
     icon: (active: boolean) => (
       <span
@@ -122,6 +122,7 @@ const NAV_ITEMS = [
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/settings": "Profile",
+  "/settings/profile": "Profile",
   "/settings/usage": "Usage",
   "/settings/billing": "Billing",
   "/settings/integrations": "Integrations",
@@ -143,6 +144,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     return pathname === item.href || pathname.startsWith(item.href + "/");
   };
 
+  const MOBILE_NAV = NAV_ITEMS.slice(0, 5); // Profile, Usage, Billing, Integrations, Tasks (Workflows folds in)
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0d0a0e] font-sans text-emma-100">
       {/* Top bar */}
@@ -157,12 +160,12 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           <span className="text-sm font-semibold tracking-wider text-emma-300">EMMA</span>
           <span className="text-emma-200/15 mx-0.5 select-none">|</span>
           <Link
-            href="/settings"
+            href="/settings/profile"
             className="text-xs text-emma-200/35 hover:text-emma-200/60 transition-colors"
           >
             Settings
           </Link>
-          {currentLabel !== "Settings" && (
+          {currentLabel !== "Settings" && currentLabel !== "Profile" && (
             <>
               <span className="text-emma-200/15 text-xs select-none">›</span>
               <span className="text-xs font-medium text-emma-200/70">{currentLabel}</span>
@@ -172,8 +175,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-[190px] shrink-0 border-r border-surface-border bg-emma-950/60 flex flex-col py-6">
+        {/* Sidebar — hidden on mobile */}
+        <aside className="hidden md:flex w-[190px] shrink-0 border-r border-surface-border bg-emma-950/60 flex-col py-6">
           <div className="px-5 mb-5">
             <span className="text-[9px] font-medium text-emma-200/20 uppercase tracking-[0.2em]">
               Navigation
@@ -212,9 +215,28 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           </div>
         </aside>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        {/* Main content — pb for mobile tab bar */}
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 flex items-center justify-around border-t border-surface-border bg-emma-950/95 backdrop-blur-2xl px-2 py-2">
+        {MOBILE_NAV.map((item) => {
+          const active = isActive(item);
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all min-w-[52px] ${
+                active ? "text-emma-300" : "text-emma-200/30 hover:text-emma-200/50"
+              }`}
+            >
+              {item.icon(active)}
+              <span className="text-[9px] font-light tracking-wide">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
