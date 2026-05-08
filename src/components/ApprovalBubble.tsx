@@ -91,14 +91,22 @@ export function ApprovalBubble({ approvalId, tool, inputs, reason, expiresAt, on
         {/* Buttons */}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button
-            onClick={async () => { setConfirming(true); await onConfirm(approvalId); setResolved("confirmed"); }}
+            onClick={async () => {
+              setConfirming(true);
+              try { await onConfirm(approvalId); setResolved("confirmed"); }
+              finally { setConfirming(false); }
+            }}
             disabled={busy}
             style={{ background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.25)", color: "rgba(52,211,153,0.85)", borderRadius: 9999, padding: "6px 16px", fontSize: 12, fontWeight: 500, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1 }}
           >
             {confirming ? "Confirming…" : "Confirm"}
           </button>
           <button
-            onClick={async () => { setCancelling(true); await onCancel(approvalId); setResolved("cancelled"); }}
+            onClick={async () => {
+              setCancelling(true);
+              try { await onCancel(approvalId); setResolved("cancelled"); }
+              finally { setCancelling(false); }
+            }}
             disabled={busy}
             style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)", color: "rgba(248,113,113,0.6)", borderRadius: 9999, padding: "6px 16px", fontSize: 12, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1 }}
           >

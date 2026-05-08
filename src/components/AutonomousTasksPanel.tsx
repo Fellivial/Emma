@@ -22,11 +22,10 @@ function StatusDot({ status }: { status: AutonomousTask["status"] }) {
   const color = STATUS_COLORS[status];
   const pulse = PULSE_STATUSES.includes(status);
   return (
-    <div style={{
-      width: 6, height: 6, borderRadius: "50%", background: color,
-      animation: pulse ? "pulse 1.2s ease-in-out infinite" : "none",
-      flexShrink: 0,
-    }} />
+    <div
+      className={pulse ? "animate-pulse" : undefined}
+      style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }}
+    />
   );
 }
 
@@ -46,6 +45,7 @@ export function AutonomousTasksPanel({ tasks, onViewTask }: AutonomousTasksPanel
     .slice(0, 3);
 
   const activeCount = active.length;
+  const visibleCount = Math.min(active.length, 3) + recent.length;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -113,7 +113,7 @@ export function AutonomousTasksPanel({ tasks, onViewTask }: AutonomousTasksPanel
             </div>
           ))}
 
-          {tasks.length > 3 && (
+          {tasks.length > visibleCount && (
             <button
               onClick={() => onViewTask("")}
               style={{ fontSize: 9, color: "rgba(232,160,191,0.3)", cursor: "pointer", background: "none", border: "none", padding: "2px 0", textAlign: "left" }}
