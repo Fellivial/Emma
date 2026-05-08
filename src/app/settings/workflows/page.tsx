@@ -29,7 +29,13 @@ const STEP_META: Record<
   {
     label: string;
     emoji: string;
-    fields: { key: string; label: string; placeholder: string; hint?: string; multiline?: boolean }[];
+    fields: {
+      key: string;
+      label: string;
+      placeholder: string;
+      hint?: string;
+      multiline?: boolean;
+    }[];
   }
 > = {
   ai_response: {
@@ -407,7 +413,11 @@ export default function WorkflowsPage() {
                   </div>
                   {cronPreset === "custom" && (
                     <p className="text-[11px] text-emma-200/20">
-                      Format: <span className="font-mono text-emma-200/35">minute hour day month weekday</span>. All times are UTC.
+                      Format:{" "}
+                      <span className="font-mono text-emma-200/35">
+                        minute hour day month weekday
+                      </span>
+                      . All times are UTC.
                     </p>
                   )}
                   {draft.cronExpression && (

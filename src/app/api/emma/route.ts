@@ -7,8 +7,14 @@ import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
-import { checkUsage, recordUsage, markWarningSent, type EnforcementResult } from "@/core/usage-enforcer";
+import {
+  checkUsage,
+  recordUsage,
+  markWarningSent,
+  type EnforcementResult,
+} from "@/core/usage-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
+import { getVertical } from "@/core/verticals/templates";
 
 /**
  * Streaming brain route.
@@ -26,21 +32,15 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY not set" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not set" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   try {
     const body = (await req.json()) as EmmaApiRequest;
-    const {
-      messages,
-      visionContext,
-      persona = "mommy",
-      activeUser,
-      emotionState,
-    } = body;
+    const { messages, visionContext, persona = "mommy", activeUser, emotionState } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
 
@@ -55,6 +55,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Load per-client config and resolve vertical (fail-open)
+    let clientConfigForPrompt = null;
+    if (userId) {
+      try {
+        clientConfigForPrompt = await loadClientConfigForUser(userId);
+      } catch {
+        // continue without vertical
+      }
+    }
+    const vertical = clientConfigForPrompt?.verticalId
+      ? getVertical(clientConfigForPrompt.verticalId)
+      : undefined;
+
     const systemPrompt = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
@@ -62,6 +75,7 @@ export async function POST(req: NextRequest) {
       visionContext,
       activeUser,
       emotionState,
+      vertical,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
@@ -108,7 +122,7 @@ export async function POST(req: NextRequest) {
     let enforcementResult: EnforcementResult | null = null;
     if (userId) {
       try {
-        const clientConfig = await loadClientConfigForUser(userId);
+        const clientConfig = clientConfigForPrompt ?? (await loadClientConfigForUser(userId));
         const planId = clientConfig.planId || "free";
         const userTimezone = (body as any).userTimezone || "UTC";
         const billingAnchorDay = (body as any).billingAnchorDay || 1;
@@ -116,7 +130,8 @@ export async function POST(req: NextRequest) {
         enforcementResult = await checkUsage(userId, planId, userTimezone, billingAnchorDay);
 
         if (enforcementResult.status === "blocked") {
-          const blockMsg = enforcementResult.message || "Mmm. You've used me a lot today. Grab some extra time?";
+          const blockMsg =
+            enforcementResult.message || "Mmm. You've used me a lot today. Grab some extra time?";
           const blockBody = `data: ${JSON.stringify({
             type: "done",
             text: blockMsg,
@@ -180,10 +195,10 @@ export async function POST(req: NextRequest) {
     if (!anthropicRes.ok) {
       const status = anthropicRes.status;
       const errMsg = getPersonaErrorMessage(status);
-      return new Response(
-        JSON.stringify({ error: errMsg, status }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: errMsg, status }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // ── Stream SSE to client ─────────────────────────────────────────────────
@@ -234,7 +249,11 @@ export async function POST(req: NextRequest) {
                   fullText += text;
 
                   // Don't stream [EMMA_CMD], [EMMA_ROUTINE], or [emotion:] tags
-                  if (!text.includes("[EMMA_CMD]") && !text.includes("[EMMA_ROUTINE]") && !text.includes("[emotion:")) {
+                  if (
+                    !text.includes("[EMMA_CMD]") &&
+                    !text.includes("[EMMA_ROUTINE]") &&
+                    !text.includes("[emotion:")
+                  ) {
                     const sseData = JSON.stringify({ type: "delta", text });
                     controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
                   }
@@ -259,12 +278,15 @@ export async function POST(req: NextRequest) {
             routineId: routineId || null,
             expression: expression || null,
             usage: { inputTokens, outputTokens },
-            enforcement: enforcementResult ? {
-              status: enforcementResult.status,
-              message: enforcementResult.status === "warning" ? enforcementResult.message : null,
-              warningWindow: enforcementResult.warningWindow?.windowType || null,
-              upgradeUrl: enforcementResult.upgradeUrl || null,
-            } : null,
+            enforcement: enforcementResult
+              ? {
+                  status: enforcementResult.status,
+                  message:
+                    enforcementResult.status === "warning" ? enforcementResult.message : null,
+                  warningWindow: enforcementResult.warningWindow?.windowType || null,
+                  upgradeUrl: enforcementResult.upgradeUrl || null,
+                }
+              : null,
           });
           controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
@@ -275,7 +297,10 @@ export async function POST(req: NextRequest) {
             // Multi-window tracking
             const planId = enforcementResult?.planId || "free";
             recordUsage(
-              userId, inputTokens, outputTokens, planId,
+              userId,
+              inputTokens,
+              outputTokens,
+              planId,
               (body as any).userTimezone || "UTC",
               (body as any).billingAnchorDay || 1
             ).catch(() => {});
@@ -310,9 +335,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[EMMA API] Unexpected error:", err);
-    return new Response(
-      JSON.stringify({ error: getPersonaErrorMessage(500) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: getPersonaErrorMessage(500) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

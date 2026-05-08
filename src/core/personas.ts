@@ -1,7 +1,15 @@
-import type { Persona, PersonaId, DeviceGraph, MemoryEntry, UserProfile, EmotionState } from "@/types/emma";
+import type {
+  Persona,
+  PersonaId,
+  DeviceGraph,
+  MemoryEntry,
+  UserProfile,
+  EmotionState,
+} from "@/types/emma";
 import { serializeMemories } from "./memory-shared";
 import { serializeRoutines } from "./routines-engine";
 import { serializeUserContext } from "./multi-user-engine";
+import type { VerticalConfig } from "@/core/verticals/templates";
 
 // ─── Persona Definitions ─────────────────────────────────────────────────────
 
@@ -87,6 +95,7 @@ interface PromptContext {
   visionContext?: string;
   activeUser?: UserProfile;
   emotionState?: EmotionState;
+  vertical?: VerticalConfig;
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
@@ -110,6 +119,16 @@ You are a workspace agent. You can:
 - Act proactively when appropriate (reminders, suggestions, check-ins)
 
 You do NOT control physical devices, smart home equipment, or IoT hardware.`;
+
+  // ── Inject vertical (industry) context ────────────────────────────────────
+  if (ctx.vertical) {
+    prompt += `
+
+## Industry Context
+${ctx.vertical.personaPrompt}
+
+Pay special attention to: ${ctx.vertical.memoryFocusAreas.join(", ")}`;
+  }
 
   // ── Inject persistent memories ─────────────────────────────────────────────
   if (ctx.memories && ctx.memories.length > 0) {
