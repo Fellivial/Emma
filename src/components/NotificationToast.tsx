@@ -17,17 +17,13 @@ const TYPE_STYLES: Record<string, { border: string; bg: string; icon: string }> 
   system: { border: "border-blue-400/20", bg: "bg-blue-400/5", icon: "🔔" },
 };
 
-export function NotificationToast({
-  notifications,
-  onAction,
-  onDismiss,
-}: NotificationToastProps) {
+export function NotificationToast({ notifications, onAction, onDismiss }: NotificationToastProps) {
   const visible = notifications.filter((n) => !n.dismissed).slice(0, 5);
 
   if (visible.length === 0) return null;
 
   return (
-    <div className="fixed top-16 right-4 z-50 flex flex-col gap-2 w-80">
+    <div className="fixed right-4 z-[45] flex flex-col gap-2 w-80" style={{ top: 64 }}>
       {visible.map((notif) => {
         const style = TYPE_STYLES[notif.type] || TYPE_STYLES.system;
 
@@ -40,12 +36,11 @@ export function NotificationToast({
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs">{style.icon}</span>
-                <span className="text-xs font-medium text-emma-200/70">
-                  {notif.title}
-                </span>
+                <span className="text-xs font-medium text-emma-200/70">{notif.title}</span>
               </div>
               <button
                 onClick={() => onDismiss(notif.id)}
+                aria-label="Dismiss notification"
                 className="text-emma-200/20 hover:text-emma-200/50 transition-colors cursor-pointer"
               >
                 <X size={12} />
