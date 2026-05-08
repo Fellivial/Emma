@@ -10,14 +10,42 @@ interface DayBucket {
   messages: number;
 }
 
-function WeeklyChart({ data }: { data: DayBucket[] }) {
-  if (!data.length) return null;
-  const maxTokens = Math.max(...data.map((d) => d.tokens), 1);
+function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean }) {
+  if (!loading && !data.length) return null;
   const W = 280;
   const H = 64;
   const BAR_W = 28;
-  const GAP = (W - data.length * BAR_W) / (data.length + 1);
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const TODAY = new Date().toLocaleDateString("en-US", { weekday: "short" });
+
+  if (loading) {
+    const GAP = (W - 7 * BAR_W) / 8;
+    return (
+      <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-xs font-medium text-emma-200/40 tracking-wider">Last 7 Days</span>
+          <span className="text-[10px] text-emma-200/20">tokens per day</span>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full" style={{ maxHeight: 88 }}>
+          {DAYS.map((day, i) => {
+            const x = GAP + i * (BAR_W + GAP);
+            const barH = 12 + ((i * 7 + 3) % 5) * 8; // varied ghost heights
+            return (
+              <g key={day}>
+                <rect x={x} y={H - barH} width={BAR_W} height={barH} rx={5} fill="rgba(232,160,191,0.04)" />
+                <text x={x + BAR_W / 2} y={H + 14} textAnchor="middle" fontSize={9} fill="rgba(232,160,191,0.1)" fontFamily="Outfit, sans-serif">
+                  {day}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  }
+
+  const maxTokens = Math.max(...data.map((d) => d.tokens), 1);
+  const GAP = (W - data.length * BAR_W) / (data.length + 1);
 
   return (
     <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
@@ -87,12 +115,13 @@ export default function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
   const [history, setHistory] = useState<DayBucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/emma/usage")
       .then((r) => r.json())
       .then((d) => setData(d))
-      .catch(() => {})
+      .catch(() => { /* graceful degradation */ })
       .finally(() => setLoading(false));
 
     // 7-day history — gracefully ignored if endpoint not present
@@ -101,7 +130,8 @@ export default function UsagePage() {
       .then((d) => {
         if (d?.history) setHistory(d.history);
       })
-      .catch(() => {});
+      .catch(() => { /* graceful degradation */ })
+      .finally(() => setHistoryLoading(false));
   }, []);
 
   const windows = data
@@ -223,7 +253,7 @@ export default function UsagePage() {
           </div>
 
           {/* 7-day bar chart */}
-          <WeeklyChart data={history} />
+          <WeeklyChart data={history} loading={historyLoading} />
 
           {/* Extra Pack section */}
           {showExtraPack && (

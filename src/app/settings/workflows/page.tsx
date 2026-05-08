@@ -95,23 +95,23 @@ const CRON_PRESETS = [
 
 const MOCK_WORKFLOWS: Workflow[] = [
   {
-    id: "1",
+    id: "w1",
     name: "Morning Brief",
     trigger: "scheduled",
     cronExpression: "0 9 * * *",
     steps: [
       {
-        id: "s1",
+        id: "w1-s1",
         type: "http_request",
         config: { url: "https://newsapi.org/v2/top-headlines", method: "GET" },
       },
       {
-        id: "s2",
+        id: "w1-s2",
         type: "ai_response",
         config: { prompt: "Summarise these top headlines into a 3-bullet brief." },
       },
       {
-        id: "s3",
+        id: "w1-s3",
         type: "send_email",
         config: {
           to: "me@example.com",
@@ -125,18 +125,18 @@ const MOCK_WORKFLOWS: Workflow[] = [
     lastRun: "1h ago",
   },
   {
-    id: "2",
+    id: "w2",
     name: "Competitor Digest",
     trigger: "scheduled",
     cronExpression: "0 8 * * 1",
     steps: [
       {
-        id: "s1",
+        id: "w2-s1",
         type: "http_request",
         config: { url: "https://api.example.com/competitors", method: "GET" },
       },
       {
-        id: "s2",
+        id: "w2-s2",
         type: "ai_response",
         config: { prompt: "Analyse competitor activity this week." },
       },
@@ -146,20 +146,20 @@ const MOCK_WORKFLOWS: Workflow[] = [
     lastRun: "May 7",
   },
   {
-    id: "3",
+    id: "w3",
     name: "Lead Follow-up Email",
     trigger: "webhook",
     cronExpression: "",
     steps: [
       {
-        id: "s1",
+        id: "w3-s1",
         type: "ai_response",
         config: {
           prompt: "Write a warm follow-up email for {{lead_name}} from {{company}}.",
         },
       },
       {
-        id: "s2",
+        id: "w3-s2",
         type: "send_email",
         config: {
           to: "{{lead_email}}",

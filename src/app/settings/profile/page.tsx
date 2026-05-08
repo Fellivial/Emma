@@ -98,13 +98,14 @@ export default function ProfilePage() {
         body: JSON.stringify(config),
       });
       if (res.ok) setSaved(true);
-    } catch {}
+    } catch (_e) {}
     setSaving(false);
     setTimeout(() => setSaved(false), 3000);
   };
 
   const handleLogout = async () => {
-    if (supabase) await supabase.auth.signOut();
+    if (!supabase) return;
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
