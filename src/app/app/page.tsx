@@ -41,6 +41,7 @@ import { Header } from "@/components/Header";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NotificationToast } from "@/components/NotificationToast";
 import { AvatarCanvas } from "@/components/AvatarCanvas";
+import { AutonomousPanel } from "@/components/AutonomousPanel";
 import { VisionPanel } from "@/components/VisionPanel";
 import { MemoryPanel } from "@/components/MemoryPanel";
 import { RoutinePanel } from "@/components/RoutinePanel";
@@ -58,7 +59,10 @@ export default function EmmaPage() {
   const [loading, setLoading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const [usageWarning, setUsageWarning] = useState<{ message: string; window: string | null } | null>(null);
+  const [usageWarning, setUsageWarning] = useState<{
+    message: string;
+    window: string | null;
+  } | null>(null);
   const [usageBlocked, setUsageBlocked] = useState<{ upgradeUrl: string } | null>(null);
 
   // ── Memory (L2) ────────────────────────────────────────────────────────────
@@ -183,8 +187,10 @@ export default function EmmaPage() {
     const greetingExpression = getGreetingExpression(persona);
 
     const greetingMsg: ChatMessageType = {
-      id: uid(), role: "assistant",
-      content: greeting, display: greeting,
+      id: uid(),
+      role: "assistant",
+      content: greeting,
+      display: greeting,
       timestamp: Date.now(),
       expression: greetingExpression as AvatarExpression,
     };
@@ -202,7 +208,10 @@ export default function EmmaPage() {
     if (messages.length < 4) return;
     setMemoryExtracting(true);
     try {
-      const conversationText = messages.slice(-20).map((m) => `${m.role}: ${m.display}`).join("\n");
+      const conversationText = messages
+        .slice(-20)
+        .map((m) => `${m.role}: ${m.display}`)
+        .join("\n");
       const res = await fetch("/api/emma/memory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,17 +220,31 @@ export default function EmmaPage() {
       const data = await res.json();
       if (data.extracted && data.extracted.length > 0) {
         await fetchMemories();
-        timeline.log({ type: "memory_extracted", source: "system", title: "Memories extracted", detail: `${data.extracted.length} new memories` });
+        timeline.log({
+          type: "memory_extracted",
+          source: "system",
+          title: "Memories extracted",
+          detail: `${data.extracted.length} new memories`,
+        });
       }
-    } catch (err) { console.error("[EMMA] Memory extraction failed:", err); }
-    finally { setMemoryExtracting(false); }
+    } catch (err) {
+      console.error("[EMMA] Memory extraction failed:", err);
+    } finally {
+      setMemoryExtracting(false);
+    }
   }, [messages, timeline]);
 
   const deleteMemory = useCallback(async (id: string) => {
     try {
-      await fetch("/api/emma/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", entry: { id } }) });
+      await fetch("/api/emma/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", entry: { id } }),
+      });
       setMemories((prev) => prev.filter((m) => m.id !== id));
-    } catch (err) { console.error("[EMMA] Memory delete failed:", err); }
+    } catch (err) {
+      console.error("[EMMA] Memory delete failed:", err);
+    }
   }, []);
 
   // Auto-extract every 10 messages
@@ -235,12 +258,23 @@ export default function EmmaPage() {
   }, [messages, extractMemories]);
 
   // ── Custom routines ────────────────────────────────────────────────────────
-  const handleCreateRoutine = useCallback((routine: Routine) => {
-    addCustomRoutine(routine);
-    setRoutineVersion((v) => v + 1);
-    timeline.log({ type: "system_event", source: "user", title: "Routine created", detail: `${routine.icon} ${routine.name}`, routineId: routine.id });
-    notifications.push(buildSystemNotification("Routine Created", `${routine.icon} ${routine.name} is ready`, 3000));
-  }, [timeline, notifications]);
+  const handleCreateRoutine = useCallback(
+    (routine: Routine) => {
+      addCustomRoutine(routine);
+      setRoutineVersion((v) => v + 1);
+      timeline.log({
+        type: "system_event",
+        source: "user",
+        title: "Routine created",
+        detail: `${routine.icon} ${routine.name}`,
+        routineId: routine.id,
+      });
+      notifications.push(
+        buildSystemNotification("Routine Created", `${routine.icon} ${routine.name} is ready`, 3000)
+      );
+    },
+    [timeline, notifications]
+  );
 
   const handleDeleteRoutine = useCallback((id: string) => {
     removeCustomRoutine(id);
@@ -249,10 +283,17 @@ export default function EmmaPage() {
 
   // ── Vision ─────────────────────────────────────────────────────────────────
   const handleVisionToggle = useCallback(async () => {
-    if (vision.active) { vision.stop(); }
-    else {
+    if (vision.active) {
+      vision.stop();
+    } else {
       const ok = await vision.start();
-      if (ok) timeline.log({ type: "system_event", source: "user", title: "Vision activated", detail: "Camera connected" });
+      if (ok)
+        timeline.log({
+          type: "system_event",
+          source: "user",
+          title: "Vision activated",
+          detail: "Camera connected",
+        });
     }
   }, [vision, timeline]);
 
@@ -260,7 +301,8 @@ export default function EmmaPage() {
     const analysis = await vision.analyzeScene();
     if (analysis) {
       timeline.log({
-        type: "vision_analysis", source: "system",
+        type: "vision_analysis",
+        source: "system",
         title: "Screen analyzed",
         detail: analysis.description.slice(0, 100),
       });
@@ -289,9 +331,12 @@ export default function EmmaPage() {
       }
 
       const userMsg: ChatMessageType = {
-        id: uid(), role: "user",
-        content: text.trim(), display: text.trim(),
-        timestamp: Date.now(), visionContext,
+        id: uid(),
+        role: "user",
+        content: text.trim(),
+        display: text.trim(),
+        timestamp: Date.now(),
+        visionContext,
         userId: multiUser.activeUser.id,
         emotion: combinedEmotion,
       };
@@ -307,7 +352,8 @@ export default function EmmaPage() {
       if (summarized) {
         setApiMessages(managed);
         timeline.log({
-          type: "system_event", source: "system",
+          type: "system_event",
+          source: "system",
           title: "Context summarized",
           detail: `Compressed ${newApiMsgs.length} → ${managed.length} messages`,
         });
@@ -319,8 +365,10 @@ export default function EmmaPage() {
       avatar.setListening();
 
       timeline.log({
-        type: "user_message", source: "user",
-        title: "User message", detail: text.trim().slice(0, 80),
+        type: "user_message",
+        source: "user",
+        title: "User message",
+        detail: text.trim().slice(0, 80),
         userId: multiUser.activeUser.id,
       });
 
@@ -328,8 +376,10 @@ export default function EmmaPage() {
         // Create placeholder assistant message for streaming
         const assistantId = uid();
         const assistantMsg: ChatMessageType = {
-          id: assistantId, role: "assistant",
-          content: "", display: "",
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          display: "",
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, assistantMsg]);
@@ -371,14 +421,22 @@ export default function EmmaPage() {
                     : m
                 )
               );
-              setApiMessages((prev) => [...prev, { role: "assistant", content: event.raw || event.text }]);
+              setApiMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: event.raw || event.text },
+              ]);
 
               // Handle enforcement metadata
               if (event.enforcement?.status === "warning" && event.enforcement.message) {
-                setUsageWarning({ message: event.enforcement.message, window: event.enforcement.warningWindow });
+                setUsageWarning({
+                  message: event.enforcement.message,
+                  window: event.enforcement.warningWindow,
+                });
               }
               if (event.enforcement?.status === "blocked") {
-                setUsageBlocked({ upgradeUrl: event.enforcement.upgradeUrl || "/settings/billing?addon=extra_pack" });
+                setUsageBlocked({
+                  upgradeUrl: event.enforcement.upgradeUrl || "/settings/billing?addon=extra_pack",
+                });
               }
 
               // Apply routine
@@ -412,9 +470,7 @@ export default function EmmaPage() {
             onError: (errorText: string) => {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, display: errorText, content: errorText }
-                    : m
+                  m.id === assistantId ? { ...m, display: errorText, content: errorText } : m
                 )
               );
               setLoading(false);
@@ -423,16 +479,33 @@ export default function EmmaPage() {
         );
       } catch (err) {
         console.error("[EMMA] Stream error:", err);
-        setMessages((prev) => [...prev, {
-          id: uid(), role: "assistant",
-          content: "Something broke on my end. Give me a second.",
-          display: "Something broke on my end. Give me a second.",
-          timestamp: Date.now(),
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "assistant",
+            content: "Something broke on my end. Give me a second.",
+            display: "Something broke on my end. Give me a second.",
+            timestamp: Date.now(),
+          },
+        ]);
         setLoading(false);
       }
     },
-    [apiMessages, loading, persona, ttsEnabled, voice, vision, emotion, timeline, multiUser.activeUser, executeRoutineById, avatar, contextManager]
+    [
+      apiMessages,
+      loading,
+      persona,
+      ttsEnabled,
+      voice,
+      vision,
+      emotion,
+      timeline,
+      multiUser.activeUser,
+      executeRoutineById,
+      avatar,
+      contextManager,
+    ]
   );
 
   const handleVoice = useCallback(async () => {
@@ -446,7 +519,8 @@ export default function EmmaPage() {
     if (multiUser.activeUser.id !== prevUserId.current) {
       prevUserId.current = multiUser.activeUser.id;
       timeline.log({
-        type: "user_switched", source: "user",
+        type: "user_switched",
+        source: "user",
         title: `Switched to ${multiUser.activeUser.name}`,
         detail: `${multiUser.activeUser.avatar} ${multiUser.activeUser.role}`,
         userId: multiUser.activeUser.id,
@@ -458,8 +532,10 @@ export default function EmmaPage() {
   const handleProactiveSpeak = useCallback(
     (text: string, expression: AvatarExpression) => {
       const msg: ChatMessageType = {
-        id: uid(), role: "assistant",
-        content: text, display: text,
+        id: uid(),
+        role: "assistant",
+        content: text,
+        display: text,
         timestamp: Date.now(),
         expression,
       };
@@ -472,7 +548,8 @@ export default function EmmaPage() {
       if (ttsEnabled) voice.speak(text);
 
       timeline.log({
-        type: "system_event", source: "proactive",
+        type: "system_event",
+        source: "proactive",
         title: "Proactive speech",
         detail: text.slice(0, 60),
       });
@@ -493,9 +570,30 @@ export default function EmmaPage() {
     avatar.resetIdleTimer();
   }, [avatar]);
 
+  // ── PiP fallback: auto-switch to pip when avatar panel is hidden ──────────
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 1100 && avatar.state.layout === "side") {
+        avatar.setLayout("pip");
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, [avatar.state.layout, avatar.setLayout]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-emma-950 via-emma-900 to-emma-950 text-emma-100 font-sans overflow-hidden">
+      <style>{`
+        @media (max-width: 1100px) {
+          .emma-avatar-panel { display: none !important; }
+        }
+        @media (max-width: 900px) {
+          .emma-right-sidebar { display: none !important; }
+        }
+        .emma-chat-min { min-width: 480px; }
+      `}</style>
       <Header
         persona={persona}
         visionActive={vision.active}
@@ -513,71 +611,25 @@ export default function EmmaPage() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar — vision, memory, routines, schedules, timeline, users */}
-        <aside className="w-80 border-l border-surface-border bg-emma-950/40 overflow-y-auto flex flex-col gap-4 p-4">
-          {/* Vision */}
-          <VisionPanel
-            active={vision.active}
-            supported={vision.supported}
-            analyzing={vision.analyzing}
-            lastAnalysis={vision.lastAnalysis}
-            previewRef={vision.previewRef}
-            onToggle={handleVisionToggle}
-            onAnalyze={handleVisionAnalyze}
+        {/* ── Left: Emma avatar identity panel ── */}
+        <div
+          className="emma-avatar-panel shrink-0 border-r border-surface-border bg-emma-950/60 flex flex-col overflow-hidden"
+          style={{ width: "clamp(240px, 22%, 270px)", flexShrink: 0 }}
+        >
+          <AvatarCanvas
+            state={avatar.state}
+            canvasRef={avatar.canvasRef}
+            onInit={avatar.init}
+            onToggleVisible={avatar.toggleVisible}
+            onSetLayout={avatar.setLayout}
           />
-          {/* Memory */}
-          <MemoryPanel
-            memories={memories}
-            loading={memoriesLoading}
-            onRefresh={fetchMemories}
-            onDelete={deleteMemory}
-            onExtract={extractMemories}
-            extracting={memoryExtracting}
-          />
-          {/* Routines */}
-          <RoutinePanel
-            onActivate={(id) => executeRoutineById(id, "user")}
-            activeRoutineId={activeRoutineId}
-            onCreate={handleCreateRoutine}
-            onDelete={handleDeleteRoutine}
-          />
-          {/* Schedule */}
-          <SchedulePanel
-            schedules={scheduler.schedules}
-            onToggle={scheduler.toggleSchedule}
-            onRemove={scheduler.removeSchedule}
-          />
-          {/* Timeline */}
-          <TimelinePanel entries={timeline.entries} />
-          {/* Users */}
-          <UserPanel
-            users={multiUser.users}
-            activeUser={multiUser.activeUser}
-            onSwitch={multiUser.switchUser}
-            onAdd={multiUser.addUser}
-            onRemove={multiUser.removeUser}
-          />
-        </aside>
+        </div>
 
-        {/* ── Main Content Area: Avatar + Chat ─── */}
-        <div className="flex-1 flex overflow-hidden relative">
-
-          {/* Side layout: avatar panel + chat panel side by side */}
-          {avatar.state.layout === "side" && avatar.state.visible && (
-            <div className="w-[280px] shrink-0 border-r border-surface-border bg-emma-950/60">
-              <AvatarCanvas
-                state={avatar.state}
-                canvasRef={avatar.canvasRef}
-                onInit={avatar.init}
-                onToggleVisible={avatar.toggleVisible}
-                onSetLayout={avatar.setLayout}
-              />
-            </div>
-          )}
-
+        {/* ── Center: Chat area ── */}
+        <div className="emma-chat-min flex-1 flex overflow-hidden relative">
           {/* Overlay layout: avatar behind chat at reduced opacity */}
           {avatar.state.layout === "overlay" && avatar.state.visible && (
-            <div className="absolute inset-0 z-0 opacity-30 pointer-events-none">
+            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
               <AvatarCanvas
                 state={avatar.state}
                 canvasRef={avatar.canvasRef}
@@ -588,8 +640,9 @@ export default function EmmaPage() {
             </div>
           )}
 
-          {/* Chat panel (always visible) */}
-          <div className={`flex-1 ${avatar.state.layout === "overlay" ? "relative z-10" : ""}`}>
+          <div
+            className={`flex-1 flex flex-col overflow-hidden ${avatar.state.layout === "overlay" ? "relative z-10" : ""}`}
+          >
             <ChatPanel
               messages={messages}
               loading={loading}
@@ -620,18 +673,107 @@ export default function EmmaPage() {
               />
             </div>
           )}
-
-          {/* Show avatar button when hidden */}
-          {!avatar.state.visible && (
-            <button
-              onClick={avatar.toggleVisible}
-              className="absolute bottom-20 right-4 z-20 px-3 py-2 rounded-full bg-emma-300/10 border border-emma-300/20 text-emma-300/50 text-[11px] hover:text-emma-300 cursor-pointer transition-all"
-            >
-              👤 Show Emma
-            </button>
-          )}
         </div>
+
+        {/* ── Right: Sidebar ── */}
+        <aside
+          className="emma-right-sidebar shrink-0 border-l border-surface-border bg-emma-950/40 overflow-y-auto flex flex-col gap-5 p-4"
+          style={{ width: "clamp(200px, 18%, 256px)" }}
+        >
+          {/* Autonomous tasks */}
+          <AutonomousPanel
+            notifications={notifications.notifications}
+            timelineEntries={timeline.entries}
+          />
+
+          {/* Memory */}
+          <SideSection label="Memory" count={memories.length}>
+            <MemoryPanel
+              memories={memories}
+              loading={memoriesLoading}
+              onRefresh={fetchMemories}
+              onDelete={deleteMemory}
+              onExtract={extractMemories}
+              extracting={memoryExtracting}
+            />
+          </SideSection>
+
+          {/* Routines */}
+          <SideSection label="Routines">
+            <RoutinePanel
+              onActivate={(id) => executeRoutineById(id, "user")}
+              activeRoutineId={activeRoutineId}
+              onCreate={handleCreateRoutine}
+              onDelete={handleDeleteRoutine}
+            />
+          </SideSection>
+
+          {/* Schedule */}
+          <SideSection label="Schedule" count={scheduler.schedules.filter((s) => s.enabled).length}>
+            <SchedulePanel
+              schedules={scheduler.schedules}
+              onToggle={scheduler.toggleSchedule}
+              onRemove={scheduler.removeSchedule}
+            />
+          </SideSection>
+
+          {/* Timeline */}
+          <SideSection label="Timeline" count={timeline.entries.length}>
+            <TimelinePanel entries={timeline.entries} />
+          </SideSection>
+
+          {/* Vision */}
+          <SideSection label="Vision">
+            <VisionPanel
+              active={vision.active}
+              supported={vision.supported}
+              analyzing={vision.analyzing}
+              lastAnalysis={vision.lastAnalysis}
+              previewRef={vision.previewRef}
+              onToggle={handleVisionToggle}
+              onAnalyze={handleVisionAnalyze}
+            />
+          </SideSection>
+
+          {/* Users */}
+          <SideSection label="Users" count={multiUser.users.length}>
+            <UserPanel
+              users={multiUser.users}
+              activeUser={multiUser.activeUser}
+              onSwitch={multiUser.switchUser}
+              onAdd={multiUser.addUser}
+              onRemove={multiUser.removeUser}
+            />
+          </SideSection>
+        </aside>
       </div>
+    </div>
+  );
+}
+
+// ── Sidebar section wrapper ────────────────────────────────────────────────────
+function SideSection({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 px-1">
+        <span className="text-[10px] font-medium text-emma-200/30 uppercase tracking-[0.15em]">
+          {label}
+        </span>
+        {count !== undefined && count > 0 && (
+          <span className="text-[9px] text-emma-200/20 bg-emma-300/8 border border-emma-300/10 rounded-full px-1.5 py-px font-light">
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
