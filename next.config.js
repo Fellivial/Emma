@@ -83,4 +83,9 @@ const nextConfig = {
 module.exports = withSentryConfig(nextConfig, {
   silent: true,
   hideSourceMaps: true,
+  // Source map upload — requires SENTRY_ORG, SENTRY_PROJECT, SENTRY_AUTH_TOKEN at build time.
+  // Without these, errors in Sentry will show minified stack traces.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 });
