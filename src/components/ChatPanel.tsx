@@ -36,20 +36,36 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({
-  messages, loading, onSend, onVoice, voiceSupported,
-  listening, ttsEnabled, onToggleTts, contextStats,
-  onTypingStart, onTypingStop,
-  usageWarning, usageBlocked, onDismissWarning,
+  messages,
+  loading,
+  onSend,
+  onVoice,
+  voiceSupported,
+  listening,
+  ttsEnabled,
+  onToggleTts,
+  contextStats,
+  onTypingStart,
+  onTypingStop,
+  usageWarning,
+  usageBlocked,
+  onDismissWarning,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, loading, usageWarning, usageBlocked]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto px-5 py-4 flex flex-col gap-3">
+      <div
+        ref={scrollContainerRef}
+        className="emma-chat-scroll flex-1 overflow-auto px-5 py-4 flex flex-col gap-3"
+      >
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
@@ -57,24 +73,39 @@ export function ChatPanel({
 
         {/* Usage warning — amber left-border annotation below last bubble */}
         {usageWarning && !usageBlocked && (
-          <div style={{
-            borderLeft: "2px solid rgba(217, 119, 6, 0.5)",
-            background: "rgba(217, 119, 6, 0.04)",
-            borderRadius: "0 8px 8px 0",
-            padding: "8px 12px",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: "8px",
-            marginLeft: "12px",
-          }}>
+          <div
+            style={{
+              borderLeft: "2px solid rgba(217, 119, 6, 0.5)",
+              background: "rgba(217, 119, 6, 0.04)",
+              borderRadius: "0 8px 8px 0",
+              padding: "8px 12px",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "8px",
+              marginLeft: "12px",
+            }}
+          >
             <div style={{ flex: 1 }}>
-              <p style={{ fontSize: "12px", color: "rgba(252, 211, 77, 0.7)", lineHeight: "1.4", fontStyle: "italic" }}>
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "rgba(252, 211, 77, 0.7)",
+                  lineHeight: "1.4",
+                  fontStyle: "italic",
+                }}
+              >
                 {usageWarning.message}
               </p>
               <Link
                 href="/settings/billing?addon=extra_pack"
-                style={{ fontSize: "11px", color: "rgba(252, 211, 77, 0.5)", textDecoration: "none", marginTop: "4px", display: "inline-block" }}
+                style={{
+                  fontSize: "11px",
+                  color: "rgba(252, 211, 77, 0.5)",
+                  textDecoration: "none",
+                  marginTop: "4px",
+                  display: "inline-block",
+                }}
               >
                 Get extra time →
               </Link>
@@ -82,7 +113,14 @@ export function ChatPanel({
             {onDismissWarning && (
               <button
                 onClick={onDismissWarning}
-                style={{ color: "rgba(252, 211, 77, 0.3)", background: "none", border: "none", cursor: "pointer", padding: "0", lineHeight: 1 }}
+                style={{
+                  color: "rgba(252, 211, 77, 0.3)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "0",
+                  lineHeight: 1,
+                }}
               >
                 <X size={12} />
               </button>
@@ -92,19 +130,25 @@ export function ChatPanel({
 
         {/* Usage blocked — compact CTA card below Emma's block message */}
         {usageBlocked && (
-          <div style={{
-            border: "1px solid rgba(232,160,191,0.15)",
-            background: "rgba(232,160,191,0.04)",
-            borderRadius: "12px",
-            padding: "12px 16px",
-            marginLeft: "12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-          }}>
+          <div
+            style={{
+              border: "1px solid rgba(232,160,191,0.15)",
+              background: "rgba(232,160,191,0.04)",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              marginLeft: "12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "12px", fontWeight: 500, color: "rgba(232,160,191,0.7)" }}>Get Extra Responses</span>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "rgba(232,160,191,0.6)" }}>$9</span>
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "rgba(232,160,191,0.7)" }}>
+                Get Extra Responses
+              </span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "rgba(232,160,191,0.6)" }}>
+                $9
+              </span>
             </div>
             <p style={{ fontSize: "11px", color: "rgba(232,160,191,0.35)", lineHeight: "1.4" }}>
               500 extra messages, valid for 30 days
@@ -115,7 +159,8 @@ export function ChatPanel({
                 style={{
                   fontSize: "11px",
                   color: "#1a1020",
-                  background: "linear-gradient(135deg, rgba(232,160,191,0.9), rgba(168,93,154,0.9))",
+                  background:
+                    "linear-gradient(135deg, rgba(232,160,191,0.9), rgba(168,93,154,0.9))",
                   borderRadius: "8px",
                   padding: "6px 14px",
                   textDecoration: "none",

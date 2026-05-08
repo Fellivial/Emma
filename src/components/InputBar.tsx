@@ -17,8 +17,16 @@ interface InputBarProps {
 }
 
 export function InputBar({
-  onSend, onVoice, voiceSupported, listening, ttsEnabled,
-  onToggleTts, disabled, blocked, onTypingStart, onTypingStop,
+  onSend,
+  onVoice,
+  voiceSupported,
+  listening,
+  ttsEnabled,
+  onToggleTts,
+  disabled,
+  blocked,
+  onTypingStart,
+  onTypingStop,
 }: InputBarProps) {
   const [input, setInput] = useState("");
   const typingRef = useRef(false);
@@ -75,12 +83,13 @@ export function InputBar({
         <button
           onClick={onVoice}
           disabled={disabled}
+          aria-label={listening ? "Stop listening" : "Start voice input"}
+          aria-pressed={listening}
           className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
             listening
               ? "bg-emma-300 border-emma-300 text-emma-950"
               : "bg-surface border-surface-active text-emma-300 hover:bg-surface-hover"
           }`}
-          title="Tap to speak"
         >
           <Mic size={16} />
         </button>
@@ -92,14 +101,18 @@ export function InputBar({
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled || blocked}
-        placeholder={blocked ? "Response limit reached — get extra time to continue" : "Talk to Emma…"}
+        placeholder={
+          blocked ? "Response limit reached — get extra time to continue" : "Talk to Emma…"
+        }
         style={blocked ? { opacity: 0.5, pointerEvents: "none" } : undefined}
-        className="flex-1 bg-surface border border-surface-border rounded-full px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/20 outline-none focus:border-emma-300/30 transition-colors"
+        className="flex-1 bg-surface border border-surface-border rounded-2xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/20 outline-none focus:border-emma-300/30 transition-colors"
       />
 
       <button
         onClick={handleSend}
-        disabled={!input.trim() || disabled || blocked}
+        disabled={!input.trim() || disabled || !!blocked}
+        aria-label="Send message"
+        aria-disabled={!input.trim() || disabled || !!blocked}
         className="w-9 h-9 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center shrink-0 transition-opacity cursor-pointer disabled:opacity-20"
       >
         <ArrowUp size={16} className="text-emma-950" strokeWidth={2.5} />
@@ -107,10 +120,11 @@ export function InputBar({
 
       <button
         onClick={onToggleTts}
+        aria-label={ttsEnabled ? "Mute Emma" : "Unmute Emma"}
+        aria-pressed={ttsEnabled}
         className={`w-9 h-9 rounded-full border border-surface-active flex items-center justify-center shrink-0 transition-opacity cursor-pointer ${
           ttsEnabled ? "opacity-100 bg-surface" : "opacity-30 bg-transparent"
         }`}
-        title={ttsEnabled ? "TTS on" : "TTS off"}
       >
         {ttsEnabled ? (
           <Volume2 size={15} className="text-emma-300" />

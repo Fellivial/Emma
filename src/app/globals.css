@@ -148,8 +148,11 @@ body {
 
 /* ─── Focus Rings ─────────────────────────────────────────────────────────── */
 
-input:focus-visible,
-button:focus-visible {
-  outline: 1px solid rgba(232, 160, 191, 0.4);
-  outline-offset: 1px;
+*:focus-visible {
+  outline: 2px solid rgba(232, 160, 191, 0.6);
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
 }
