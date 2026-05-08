@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Save } from "lucide-react";
-
-type AutonomyTier = 1 | 2 | 3;
+import type { AutonomyTier } from "@/types/emma";
 
 interface Config {
   name: string;
@@ -99,13 +98,14 @@ export default function ProfilePage() {
         body: JSON.stringify(config),
       });
       if (res.ok) setSaved(true);
-    } catch {}
+    } catch (_e) {}
     setSaving(false);
     setTimeout(() => setSaved(false), 3000);
   };
 
   const handleLogout = async () => {
-    if (supabase) await supabase.auth.signOut();
+    if (!supabase) return;
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
