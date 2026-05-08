@@ -51,11 +51,17 @@ create table if not exists public.clients (
   token_budget_daily integer not null default 10714,
   message_limit_daily integer not null default 10,
   plan_id text not null default 'free',
+  vertical_id text default null,
+  autonomy_tier integer not null default 2,
+  proactive_vision boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.clients add column if not exists plan_id text not null default 'free';
+alter table public.clients add column if not exists vertical_id text default null;
+alter table public.clients add column if not exists autonomy_tier integer not null default 2;
+alter table public.clients add column if not exists proactive_vision boolean not null default false;
 
 create table if not exists public.client_members (
   client_id uuid references public.clients on delete cascade,
@@ -383,7 +389,7 @@ create table if not exists public.rate_limit_counters (
 create table if not exists public.client_integrations (
   id uuid default gen_random_uuid() primary key,
   client_id uuid references public.clients on delete cascade not null,
-  service text not null check (service in ('gmail','google_calendar','slack','notion','hubspot','elevenlabs')),
+  service text not null constraint client_integrations_service_check check (service in ('gmail','google_calendar','slack','notion','hubspot','elevenlabs') or service like 'mcp_%'),
   status text not null default 'disconnected' check (status in ('connected','disconnected','auth_expired','error')),
   access_token text,
   refresh_token text,
@@ -392,6 +398,7 @@ create table if not exists public.client_integrations (
   last_used_at timestamptz,
   last_error text,
   voice_id text,
+  mcp_url text default null,
   metadata jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -467,6 +474,23 @@ create table if not exists public.pattern_detections (
 );
 
 
+-- ─── 23. Provenance Chains ──────────────────────────────────────────────────
+
+create table if not exists public.provenance_chains (
+  id           uuid        primary key default gen_random_uuid(),
+  chain_id     text        not null unique,
+  data         jsonb       not null,
+  status       text        not null default 'running'
+                           check (status in ('running', 'completed', 'failed', 'awaiting_approval')),
+  started_at   timestamptz not null default now(),
+  completed_at timestamptz default null,
+  user_id      uuid        references auth.users(id) on delete cascade,
+  client_id    uuid        references public.clients(id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- ROW LEVEL SECURITY
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -496,6 +520,7 @@ alter table public.usage_windows enable row level security;
 alter table public.extra_packs enable row level security;
 alter table public.agent_task_summaries enable row level security;
 alter table public.pattern_detections enable row level security;
+alter table public.provenance_chains enable row level security;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -598,6 +623,10 @@ create policy "Members read task summaries" on public.agent_task_summaries for a
 drop policy if exists "Members manage patterns" on public.pattern_detections;
 create policy "Members manage patterns" on public.pattern_detections for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
 
+-- Provenance Chains
+drop policy if exists "Users read own provenance" on public.provenance_chains;
+create policy "Users read own provenance" on public.provenance_chains for select using (auth.uid() = user_id);
+
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- INDEXES
@@ -635,6 +664,9 @@ create index if not exists idx_extra_packs_user_valid on public.extra_packs (use
 create index if not exists idx_task_summaries_task on public.agent_task_summaries (task_id);
 create index if not exists idx_task_summaries_user on public.agent_task_summaries (user_id, created_at desc);
 create index if not exists idx_pattern_detections_client on public.pattern_detections (client_id, user_id, status);
+create index if not exists idx_provenance_chain_id on public.provenance_chains (chain_id);
+create index if not exists idx_provenance_user_id on public.provenance_chains (user_id);
+create index if not exists idx_provenance_status on public.provenance_chains (status);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -646,6 +678,15 @@ alter table public.email_sequences add column if not exists error_detail text;
 alter table public.email_sequences drop constraint if exists email_sequences_status_check;
 alter table public.email_sequences add constraint email_sequences_status_check
   check (status in ('pending','sending','sent','failed','skipped','opened','clicked'));
+
+alter table public.client_integrations add column if not exists mcp_url text default null;
+
+alter table public.client_integrations drop constraint if exists client_integrations_service_check;
+alter table public.client_integrations add constraint client_integrations_service_check
+  check (
+    service in ('gmail', 'google_calendar', 'slack', 'notion', 'hubspot', 'elevenlabs')
+    or service like 'mcp_%'
+  );
 
 
 -- ═══════════════════════════════════════════════════════════════════════════

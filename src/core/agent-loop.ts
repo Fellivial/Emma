@@ -223,6 +223,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             continue;
           }
 
+          // Resolve {{variables}} before risk checks so approval path logs resolved values
+          const resolvedInput = resolveInputVariables(toolInput, ctx);
+
           // ── Check risk level → approval gate ──────────────────────────
 
           // Moderate tools: log prominently but execute immediately.
@@ -282,7 +285,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             provChain = addStep(provChain, {
               stepNumber: step,
               action: toolName,
-              input: toolInput,
+              input: resolvedInput,
               output: stepResult.output,
               source: "human_approved",
               verified: false,
@@ -291,7 +294,11 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             });
 
             // Persist provenance at pause point (fire-and-forget)
-            persistChain(completeChain(provChain, "awaiting_approval")).catch(() => {});
+            persistChain(
+              completeChain(provChain, "awaiting_approval"),
+              task.userId,
+              task.clientId
+            ).catch(() => {});
 
             return {
               taskId: task.id,
@@ -309,9 +316,6 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             clientId: task.clientId,
             taskId: task.id,
           };
-
-          // Resolve {{variables}} from scratchpad before execution
-          const resolvedInput = resolveInputVariables(toolInput, ctx);
 
           let toolResult;
           try {
@@ -340,13 +344,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           steps.push(stepResult);
           await logAction(supabase, task.id, stepResult);
 
-          // Append to provenance chain
+          // Append to provenance chain (dangerous case already returned above; always "automated" here)
           provChain = addStep(provChain, {
             stepNumber: step,
             action: toolName,
             input: resolvedInput,
             output: toolResult.output,
-            source: toolDef.riskLevel === "dangerous" ? "human_approved" : "automated",
+            source: "automated",
             verified: stepResult.status === "completed",
             timestamp: Date.now(),
             durationMs: stepResult.durationMs,
@@ -403,7 +407,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   const finalStatus = taskCompleted
     ? "completed"
     : steps.length >= task.maxSteps
-      ? "failed"
+      ? "max_steps_reached"
       : "failed";
   const finalSummary =
     taskSummary ||
@@ -428,8 +432,12 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   summarizeTask(task.id, task.goal, ctx, finalStatus).catch(() => {});
 
   // Fire-and-forget: finalize and persist provenance chain
-  provChain = completeChain(provChain, finalStatus);
-  persistChain(provChain).catch(() => {});
+  // "max_steps_reached" maps to "failed" for provenance (provenance_chains status doesn't include it)
+  const provStatus = (
+    finalStatus === "max_steps_reached" ? "failed" : finalStatus
+  ) as ProvenanceChain["status"];
+  provChain = completeChain(provChain, provStatus);
+  persistChain(provChain, task.userId, task.clientId).catch(() => {});
 
   return {
     taskId: task.id,

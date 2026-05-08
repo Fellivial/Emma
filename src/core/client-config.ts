@@ -23,7 +23,6 @@ export interface ClientConfig {
   tokenBudgetDaily: number;
   messageLimitDaily: number;
   planId: string;
-  // DB columns required: autonomy_tier integer default 2, proactive_vision boolean default false
   autonomyTier: AutonomyTier;
   proactiveVision: boolean;
   verticalId: string | null;
