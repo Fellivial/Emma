@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Eye, Brain, Clock, Volume2, Settings } from "lucide-react";
 import type { PersonaId, EmotionState, UserProfile } from "@/types/emma";
-import { getPersona } from "@/core/personas";
 
 const EMOTION_EMOJI: Record<string, string> = {
   neutral: "😐",
@@ -30,8 +29,6 @@ interface HeaderProps {
 }
 
 export function Header(props: HeaderProps) {
-  const p = getPersona(props.persona);
-
   return (
     <header className="flex items-center justify-between px-5 py-2.5 border-b border-surface-border bg-emma-950/80 backdrop-blur-2xl shrink-0">
       <div className="flex items-center gap-3">
@@ -86,9 +83,6 @@ export function Header(props: HeaderProps) {
           <Volume2 size={12} />
           {props.elConnected ? `EL · ${props.elVoiceName?.slice(0, 10) ?? ""}` : "WS"}
         </Pill>
-        <div className="text-[10px] font-medium text-emma-300 bg-emma-300/10 border border-emma-300/20 rounded-full px-2.5 py-1">
-          {p.label}
-        </div>
         <Link
           href="/settings"
           className="flex items-center gap-1 text-[10px] font-light text-emma-200/25 bg-surface border border-surface-border rounded-full px-2.5 py-1 hover:text-emma-200/50 hover:border-emma-300/20 transition-all"

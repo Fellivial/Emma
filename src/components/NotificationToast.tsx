@@ -15,6 +15,7 @@ const TYPE_STYLES: Record<string, { border: string; bg: string; icon: string }> 
   alert: { border: "border-amber-400/25", bg: "bg-amber-400/5", icon: "⚠️" },
   anomaly: { border: "border-red-400/20", bg: "bg-red-400/5", icon: "👁️" },
   system: { border: "border-blue-400/20", bg: "bg-blue-400/5", icon: "🔔" },
+  approval: { border: "border-amber-400/30", bg: "bg-amber-400/8", icon: "⚠️" },
 };
 
 export function NotificationToast({ notifications, onAction, onDismiss }: NotificationToastProps) {

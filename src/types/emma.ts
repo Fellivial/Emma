@@ -216,6 +216,28 @@ export type AutonomyTier = 1 | 2 | 3;
 
 // ─── Notification Types (L3) ────────────────────────────────────────────────
 
+export interface ApprovalDetails {
+  approvalId: string;
+  taskId: string;
+  tool: string;
+  riskLevel: "dangerous";
+  inputs: Record<string, string>;
+  reason: string;
+  expiresAt: number;
+}
+
+export interface AutonomousTask {
+  id: string;
+  goal: string;
+  status: "running" | "completed" | "failed" | "awaiting_approval" | "awaiting_suggestion" | "max_steps_reached";
+  triggerType: "manual" | "scheduled" | "webhook";
+  stepsTaken: number;
+  totalTokens: number;
+  createdAt: number;
+  completedAt?: number;
+  currentTool?: string;
+}
+
 export interface EmmaNotification {
   id: string;
   timestamp: number;
@@ -227,10 +249,11 @@ export interface EmmaNotification {
   actions?: NotificationAction[];
   dismissed: boolean;
   autoExpire?: number;
+  approvalDetails?: ApprovalDetails;
 }
 
 export type NotificationType =
-  | "auto_action" | "suggestion" | "alert" | "anomaly" | "system" | "emotion";
+  | "auto_action" | "suggestion" | "alert" | "anomaly" | "system" | "emotion" | "approval";
 
 export interface NotificationAction {
   label: string;

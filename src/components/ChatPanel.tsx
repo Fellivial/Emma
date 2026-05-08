@@ -3,11 +3,12 @@
 import { useRef, useEffect } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
-import type { ChatMessage as ChatMessageType } from "@/types/emma";
+import type { ChatMessage as ChatMessageType, ApprovalDetails } from "@/types/emma";
 import type { ContextStats } from "@/core/context-manager";
 import { ChatMessage, TypingIndicator } from "./ChatMessage";
 import { InputBar } from "./InputBar";
 import { ContextIndicator } from "./ContextIndicator";
+import { ApprovalBubble } from "./ApprovalBubble";
 
 interface UsageWarning {
   message: string;
@@ -33,6 +34,11 @@ interface ChatPanelProps {
   usageWarning?: UsageWarning | null;
   usageBlocked?: UsageBlocked | null;
   onDismissWarning?: () => void;
+  pendingApprovals?: ApprovalDetails[];
+  onApprove?: (approvalId: string) => Promise<void>;
+  onCancelApproval?: (approvalId: string) => Promise<void>;
+  visionActive?: boolean;
+  onVisionToggle?: () => void;
 }
 
 export function ChatPanel({
@@ -50,6 +56,11 @@ export function ChatPanel({
   usageWarning,
   usageBlocked,
   onDismissWarning,
+  pendingApprovals,
+  onApprove,
+  onCancelApproval,
+  visionActive,
+  onVisionToggle,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -68,6 +79,18 @@ export function ChatPanel({
       >
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
+        ))}
+        {pendingApprovals && pendingApprovals.map((approval) => (
+          <ApprovalBubble
+            key={approval.approvalId}
+            approvalId={approval.approvalId}
+            tool={approval.tool}
+            inputs={approval.inputs}
+            reason={approval.reason}
+            expiresAt={approval.expiresAt}
+            onConfirm={onApprove ?? (() => Promise.resolve())}
+            onCancel={onCancelApproval ?? (() => Promise.resolve())}
+          />
         ))}
         {loading && <TypingIndicator />}
 
@@ -195,6 +218,8 @@ export function ChatPanel({
         blocked={!!usageBlocked}
         onTypingStart={onTypingStart}
         onTypingStop={onTypingStop}
+        visionActive={visionActive}
+        onVisionToggle={onVisionToggle}
       />
     </div>
   );

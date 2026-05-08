@@ -8,6 +8,8 @@ import type {
   MemoryEntry,
   Routine,
   AvatarExpression,
+  AutonomousTask,
+  ApprovalDetails,
 } from "@/types/emma";
 import { formatCommandLog } from "@/core/command-parser";
 import { getPersona } from "@/core/personas";
@@ -41,8 +43,7 @@ import { Header } from "@/components/Header";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NotificationToast } from "@/components/NotificationToast";
 import { AvatarCanvas } from "@/components/AvatarCanvas";
-import { AutonomousPanel } from "@/components/AutonomousPanel";
-import { VisionPanel } from "@/components/VisionPanel";
+import { AutonomousTasksPanel } from "@/components/AutonomousTasksPanel";
 import { MemoryPanel } from "@/components/MemoryPanel";
 import { RoutinePanel } from "@/components/RoutinePanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
@@ -64,6 +65,8 @@ export default function EmmaPage() {
     window: string | null;
   } | null>(null);
   const [usageBlocked, setUsageBlocked] = useState<{ upgradeUrl: string } | null>(null);
+  const [autonomousTasks, setAutonomousTasks] = useState<AutonomousTask[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalDetails[]>([]);
 
   // ── Memory (L2) ────────────────────────────────────────────────────────────
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
@@ -279,6 +282,60 @@ export default function EmmaPage() {
   const handleDeleteRoutine = useCallback((id: string) => {
     removeCustomRoutine(id);
     setRoutineVersion((v) => v + 1);
+  }, []);
+
+  // ── Autonomous tasks polling (15s) ────────────────────────────────────────
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        const res = await fetch("/api/emma/tasks?limit=6");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tasks) setAutonomousTasks(data.tasks);
+        }
+      } catch { /* silent */ }
+    };
+    loadTasks();
+    const id = setInterval(loadTasks, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Approvals polling (30s) ────────────────────────────────────────────────
+  useEffect(() => {
+    const loadApprovals = async () => {
+      try {
+        const res = await fetch("/api/emma/suggestions");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.approvals) setPendingApprovals(data.approvals);
+        }
+      } catch { /* silent */ }
+    };
+    loadApprovals();
+    const id = setInterval(loadApprovals, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleApprove = useCallback(async (approvalId: string) => {
+    await fetch("/api/emma/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve", approvalId }),
+    });
+    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+  }, []);
+
+  const handleCancelApproval = useCallback(async (approvalId: string) => {
+    await fetch("/api/emma/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel", approvalId }),
+    });
+    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+  }, []);
+
+  const handleViewTask = useCallback((taskId: string) => {
+    window.open(`/settings/tasks${taskId ? `/${taskId}` : ""}`, "_blank");
   }, []);
 
   // ── Vision ─────────────────────────────────────────────────────────────────
@@ -614,7 +671,7 @@ export default function EmmaPage() {
         {/* ── Left: Emma avatar identity panel ── */}
         <div
           className="emma-avatar-panel shrink-0 border-r border-surface-border bg-emma-950/60 flex flex-col overflow-hidden"
-          style={{ width: "clamp(240px, 22%, 270px)", flexShrink: 0 }}
+          style={{ width: 420, flexShrink: 0, borderRight: "1px solid rgba(232,160,191,0.1)" }}
         >
           <AvatarCanvas
             state={avatar.state}
@@ -658,6 +715,11 @@ export default function EmmaPage() {
               usageWarning={usageWarning}
               usageBlocked={usageBlocked}
               onDismissWarning={() => setUsageWarning(null)}
+              pendingApprovals={pendingApprovals}
+              onApprove={handleApprove}
+              onCancelApproval={handleCancelApproval}
+              visionActive={vision.active}
+              onVisionToggle={handleVisionToggle}
             />
           </div>
 
@@ -681,9 +743,9 @@ export default function EmmaPage() {
           style={{ width: "clamp(200px, 18%, 256px)" }}
         >
           {/* Autonomous tasks */}
-          <AutonomousPanel
-            notifications={notifications.notifications}
-            timelineEntries={timeline.entries}
+          <AutonomousTasksPanel
+            tasks={autonomousTasks}
+            onViewTask={handleViewTask}
           />
 
           {/* Memory */}
@@ -720,19 +782,6 @@ export default function EmmaPage() {
           {/* Timeline */}
           <SideSection label="Timeline" count={timeline.entries.length}>
             <TimelinePanel entries={timeline.entries} />
-          </SideSection>
-
-          {/* Vision */}
-          <SideSection label="Vision">
-            <VisionPanel
-              active={vision.active}
-              supported={vision.supported}
-              analyzing={vision.analyzing}
-              lastAnalysis={vision.lastAnalysis}
-              previewRef={vision.previewRef}
-              onToggle={handleVisionToggle}
-              onAnalyze={handleVisionAnalyze}
-            />
           </SideSection>
 
           {/* Users */}
