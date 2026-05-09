@@ -29,13 +29,27 @@ export async function GET(req: NextRequest) {
   }
 
   // Verify HMAC
-  const key = process.env.EMMA_ENCRYPTION_KEY || "emma-fallback-key";
+  const key = process.env.EMMA_ENCRYPTION_KEY;
+  if (!key) {
+    return new Response(renderPage("Configuration Error", "The server is not configured correctly."), {
+      status: 500,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
   const expected = crypto
     .createHmac("sha256", key)
     .update(`${uid}:unsubscribe`)
     .digest("hex");
 
-  if (token !== expected) {
+  let tokenValid = false;
+  try {
+    tokenValid = crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    tokenValid = false;
+  }
+
+  if (!tokenValid) {
     return new Response(renderPage("Invalid Link", "This unsubscribe link has expired or is invalid."), {
       status: 400,
       headers: { "Content-Type": "text/html; charset=utf-8" },

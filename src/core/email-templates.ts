@@ -26,7 +26,8 @@ interface RenderedEmail {
 // ─── Unsubscribe Token ───────────────────────────────────────────────────────
 
 export function generateUnsubscribeUrl(userId: string): string {
-  const key = process.env.EMMA_ENCRYPTION_KEY || "emma-fallback-key";
+  const key = process.env.EMMA_ENCRYPTION_KEY;
+  if (!key) throw new Error("EMMA_ENCRYPTION_KEY is required to generate unsubscribe tokens");
   const token = crypto
     .createHmac("sha256", key)
     .update(`${userId}:unsubscribe`)
