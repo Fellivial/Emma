@@ -35,7 +35,7 @@ async function twilioPost(
 
   if (!res.ok) {
     const errText = await res.text();
-    return { success: false, output: `Twilio API error ${res.status}: ${errText}` };
+    return { success: false, output: `Twilio API error ${res.status}: ${errText.slice(0, 200)}` };
   }
 
   const data = await res.json();

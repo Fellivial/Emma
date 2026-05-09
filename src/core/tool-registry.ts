@@ -499,8 +499,7 @@ registerTool({
 // Tool: slack_send_message — Send a Slack message (moderate)
 registerTool({
   name: "slack_send_message",
-  description:
-    "Send a message to a Slack channel or thread. Requires Slack integration.",
+  description: "Send a message to a Slack channel or thread. Requires Slack integration.",
   inputSchema: {
     type: "object",
     properties: {
@@ -518,18 +517,23 @@ registerTool({
     try {
       const { SlackAdapter } = await import("@/core/integrations/slack");
       const adapter = new SlackAdapter();
-
-      if (!(await adapter.validate(context.clientId || ""))) {
+      return adapter.send(context.clientId || "", {
+        channel: input.channel as string,
+        message: input.message as string,
+        ...(input.thread_ts ? { thread_ts: input.thread_ts as string } : {}),
+      });
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
           output: "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
         };
       }
-
-      return adapter.send(context.clientId || "", input);
-    } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
-        return { success: false, output: "Slack auth expired. Go to Settings → Integrations to reconnect." };
+        return {
+          success: false,
+          output: "Slack auth expired. Go to Settings → Integrations to reconnect.",
+        };
       }
       return { success: false, output: `Slack send failed: ${err.message}` };
     }
@@ -554,18 +558,19 @@ registerTool({
     try {
       const { NotionAdapter } = await import("@/core/integrations/notion");
       const adapter = new NotionAdapter();
-
-      if (!(await adapter.validate(context.clientId || ""))) {
+      return adapter.createPage(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
           output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
         };
       }
-
-      return adapter.createPage(context.clientId || "", input);
-    } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
-        return { success: false, output: "Notion auth expired. Go to Settings → Integrations to reconnect." };
+        return {
+          success: false,
+          output: "Notion auth expired. Go to Settings → Integrations to reconnect.",
+        };
       }
       return { success: false, output: `Notion create page failed: ${err.message}` };
     }
@@ -591,18 +596,19 @@ registerTool({
     try {
       const { NotionAdapter } = await import("@/core/integrations/notion");
       const adapter = new NotionAdapter();
-
-      if (!(await adapter.validate(context.clientId || ""))) {
+      return adapter.updatePage(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
           output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
         };
       }
-
-      return adapter.updatePage(context.clientId || "", input);
-    } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
-        return { success: false, output: "Notion auth expired. Go to Settings → Integrations to reconnect." };
+        return {
+          success: false,
+          output: "Notion auth expired. Go to Settings → Integrations to reconnect.",
+        };
       }
       return { success: false, output: `Notion update page failed: ${err.message}` };
     }
@@ -616,7 +622,10 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      to: { type: "string", description: "Recipient phone number in E.164 format (e.g. +15551234567)" },
+      to: {
+        type: "string",
+        description: "Recipient phone number in E.164 format (e.g. +15551234567)",
+      },
       message: { type: "string", description: "SMS message body" },
     },
     required: ["to", "message"],
@@ -681,7 +690,8 @@ registerTool({
         context.taskId,
         input.filename as string,
         input.title as string,
-        input.content as string
+        input.content as string,
+        context.userId
       );
       return result;
     } catch (err: any) {
@@ -711,7 +721,8 @@ registerTool({
         context.taskId,
         input.filename as string,
         input.title as string,
-        input.content as string
+        input.content as string,
+        context.userId
       );
       return result;
     } catch (err: any) {
@@ -720,15 +731,15 @@ registerTool({
   },
 });
 
-// Tool: trigger_webhook — Send an outbound webhook POST (moderate)
+// Tool: trigger_webhook — Send an outbound webhook POST (DANGEROUS — always requires approval)
 registerTool({
   name: "trigger_webhook",
   description:
-    "Send a POST request to an external HTTPS webhook URL with a JSON payload.",
+    "Send a POST request to an external HTTPS webhook URL with a JSON payload. REQUIRES APPROVAL.",
   inputSchema: {
     type: "object",
     properties: {
-      url: { type: "string", description: "Webhook URL (must start with https://)" },
+      url: { type: "string", description: "Webhook URL (must be a public HTTPS endpoint)" },
       payload: {
         type: "object",
         description: "JSON payload to send in the request body",
@@ -736,21 +747,40 @@ registerTool({
     },
     required: ["url", "payload"],
   },
-  riskLevel: "moderate",
+  riskLevel: "dangerous",
   handler: async (input) => {
-    const url = input.url as string;
-    if (!url.startsWith("https://")) {
+    const rawUrl = input.url as string;
+    if (!rawUrl.startsWith("https://")) {
       return { success: false, output: "Webhook URL must use HTTPS." };
+    }
+
+    // Block private/loopback/link-local addresses to prevent SSRF
+    let hostname: string;
+    try {
+      hostname = new URL(rawUrl).hostname;
+    } catch {
+      return { success: false, output: "Invalid webhook URL." };
+    }
+    const privateRange =
+      /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|::1$)/i;
+    if (privateRange.test(hostname)) {
+      return { success: false, output: "Webhook URL must point to a public host." };
+    }
+
+    // Cap outbound payload at 64 KB
+    const serialized = JSON.stringify(input.payload);
+    if (serialized.length > 65_536) {
+      return { success: false, output: "Webhook payload exceeds 64 KB limit." };
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch(rawUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input.payload),
+        body: serialized,
         signal: controller.signal,
       });
 
@@ -791,21 +821,19 @@ registerTool({
     try {
       const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
       const adapter = new HubSpotAdapter();
-
-      if (!(await adapter.validate(context.clientId || ""))) {
+      return adapter.createDeal(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
           output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
         };
       }
-
-      return adapter.createDeal(context.clientId || "", input);
-    } catch (err: any) {
-      if (err.name === "IntegrationNotConfiguredError") {
-        return { success: false, output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot." };
-      }
       if (err.name === "IntegrationAuthExpiredError") {
-        return { success: false, output: "HubSpot auth expired. Go to Settings → Integrations to reconnect." };
+        return {
+          success: false,
+          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
+        };
       }
       return { success: false, output: `HubSpot create deal failed: ${err.message}` };
     }
@@ -831,21 +859,20 @@ registerTool({
     try {
       const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
       const adapter = new HubSpotAdapter();
-
-      if (!(await adapter.validate(context.clientId || ""))) {
-        return {
-          success: false,
-          output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
-        };
-      }
-
       return adapter.updateDealStage(context.clientId || "", input);
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
-        return { success: false, output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot." };
+        return {
+          success: false,
+          output:
+            "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
       }
       if (err.name === "IntegrationAuthExpiredError") {
-        return { success: false, output: "HubSpot auth expired. Go to Settings → Integrations to reconnect." };
+        return {
+          success: false,
+          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
+        };
       }
       return { success: false, output: `HubSpot update deal stage failed: ${err.message}` };
     }

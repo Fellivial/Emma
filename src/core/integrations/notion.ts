@@ -91,6 +91,10 @@ export class NotionAdapter implements IntegrationAdapter {
       content?: string;
     };
 
+    if (!title && !content) {
+      return { success: false, output: "Either title or content must be provided." };
+    }
+
     try {
       const { accessToken } = await getIntegrationTokens(clientId, "notion");
       const headers = {
