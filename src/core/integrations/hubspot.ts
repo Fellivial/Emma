@@ -80,15 +80,16 @@ export class HubSpotAdapter implements IntegrationAdapter {
     }
   }
 
-  async updateDealStage(
-    clientId: string,
-    params: Record<string, unknown>
-  ): Promise<AdapterResult> {
+  async updateDealStage(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
     const { deal_id, dealstage, amount } = params as {
       deal_id: string;
       dealstage: string;
       amount?: string;
     };
+
+    if (!/^\d+$/.test(deal_id)) {
+      return { success: false, output: "Invalid deal ID — must be numeric." };
+    }
 
     try {
       const { accessToken } = await getIntegrationTokens(clientId, "hubspot");
@@ -124,8 +125,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
   }
 
   async send(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
-    const { contact_email, note, deal_id } = params as {
-      contact_email?: string;
+    const { note, deal_id } = params as {
       note: string;
       deal_id?: string;
     };
