@@ -66,12 +66,14 @@ export async function POST(req: NextRequest) {
 
     const sigValue = signature.startsWith("sha256=") ? signature.slice(7) : signature;
 
-    // Use timing-safe comparison to prevent timing attacks
+    // Use timing-safe comparison to prevent timing attacks.
+    // No padding needed — HMAC-SHA256 hex output is always 64 chars.
+    // timingSafeEqual throws on length mismatch, caught below.
     let signatureValid = false;
     try {
       signatureValid = crypto.timingSafeEqual(
-        Buffer.from(expected.padEnd(64, "0")),
-        Buffer.from(sigValue.padEnd(64, "0"))
+        Buffer.from(expected),
+        Buffer.from(sigValue)
       );
     } catch {
       signatureValid = false;
