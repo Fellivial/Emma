@@ -41,9 +41,7 @@ async function uploadToStorage(
 
   if (error) return null;
 
-  const { data } = await supabase.storage
-    .from("task-documents")
-    .createSignedUrl(storagePath, 3600);
+  const { data } = await supabase.storage.from("task-documents").createSignedUrl(storagePath, 3600);
 
   return data?.signedUrl ?? null;
 }
@@ -66,9 +64,7 @@ export async function generateDocx(
       {
         children: [
           new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }),
-          ...content
-            .split("\n")
-            .map((line) => new Paragraph({ children: [new TextRun(line)] })),
+          ...content.split("\n").map((line) => new Paragraph({ children: [new TextRun(line)] })),
         ],
       },
     ],
@@ -83,7 +79,12 @@ export async function generateDocx(
 
   if (userId) {
     const storagePath = `${userId}/${taskId}_${name}`;
-    const url = await uploadToStorage(buffer, userId, storagePath, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    const url = await uploadToStorage(
+      buffer,
+      userId,
+      storagePath,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
     if (url) {
       return { success: true, output: `DOCX ready — download link (1h): ${url}`, url };
     }

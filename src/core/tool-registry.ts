@@ -526,7 +526,8 @@ registerTool({
       if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
-          output: "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
+          output:
+            "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
         };
       }
       if (err.name === "IntegrationAuthExpiredError") {
@@ -563,7 +564,8 @@ registerTool({
       if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
-          output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
+          output:
+            "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
         };
       }
       if (err.name === "IntegrationAuthExpiredError") {
@@ -601,7 +603,8 @@ registerTool({
       if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
-          output: "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
+          output:
+            "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
         };
       }
       if (err.name === "IntegrationAuthExpiredError") {
@@ -826,7 +829,8 @@ registerTool({
       if (err.name === "IntegrationNotConfiguredError") {
         return {
           success: false,
-          output: "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
+          output:
+            "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
         };
       }
       if (err.name === "IntegrationAuthExpiredError") {
