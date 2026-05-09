@@ -75,20 +75,18 @@ export async function persistChain(
 
   if (supabase) {
     try {
-      await supabase
-        .from("provenance_chains")
-        .upsert(
-          {
-            chain_id: chain.taskId,
-            data: chain,
-            status: chain.status,
-            started_at: new Date(chain.startedAt).toISOString(),
-            completed_at: chain.completedAt ? new Date(chain.completedAt).toISOString() : null,
-            user_id: userId ?? null,
-            client_id: clientId ?? null,
-          },
-          { onConflict: "chain_id" }
-        );
+      await supabase.from("provenance_chains").upsert(
+        {
+          chain_id: chain.taskId,
+          data: chain,
+          status: chain.status,
+          started_at: new Date(chain.startedAt).toISOString(),
+          completed_at: chain.completedAt ? new Date(chain.completedAt).toISOString() : null,
+          user_id: userId ?? null,
+          client_id: clientId ?? null,
+        },
+        { onConflict: "chain_id" }
+      );
       return;
     } catch {
       // fall through to file fallback
