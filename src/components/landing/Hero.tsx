@@ -18,7 +18,9 @@ function HeroTicker() {
         aria-hidden="true"
         style={{
           position: "absolute",
-          left: 0, top: 0, bottom: 0,
+          left: 0,
+          top: 0,
+          bottom: 0,
           width: "80px",
           background: "linear-gradient(to right, #e8547a, transparent)",
           zIndex: 1,
@@ -29,7 +31,9 @@ function HeroTicker() {
         aria-hidden="true"
         style={{
           position: "absolute",
-          right: 0, top: 0, bottom: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
           width: "80px",
           background: "linear-gradient(to left, #e8547a, transparent)",
           zIndex: 1,
@@ -168,9 +172,7 @@ export default function Hero() {
                   display: "inline-flex",
                   alignItems: "center",
                 }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLAnchorElement).style.color = "#000")
-                }
+                onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "#000")}
                 onMouseLeave={(e) =>
                   ((e.currentTarget as HTMLAnchorElement).style.color = "rgba(0,0,0,0.58)")
                 }
@@ -228,8 +230,8 @@ export default function Hero() {
                     ? i === 0
                       ? "translateY(7px) rotate(45deg)"
                       : i === 2
-                      ? "translateY(-7px) rotate(-45deg)"
-                      : "scaleX(0)"
+                        ? "translateY(-7px) rotate(-45deg)"
+                        : "scaleX(0)"
                     : "none",
                   opacity: menuOpen && i === 1 ? 0 : 1,
                 }}
@@ -374,8 +376,8 @@ export default function Hero() {
             animation: "heroFadeIn 0.6s ease 0.2s both",
           }}
         >
-          Emma is the first AI companion system that integrates presence, voice,
-          vision, memory, and autonomous action into one coherent experience.
+          Emma is the first AI companion system that integrates presence, voice, vision, memory, and
+          autonomous action into one coherent experience.
         </p>
 
         {/* CTAs */}
@@ -439,9 +441,9 @@ export default function Hero() {
           }}
         >
           {[
-            { val: "6",      label: "Capabilities" },
-            { val: "100%",   label: "On-Device"    },
-            { val: "Always", label: "Present"      },
+            { val: "6", label: "Capabilities" },
+            { val: "100%", label: "On-Device" },
+            { val: "Always", label: "Present" },
           ].map(({ val, label }) => (
             <div key={label}>
               <div

@@ -82,8 +82,7 @@ export default function TerminalShowcase() {
                 display: "flex",
                 alignItems: "center",
                 paddingLeft: "16px",
-                borderBottom:
-                  i < LEFT_LABELS.length - 1 ? "1px solid var(--l-border)" : "none",
+                borderBottom: i < LEFT_LABELS.length - 1 ? "1px solid var(--l-border)" : "none",
               }}
             >
               <span
@@ -209,8 +208,8 @@ export default function TerminalShowcase() {
                   color: line.text.startsWith("✓")
                     ? "var(--l-green)"
                     : line.text.startsWith(">")
-                    ? "var(--l-muted)"
-                    : "var(--l-text)",
+                      ? "var(--l-muted)"
+                      : "var(--l-text)",
                   lineHeight: 1.7,
                   minHeight: "1.7em",
                 }}
@@ -275,8 +274,7 @@ export default function TerminalShowcase() {
                 alignItems: "center",
                 justifyContent: "flex-end",
                 paddingRight: "16px",
-                borderBottom:
-                  i < RIGHT_LABELS.length - 1 ? "1px solid var(--l-border)" : "none",
+                borderBottom: i < RIGHT_LABELS.length - 1 ? "1px solid var(--l-border)" : "none",
               }}
             >
               {/* Blueprint dot at terminal boundary */}

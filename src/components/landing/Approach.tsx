@@ -84,13 +84,9 @@ export default function Approach() {
                 textAlign: "left",
                 padding: "32px 40px",
                 background: i === activeStep ? "var(--l-surface)" : "transparent",
-                borderBottom:
-                  i < APPROACH_STEPS.length - 1
-                    ? "1px solid var(--l-border)"
-                    : "none",
-                borderLeft: i === activeStep
-                  ? "3px solid var(--l-accent)"
-                  : "3px solid transparent",
+                borderBottom: i < APPROACH_STEPS.length - 1 ? "1px solid var(--l-border)" : "none",
+                borderLeft:
+                  i === activeStep ? "3px solid var(--l-accent)" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 150ms, border-color 150ms",
               }}
