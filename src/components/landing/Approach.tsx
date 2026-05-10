@@ -185,10 +185,10 @@ function BarRow({
     if (!barRef.current) return;
     if (animate) {
       barRef.current.style.transitionDelay = `${delay}ms`;
-      barRef.current.style.width = `${pct}%`;
+      barRef.current.style.transform = `scaleX(${pct / 100})`;
     } else {
       barRef.current.style.transitionDelay = "0ms";
-      barRef.current.style.width = "0%";
+      barRef.current.style.transform = "scaleX(0)";
     }
   }, [animate, pct, delay]);
 
@@ -234,9 +234,11 @@ function BarRow({
           ref={barRef}
           style={{
             height: "100%",
-            width: "0%",
+            width: "100%",
             background: isEmma ? "var(--l-green)" : "var(--l-surface2)",
-            transition: "width 1s ease",
+            transition: "transform 1s ease",
+            transform: "scaleX(0)",
+            transformOrigin: "left",
           }}
         />
       </div>
