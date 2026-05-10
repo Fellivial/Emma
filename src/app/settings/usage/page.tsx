@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface DayBucket {
   day: string;
@@ -16,7 +17,6 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
   const H = 64;
   const BAR_W = 28;
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const TODAY = new Date().toLocaleDateString("en-US", { weekday: "short" });
 
   if (loading) {
     const GAP = (W - 7 * BAR_W) / 8;
@@ -60,6 +60,7 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
 
   const maxTokens = Math.max(...data.map((d) => d.tokens), 1);
   const GAP = (W - data.length * BAR_W) / (data.length + 1);
+  const todayISO = new Date().toISOString().split("T")[0];
 
   return (
     <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
@@ -72,7 +73,10 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
           const x = GAP + i * (BAR_W + GAP);
           const barH = Math.max(3, (d.tokens / maxTokens) * H);
           const y = H - barH;
-          const isToday = d.day.slice(0, 3) === TODAY.slice(0, 3);
+          const isToday = d.day === todayISO;
+          const label = new Date(d.day + "T00:00:00").toLocaleDateString("en-US", {
+            weekday: "short",
+          });
           return (
             <g key={d.day}>
               <rect
@@ -97,7 +101,7 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
                 fill={isToday ? "rgba(232,160,191,0.6)" : "rgba(232,160,191,0.2)"}
                 fontFamily="Outfit, sans-serif"
               >
-                {d.day.slice(0, 3)}
+                {label}
               </text>
             </g>
           );
@@ -105,6 +109,22 @@ function WeeklyChart({ data, loading }: { data: DayBucket[]; loading: boolean })
       </svg>
     </div>
   );
+}
+
+interface MonthBucket {
+  date: string;
+  token_count: number;
+  message_count: number;
+}
+
+interface AgentTask {
+  id: string;
+  goal: string;
+  status: string;
+  steps_taken: number;
+  token_cost: number;
+  trigger_type: string;
+  created_at: string;
 }
 
 interface WindowUsage {
@@ -126,10 +146,14 @@ interface UsageData {
 }
 
 export default function UsagePage() {
+  const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<UsageData | null>(null);
   const [history, setHistory] = useState<DayBucket[]>([]);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [monthHistory, setMonthHistory] = useState<MonthBucket[]>([]);
+  const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
+  const [agentLoading, setAgentLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/emma/usage")
@@ -140,7 +164,7 @@ export default function UsagePage() {
       })
       .finally(() => setLoading(false));
 
-    // 7-day history — gracefully ignored if endpoint not present
+    // 7-day history
     fetch("/api/emma/usage/history?days=7")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -150,7 +174,44 @@ export default function UsagePage() {
         /* graceful degradation */
       })
       .finally(() => setHistoryLoading(false));
-  }, []);
+
+    // 30-day token history + last 20 agent tasks from Supabase
+    const fetchAgentData = async () => {
+      try {
+        if (!supabase) return;
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const [{ data: usageRows }, { data: taskRows }] = await Promise.all([
+          supabase
+            .from("usage")
+            .select("date, token_count, message_count")
+            .eq("user_id", user.id)
+            .gte("date", thirtyDaysAgo.toISOString().split("T")[0])
+            .order("date", { ascending: true }),
+          supabase
+            .from("tasks")
+            .select("id, goal, status, steps_taken, token_cost, trigger_type, created_at")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+        ]);
+
+        setMonthHistory(usageRows ?? []);
+        setAgentTasks(taskRows ?? []);
+      } catch {
+        // graceful degradation
+      } finally {
+        setAgentLoading(false);
+      }
+    };
+    fetchAgentData();
+  }, [supabase]);
 
   const windows = data
     ? [
@@ -327,6 +388,19 @@ export default function UsagePage() {
                 </Link>
               </div>
             )}
+
+          {/* ── 30-day token chart ────────────────────────────────── */}
+          {monthHistory.length > 0 && (
+            <MonthChart data={monthHistory} monthlyBudget={data?.limits?.monthly?.tokens ?? 0} />
+          )}
+
+          {/* ── Agent activity summary + task history ─────────────── */}
+          {!agentLoading && (
+            <>
+              <AgentSummary tasks={agentTasks} />
+              <TaskHistory tasks={agentTasks} />
+            </>
+          )}
         </>
       )}
     </div>
@@ -344,4 +418,192 @@ function fmtAnchor(): string {
   d.setDate(1);
   d.setMonth(d.getMonth() + 1);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function fmtRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+// ── 30-day token bar chart ────────────────────────────────────────────────────
+
+function MonthChart({ data, monthlyBudget }: { data: MonthBucket[]; monthlyBudget: number }) {
+  const totalTokens = data.reduce((s, d) => s + d.token_count, 0);
+  const maxTokens = Math.max(...data.map((d) => d.token_count), 1);
+  const pct =
+    monthlyBudget > 0 ? Math.min(100, Math.round((totalTokens / monthlyBudget) * 100)) : 0;
+  const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-violet-500/70";
+
+  const W = 560;
+  const H = 64;
+  const barW = Math.max(4, Math.floor((W - (data.length + 1) * 2) / data.length));
+  const gap = Math.floor((W - data.length * barW) / (data.length + 1));
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs font-medium text-emma-200/40 tracking-wider">Last 30 Days</span>
+        <span className="text-[10px] text-emma-200/20">tokens per day</span>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full" style={{ maxHeight: 88 }}>
+        {data.map((d, i) => {
+          const x = gap + i * (barW + gap);
+          const bh = Math.max(3, (d.token_count / maxTokens) * H);
+          const isWeekend = [0, 6].includes(new Date(d.date).getDay());
+          return (
+            <g key={d.date}>
+              <rect
+                x={x}
+                y={H - bh}
+                width={barW}
+                height={bh}
+                rx={2}
+                fill={
+                  d.token_count === 0
+                    ? "rgba(232,160,191,0.04)"
+                    : isWeekend
+                      ? "rgba(232,160,191,0.12)"
+                      : "rgba(232,160,191,0.22)"
+                }
+              />
+              {/* show day label every 5 bars */}
+              {i % 5 === 0 && (
+                <text
+                  x={x + barW / 2}
+                  y={H + 14}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fill="rgba(232,160,191,0.18)"
+                  fontFamily="Outfit, sans-serif"
+                >
+                  {new Date(d.date).toLocaleDateString("en-US", {
+                    month: "numeric",
+                    day: "numeric",
+                  })}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {monthlyBudget > 0 && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[11px] mb-1.5">
+            <span className="text-emma-200/30">
+              <span className="font-mono text-emma-200/60">{fmtTokens(totalTokens)}</span> /{" "}
+              {fmtTokens(monthlyBudget)} tokens this month
+            </span>
+            <span
+              className={`font-mono ${pct >= 90 ? "text-red-300" : pct >= 70 ? "text-amber-300" : "text-emma-200/40"}`}
+            >
+              {pct}%
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-emma-200/5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${barColor}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Agent activity summary cards ──────────────────────────────────────────────
+
+function AgentSummary({ tasks }: { tasks: AgentTask[] }) {
+  if (tasks.length === 0) return null;
+
+  const thisMonth = new Date();
+  thisMonth.setDate(1);
+  thisMonth.setHours(0, 0, 0, 0);
+
+  const monthTasks = tasks.filter((t) => new Date(t.created_at) >= thisMonth);
+  const completed = tasks.filter((t) => t.status === "completed").length;
+  const successRate = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+  const avgSteps =
+    tasks.length > 0
+      ? (tasks.reduce((s, t) => s + (t.steps_taken ?? 0), 0) / tasks.length).toFixed(1)
+      : "0";
+  const totalAgentTokens = tasks.reduce((s, t) => s + (t.token_cost ?? 0), 0);
+
+  const stats = [
+    { label: "Tasks this month", value: String(monthTasks.length) },
+    { label: "Success rate", value: `${successRate}%` },
+    { label: "Avg steps / task", value: avgSteps },
+    { label: "Agent tokens", value: fmtTokens(totalAgentTokens) },
+  ];
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-[10px] font-medium text-emma-200/20 uppercase tracking-[0.2em] mb-3">
+        Agent Activity
+      </h2>
+      <div className="grid grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-surface-border bg-surface p-4">
+            <div className="text-xl font-light text-emma-200/70 font-mono mb-1">{s.value}</div>
+            <div className="text-[10px] text-emma-200/25">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Task history table ────────────────────────────────────────────────────────
+
+const STATUS_STYLES: Record<string, string> = {
+  completed: "bg-emerald-400/10 text-emerald-300 border-emerald-400/20",
+  failed: "bg-red-400/10 text-red-300 border-red-400/20",
+  awaiting_approval: "bg-amber-400/10 text-amber-300 border-amber-400/20",
+  running: "bg-blue-400/10 text-blue-300 border-blue-400/20",
+  max_steps_reached: "bg-purple-400/10 text-purple-300 border-purple-400/20",
+};
+
+function TaskHistory({ tasks }: { tasks: AgentTask[] }) {
+  if (tasks.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-[10px] font-medium text-emma-200/20 uppercase tracking-[0.2em] mb-3">
+        Task History
+      </h2>
+      <div className="flex flex-col gap-1.5">
+        {tasks.map((t) => (
+          <Link
+            key={t.id}
+            href={`/settings/provenance?taskId=${t.id}`}
+            className="rounded-xl border border-surface-border bg-surface p-4 hover:border-emma-300/20 hover:bg-surface-hover transition-all group"
+          >
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${STATUS_STYLES[t.status] ?? STATUS_STYLES.failed}`}
+                >
+                  {t.status.replace(/_/g, " ")}
+                </span>
+                <span className="text-xs font-light text-emma-200/60 truncate">{t.goal}</span>
+              </div>
+              <span className="text-[10px] text-emma-200/15 shrink-0">
+                {fmtRelative(t.created_at)}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-emma-200/20">
+              <span className="capitalize">{t.trigger_type}</span>
+              <span>{t.steps_taken ?? 0} steps</span>
+              <span>{fmtTokens(t.token_cost ?? 0)} tokens</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }

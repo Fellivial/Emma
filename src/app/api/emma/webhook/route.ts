@@ -54,15 +54,10 @@ export async function POST(req: NextRequest) {
 
     // Signature is MANDATORY — reject if missing
     if (!signature) {
-      return NextResponse.json(
-        { error: "Missing signature" }, { status: 401 }
-      );
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 });
     }
 
-    const expected = crypto
-      .createHmac("sha256", endpoint.secret)
-      .update(body)
-      .digest("hex");
+    const expected = crypto.createHmac("sha256", endpoint.secret).update(body).digest("hex");
 
     const sigValue = signature.startsWith("sha256=") ? signature.slice(7) : signature;
 
@@ -71,15 +66,12 @@ export async function POST(req: NextRequest) {
     // timingSafeEqual throws on length mismatch, caught below.
     let signatureValid = false;
     try {
-      signatureValid = crypto.timingSafeEqual(
-        Buffer.from(expected),
-        Buffer.from(sigValue)
-      );
+      signatureValid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sigValue));
     } catch {
       signatureValid = false;
     }
 
-    if (!signatureValid || expected !== sigValue) {
+    if (!signatureValid) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
@@ -114,7 +106,7 @@ export async function POST(req: NextRequest) {
     );
 
     // ── Run agent loop ───────────────────────────────────────────────────
-    const taskId = `wh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const taskId = `wh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 
     const task: AgentTask = {
       id: taskId,

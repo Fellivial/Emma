@@ -22,25 +22,28 @@ export async function GET(req: NextRequest) {
   const uid = req.nextUrl.searchParams.get("uid");
 
   if (!token || !uid) {
-    return new Response(renderPage("Invalid Link", "This unsubscribe link is missing required parameters."), {
-      status: 400,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+    return new Response(
+      renderPage("Invalid Link", "This unsubscribe link is missing required parameters."),
+      {
+        status: 400,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
   }
 
   // Verify HMAC
   const key = process.env.EMMA_ENCRYPTION_KEY;
   if (!key) {
-    return new Response(renderPage("Configuration Error", "The server is not configured correctly."), {
-      status: 500,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+    return new Response(
+      renderPage("Configuration Error", "The server is not configured correctly."),
+      {
+        status: 500,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
   }
 
-  const expected = crypto
-    .createHmac("sha256", key)
-    .update(`${uid}:unsubscribe`)
-    .digest("hex");
+  const expected = crypto.createHmac("sha256", key).update(`${uid}:unsubscribe`).digest("hex");
 
   let tokenValid = false;
   try {
@@ -50,10 +53,13 @@ export async function GET(req: NextRequest) {
   }
 
   if (!tokenValid) {
-    return new Response(renderPage("Invalid Link", "This unsubscribe link has expired or is invalid."), {
-      status: 400,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+    return new Response(
+      renderPage("Invalid Link", "This unsubscribe link has expired or is invalid."),
+      {
+        status: 400,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
   }
 
   // Cancel all pending/sending emails for this user
@@ -68,7 +74,6 @@ export async function GET(req: NextRequest) {
       .in("status", ["pending", "sending"]);
 
     cancelled = count || 0;
-
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
