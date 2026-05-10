@@ -1,3 +1,12 @@
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
 /**
  * Tool Registry — defines every action Emma can take autonomously.
  *
@@ -618,43 +627,16 @@ registerTool({
   },
 });
 
-// Tool: send_sms — Send an SMS via Twilio (DANGEROUS — always requires approval)
-registerTool({
-  name: "send_sms",
-  description: "Send an SMS message to a phone number via Twilio. REQUIRES APPROVAL.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      to: {
-        type: "string",
-        description: "Recipient phone number in E.164 format (e.g. +15551234567)",
-      },
-      message: { type: "string", description: "SMS message body" },
-    },
-    required: ["to", "message"],
-  },
-  riskLevel: "dangerous",
-  handler: async (input) => {
-    try {
-      const { TwilioAdapter } = await import("@/core/integrations/twilio");
-      const adapter = new TwilioAdapter();
-      return adapter.sendSms(input);
-    } catch (err: any) {
-      return { success: false, output: `SMS failed: ${err.message}` };
-    }
-  },
-});
-
-// Tool: send_whatsapp — Send a WhatsApp message via Twilio (DANGEROUS — always requires approval)
+// Tool: send_whatsapp — Send a WhatsApp message via WhatsApp Business API (DANGEROUS — always requires approval)
 registerTool({
   name: "send_whatsapp",
-  description: "Send a WhatsApp message to a phone number via Twilio. REQUIRES APPROVAL.",
+  description: "Send a WhatsApp message via WhatsApp Business API. REQUIRES APPROVAL.",
   inputSchema: {
     type: "object",
     properties: {
       to: {
         type: "string",
-        description: "Recipient phone number in E.164 format (e.g. +15551234567)",
+        description: "Recipient phone number in E.164 format (e.g. +6281234567890)",
       },
       message: { type: "string", description: "WhatsApp message body" },
     },
@@ -663,9 +645,9 @@ registerTool({
   riskLevel: "dangerous",
   handler: async (input) => {
     try {
-      const { TwilioAdapter } = await import("@/core/integrations/twilio");
-      const adapter = new TwilioAdapter();
-      return adapter.sendWhatsApp(input);
+      const { WhatsAppAdapter } = await import("@/core/integrations/whatsapp");
+      const adapter = new WhatsAppAdapter();
+      return adapter.sendText(input.to as string, input.message as string);
     } catch (err: any) {
       return { success: false, output: `WhatsApp failed: ${err.message}` };
     }
@@ -879,6 +861,414 @@ registerTool({
         };
       }
       return { success: false, output: `HubSpot update deal stage failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: read_ingested_document — Read extracted text from an ingested document (safe)
+registerTool({
+  name: "read_ingested_document",
+  description:
+    "Read the extracted text content of a previously ingested document (PDF, DOCX, or image).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      document_id: { type: "string", description: "UUID of the ingested document" },
+      query: {
+        type: "string",
+        description: "Specific keyword or topic to extract from the document (optional)",
+      },
+    },
+    required: ["document_id"],
+  },
+  riskLevel: "safe",
+  handler: async (input) => {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return { success: false, output: "Database not configured." };
+
+    const { data, error } = await supabase
+      .from("ingested_documents")
+      .select("id, label, extracted_text, character_count")
+      .eq("id", input.document_id as string)
+      .single();
+
+    if (error || !data) {
+      return { success: false, output: `Document not found: ${input.document_id}` };
+    }
+
+    const text: string = data.extracted_text || "";
+    let excerpt = text;
+
+    if (input.query) {
+      const kw = (input.query as string).toLowerCase();
+      const idx = text.toLowerCase().indexOf(kw);
+      if (idx !== -1) {
+        const start = Math.max(0, idx - 500);
+        const end = Math.min(text.length, idx + 1500);
+        excerpt = text.slice(start, end);
+      } else {
+        excerpt = text.slice(0, 2000);
+      }
+    } else {
+      excerpt = text.slice(0, 3000);
+    }
+
+    return {
+      success: true,
+      output: excerpt,
+      data: { documentId: data.id, label: data.label, characterCount: data.character_count },
+    };
+  },
+});
+
+// Tool: read_recent_emails — Fetch recent inbound emails (safe)
+registerTool({
+  name: "read_recent_emails",
+  description:
+    "Fetch recent inbound emails captured by the email webhook. Optionally filter by keyword or unprocessed only.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Number of emails to return (default 5, max 20)" },
+      keyword: { type: "string", description: "Filter by subject keyword (optional)" },
+      unprocessed_only: {
+        type: "boolean",
+        description: "Only return unprocessed emails (optional)",
+      },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return { success: false, output: "Database not configured." };
+
+    const limit = Math.min(Number(input.limit) || 5, 20);
+
+    // Webhook-ingested emails have no user_id (no session at ingest time),
+    // so we read the shared inbox rather than filtering by user.
+    let query = supabase
+      .from("ingested_emails")
+      .select("*")
+      .order("received_at", { ascending: false })
+      .limit(limit);
+
+    if (input.unprocessed_only) {
+      query = query.eq("processed", false);
+    }
+
+    const { data: emails, error } = await query;
+    if (error) return { success: false, output: `Failed to fetch emails: ${error.message}` };
+
+    let filtered = (emails || []) as any[];
+    if (input.keyword) {
+      const kw = (input.keyword as string).toLowerCase();
+      filtered = filtered.filter((e: any) => (e.subject || "").toLowerCase().includes(kw));
+    }
+
+    if (filtered.length === 0) {
+      return { success: true, output: "No emails found.", data: { count: 0 } };
+    }
+
+    const ids = filtered.map((e: any) => e.id);
+    await supabase.from("ingested_emails").update({ processed: true }).in("id", ids);
+
+    const formatted = filtered
+      .map(
+        (e: any) =>
+          `From: ${e.from_address}\nSubject: ${e.subject || "(no subject)"}\nPreview: ${(e.body_text || "").slice(0, 100)}\nReceived: ${e.received_at}`
+      )
+      .join("\n\n");
+
+    return {
+      success: true,
+      output: formatted,
+      data: { count: filtered.length },
+    };
+  },
+});
+
+// Tool: read_whatsapp_messages — Fetch recent inbound WhatsApp messages (safe)
+registerTool({
+  name: "read_whatsapp_messages",
+  description: "Fetch recent inbound WhatsApp messages captured by the WhatsApp webhook.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Number of messages to return (default 5)" },
+      from_number: { type: "string", description: "Filter by sender phone number (optional)" },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return { success: false, output: "Database not configured." };
+
+    const limit = Math.min(Number(input.limit) || 5, 50);
+
+    // Webhook-ingested messages have no user_id, so we read the shared inbox.
+    let query = supabase
+      .from("ingested_whatsapp")
+      .select("*")
+      .order("received_at", { ascending: false })
+      .limit(limit);
+
+    if (input.from_number) {
+      query = query.eq("from_number", input.from_number as string);
+    }
+
+    const { data: messages, error } = await query;
+    if (error) return { success: false, output: `Failed to fetch messages: ${error.message}` };
+
+    const msgs = (messages || []) as any[];
+    if (msgs.length === 0) {
+      return { success: true, output: "No WhatsApp messages found.", data: { count: 0 } };
+    }
+
+    const formatted = msgs
+      .map(
+        (m: any) => `From: ${m.from_number}\nMessage: ${m.body || ""}\nReceived: ${m.received_at}`
+      )
+      .join("\n\n");
+
+    return { success: true, output: formatted, data: { count: msgs.length } };
+  },
+});
+
+// Tool: ocr_image — Extract text from an image via OCR (safe)
+registerTool({
+  name: "ocr_image",
+  description:
+    "Extract text from an image using OCR. Provide either a public image URL or a document_id of an already-ingested image.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      image_url: { type: "string", description: "Public URL of the image to OCR (optional)" },
+      document_id: {
+        type: "string",
+        description: "UUID of an already-ingested image document (optional)",
+      },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input) => {
+    if (input.document_id) {
+      const supabase = getSupabaseAdmin();
+      if (!supabase) return { success: false, output: "Database not configured." };
+      const { data, error } = await supabase
+        .from("ingested_documents")
+        .select("extracted_text, character_count, label")
+        .eq("id", input.document_id as string)
+        .single();
+      if (error || !data)
+        return { success: false, output: `Document not found: ${input.document_id}` };
+      return {
+        success: true,
+        output: data.extracted_text || "",
+        data: { documentId: input.document_id, label: data.label, confidence: null },
+      };
+    }
+
+    if (input.image_url) {
+      const rawUrl = input.image_url as string;
+      if (!rawUrl.startsWith("https://")) {
+        return { success: false, output: "image_url must use HTTPS." };
+      }
+      let hostname: string;
+      try {
+        hostname = new URL(rawUrl).hostname;
+      } catch {
+        return { success: false, output: "Invalid image URL." };
+      }
+      const privateRange =
+        /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|::1$)/i;
+      if (privateRange.test(hostname)) {
+        return { success: false, output: "image_url must point to a public host." };
+      }
+      try {
+        const res = await fetch(rawUrl);
+        if (!res.ok) return { success: false, output: `Failed to fetch image: ${res.status}` };
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const contentType = res.headers.get("content-type") || "image/jpeg";
+        const mimeType = contentType.split(";")[0].trim();
+        const { extractTextFromImage } = await import("@/core/integrations/ocr");
+        const { text, confidence } = await extractTextFromImage(buffer, mimeType);
+        return {
+          success: true,
+          output: text || "No text detected.",
+          data: { confidence },
+        };
+      } catch (err: any) {
+        return { success: false, output: `OCR failed: ${err.message}` };
+      }
+    }
+
+    return { success: false, output: "Provide either image_url or document_id." };
+  },
+});
+
+// Tool: calendar_get_upcoming — Get upcoming calendar events (safe)
+registerTool({
+  name: "calendar_get_upcoming",
+  description: "Get upcoming Google Calendar events. Requires Google Calendar integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      max_results: { type: "number", description: "Maximum events to return (default 10)" },
+      days_ahead: { type: "number", description: "How many days ahead to look (default 7)" },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { GoogleCalendarAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleCalendarAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output: "Google Calendar not connected. Go to Settings → Integrations to connect.",
+        };
+      }
+      const daysAhead = Number(input.days_ahead) || 7;
+      return adapter.getUpcomingEvents(context.clientId || "", {
+        maxResults: Number(input.max_results) || 10,
+        timeMax: new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Calendar auth expired. Reconnect in Settings → Integrations.",
+        };
+      }
+      return { success: false, output: `Calendar read failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: calendar_get_today — Get today's calendar events (safe)
+registerTool({
+  name: "calendar_get_today",
+  description: "Get all Google Calendar events for today. Requires Google Calendar integration.",
+  inputSchema: { type: "object", properties: {} },
+  riskLevel: "safe",
+  handler: async (_input, context) => {
+    try {
+      const { GoogleCalendarAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleCalendarAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output: "Google Calendar not connected. Go to Settings → Integrations to connect.",
+        };
+      }
+      return adapter.getTodayEvents(context.clientId || "");
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Calendar auth expired. Reconnect in Settings → Integrations.",
+        };
+      }
+      return { success: false, output: `Calendar read failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: hubspot_get_contacts — List or search HubSpot contacts (safe)
+registerTool({
+  name: "hubspot_get_contacts",
+  description: "List or search contacts in HubSpot CRM. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Number of contacts to return (default 10, max 100)" },
+      query: { type: "string", description: "Search contacts by name or email (optional)" },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+      return adapter.getContacts(context.clientId || "", {
+        limit: input.limit ? Number(input.limit) : 10,
+        query: input.query as string | undefined,
+      });
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return {
+          success: false,
+          output: "HubSpot not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+      return { success: false, output: `HubSpot get contacts failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: hubspot_get_deals — List HubSpot deals (safe)
+registerTool({
+  name: "hubspot_get_deals",
+  description:
+    "List deals in HubSpot CRM. Optionally filter by pipeline stage. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Number of deals to return (default 10)" },
+      stage: {
+        type: "string",
+        description: "Filter by deal stage ID (optional, e.g. 'appointmentscheduled')",
+      },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+      return adapter.getDeals(context.clientId || "", {
+        limit: input.limit ? Number(input.limit) : 10,
+        stage: input.stage as string | undefined,
+      });
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return {
+          success: false,
+          output: "HubSpot not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+      return { success: false, output: `HubSpot get deals failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: hubspot_get_contact — Get a single HubSpot contact by ID (safe)
+registerTool({
+  name: "hubspot_get_contact",
+  description: "Get full details for a single HubSpot contact by ID. Requires HubSpot integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      contact_id: { type: "string", description: "HubSpot contact ID" },
+    },
+    required: ["contact_id"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+      return adapter.getContactById(context.clientId || "", input.contact_id as string);
+    } catch (err: any) {
+      if (err.name === "IntegrationNotConfiguredError") {
+        return {
+          success: false,
+          output: "HubSpot not connected. Go to Settings → Integrations to connect HubSpot.",
+        };
+      }
+      return { success: false, output: `HubSpot get contact failed: ${err.message}` };
     }
   },
 });

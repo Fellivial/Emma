@@ -12,6 +12,11 @@ import {
   markIntegrationError,
 } from "./adapter";
 
+function formatDeal(d: any): string {
+  const p = d.properties || {};
+  return `Deal: ${p.dealname || "(unnamed)"}\nAmount: ${p.amount || "N/A"}\nStage: ${p.dealstage || "N/A"}`;
+}
+
 export class HubSpotAdapter implements IntegrationAdapter {
   service: IntegrationService = "hubspot";
 
@@ -121,6 +126,154 @@ export class HubSpotAdapter implements IntegrationAdapter {
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot update deal failed: ${err.message}` };
+    }
+  }
+
+  async getContacts(
+    clientId: string,
+    params: { limit?: number; query?: string }
+  ): Promise<AdapterResult> {
+    const { limit = 10, query } = params;
+    try {
+      const { accessToken } = await getIntegrationTokens(clientId, "hubspot");
+      let res: Response;
+
+      if (query) {
+        res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query,
+            limit: Math.min(limit, 100),
+            properties: ["firstname", "lastname", "email", "company"],
+          }),
+        });
+      } else {
+        res = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/contacts?limit=${Math.min(limit, 100)}&properties=firstname,lastname,email,company`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "hubspot", new Error(errText));
+        return { success: false, output: `HubSpot API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const contacts: any[] = data.results || [];
+
+      if (contacts.length === 0) {
+        return { success: true, output: "No contacts found.", data: { contacts: [] } };
+      }
+
+      const formatted = contacts
+        .map((c) => {
+          const p = c.properties || {};
+          return `Contact: ${p.firstname || ""} ${p.lastname || ""}\nEmail: ${p.email || "N/A"}\nCompany: ${p.company || "N/A"}`;
+        })
+        .join("\n\n");
+
+      await markIntegrationUsed(clientId, "hubspot");
+      return { success: true, output: formatted, data: { count: contacts.length, contacts } };
+    } catch (err: any) {
+      await markIntegrationError(clientId, "hubspot", err);
+      return { success: false, output: `HubSpot get contacts failed: ${err.message}` };
+    }
+  }
+
+  async getDeals(
+    clientId: string,
+    params: { limit?: number; stage?: string }
+  ): Promise<AdapterResult> {
+    const { limit = 10, stage } = params;
+    try {
+      const { accessToken } = await getIntegrationTokens(clientId, "hubspot");
+      let res: Response;
+
+      if (stage) {
+        res = await fetch("https://api.hubapi.com/crm/v3/objects/deals/search", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            filterGroups: [
+              { filters: [{ propertyName: "dealstage", operator: "EQ", value: stage }] },
+            ],
+            properties: ["dealname", "amount", "dealstage"],
+            limit: Math.min(limit, 100),
+          }),
+        });
+      } else {
+        res = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/deals?limit=${Math.min(limit, 100)}&properties=dealname,amount,dealstage`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "hubspot", new Error(errText));
+        return { success: false, output: `HubSpot API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const deals: any[] = data.results || [];
+
+      if (deals.length === 0) {
+        return { success: true, output: "No deals found.", data: { deals: [] } };
+      }
+
+      const formatted = deals.map(formatDeal).join("\n\n");
+      await markIntegrationUsed(clientId, "hubspot");
+      return { success: true, output: formatted, data: { count: deals.length, deals } };
+    } catch (err: any) {
+      await markIntegrationError(clientId, "hubspot", err);
+      return { success: false, output: `HubSpot get deals failed: ${err.message}` };
+    }
+  }
+
+  async getContactById(clientId: string, contactId: string): Promise<AdapterResult> {
+    try {
+      const { accessToken } = await getIntegrationTokens(clientId, "hubspot");
+
+      const res = await fetch(
+        `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}?properties=firstname,lastname,email,company,phone,jobtitle,website`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "hubspot", new Error(errText));
+        return { success: false, output: `HubSpot API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const p = data.properties || {};
+      const formatted = [
+        `Contact: ${p.firstname || ""} ${p.lastname || ""}`,
+        `Email: ${p.email || "N/A"}`,
+        `Company: ${p.company || "N/A"}`,
+        `Phone: ${p.phone || "N/A"}`,
+        `Job Title: ${p.jobtitle || "N/A"}`,
+        `Website: ${p.website || "N/A"}`,
+      ].join("\n");
+
+      await markIntegrationUsed(clientId, "hubspot");
+      return {
+        success: true,
+        output: formatted,
+        data: { contactId: data.id, properties: data.properties },
+      };
+    } catch (err: any) {
+      await markIntegrationError(clientId, "hubspot", err);
+      return { success: false, output: `HubSpot get contact failed: ${err.message}` };
     }
   }
 

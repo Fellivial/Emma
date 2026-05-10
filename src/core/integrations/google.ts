@@ -67,12 +67,16 @@ async function refreshGoogleToken(clientId: string, service: IntegrationService)
   const newAccessToken = data.access_token;
   const expiresIn = data.expires_in || 3600;
 
-  await supabase.from("client_integrations").update({
-    access_token: encrypt(newAccessToken),
-    token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
-    status: "connected",
-    updated_at: new Date().toISOString(),
-  }).eq("client_id", clientId).eq("service", service);
+  await supabase
+    .from("client_integrations")
+    .update({
+      access_token: encrypt(newAccessToken),
+      token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      status: "connected",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("client_id", clientId)
+    .eq("service", service);
 
   return newAccessToken;
 }
@@ -101,14 +105,14 @@ async function googleFetch(
 
   let res = await fetch(url, {
     ...options,
-    headers: { ...options.headers as any, Authorization: `Bearer ${token}` },
+    headers: { ...(options.headers as any), Authorization: `Bearer ${token}` },
   });
 
   if (res.status === 401) {
     token = await refreshGoogleToken(clientId, service);
     res = await fetch(url, {
       ...options,
-      headers: { ...options.headers as any, Authorization: `Bearer ${token}` },
+      headers: { ...(options.headers as any), Authorization: `Bearer ${token}` },
     });
     if (res.status === 401) throw new IntegrationAuthExpiredError(service);
   }
@@ -212,8 +216,18 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
   }
 
   async send(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
-    const { title, date, time, duration_minutes = 60, attendees } = params as {
-      title: string; date: string; time: string; duration_minutes?: number; attendees?: string[];
+    const {
+      title,
+      date,
+      time,
+      duration_minutes = 60,
+      attendees,
+    } = params as {
+      title: string;
+      date: string;
+      time: string;
+      duration_minutes?: number;
+      attendees?: string[];
     };
 
     try {
@@ -259,5 +273,79 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
       await markIntegrationError(clientId, "google_calendar", err);
       return { success: false, output: `Calendar failed: ${err.message}` };
     }
+  }
+
+  async getUpcomingEvents(
+    clientId: string,
+    params: {
+      maxResults?: number;
+      timeMin?: string;
+      timeMax?: string;
+      calendarId?: string;
+    }
+  ): Promise<AdapterResult> {
+    const {
+      maxResults = 10,
+      timeMin = new Date().toISOString(),
+      timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      calendarId = "primary",
+    } = params;
+
+    try {
+      const url = new URL(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+      );
+      url.searchParams.set("timeMin", timeMin);
+      url.searchParams.set("timeMax", timeMax);
+      url.searchParams.set("maxResults", String(maxResults));
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("orderBy", "startTime");
+
+      const res = await googleFetch(clientId, "google_calendar", url.toString(), {
+        method: "GET",
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        await markIntegrationError(clientId, "google_calendar", new Error(err));
+        return { success: false, output: `Calendar API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const events: any[] = data.items || [];
+
+      if (events.length === 0) {
+        return { success: true, output: "No upcoming events found.", data: { events: [] } };
+      }
+
+      const formatted = events
+        .map(
+          (e) =>
+            `Event: ${e.summary || "(no title)"}\nWhen: ${e.start?.dateTime || e.start?.date || "?"}\nWhere: ${e.location || "N/A"}`
+        )
+        .join("\n\n");
+
+      await markIntegrationUsed(clientId, "google_calendar");
+      return {
+        success: true,
+        output: formatted,
+        data: { count: events.length, events },
+      };
+    } catch (err: any) {
+      if (err instanceof IntegrationAuthExpiredError) throw err;
+      await markIntegrationError(clientId, "google_calendar", err);
+      return { success: false, output: `Calendar read failed: ${err.message}` };
+    }
+  }
+
+  async getTodayEvents(clientId: string): Promise<AdapterResult> {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    return this.getUpcomingEvents(clientId, {
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      maxResults: 20,
+    });
   }
 }
