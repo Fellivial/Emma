@@ -56,7 +56,12 @@ export interface EnforcementResult {
 function getDailyStart(tz: string): Date {
   try {
     const now = new Date();
-    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
     const dateStr = fmt.format(now); // "2026-04-25"
     return new Date(dateStr + "T00:00:00Z");
   } catch {
@@ -92,18 +97,14 @@ function getMonthlyStart(anchorDay: number, tz: string): Date {
 // ─── Extra Pack Helper ───────────────────────────────────────────────────────
 
 async function getExtraTokens(userId: string, supabase: any): Promise<number> {
-  try {
-    const { data } = await supabase
-      .from("extra_packs")
-      .select("tokens_remaining")
-      .eq("user_id", userId)
-      .gt("valid_until", new Date().toISOString())
-      .gt("tokens_remaining", 0);
+  const { data } = await supabase
+    .from("extra_packs")
+    .select("tokens_remaining")
+    .eq("user_id", userId)
+    .gt("valid_until", new Date().toISOString())
+    .gt("tokens_remaining", 0);
 
-    return (data || []).reduce((sum: number, p: any) => sum + (p.tokens_remaining || 0), 0);
-  } catch {
-    return 0;
-  }
+  return (data || []).reduce((sum: number, p: any) => sum + (p.tokens_remaining || 0), 0);
 }
 
 // ─── Main Check ──────────────────────────────────────────────────────────────
@@ -136,8 +137,8 @@ export async function checkUsage(
       .eq("user_id", userId)
       .or(
         `and(window_type.eq.daily,window_start.eq.${dailyStart.toISOString()}),` +
-        `and(window_type.eq.weekly,window_start.eq.${weeklyStart.toISOString()}),` +
-        `and(window_type.eq.monthly,window_start.eq.${monthlyStart.toISOString()})`
+          `and(window_type.eq.weekly,window_start.eq.${weeklyStart.toISOString()}),` +
+          `and(window_type.eq.monthly,window_start.eq.${monthlyStart.toISOString()})`
       );
 
     // Get extra pack tokens (stacks on monthly limit)
@@ -150,20 +151,34 @@ export async function checkUsage(
       tokenLimit: number;
       messageLimit: number;
     }> = [
-      { type: "daily", start: dailyStart, tokenLimit: plan.tokenBudgetDaily, messageLimit: plan.messageLimitDaily },
-      { type: "weekly", start: weeklyStart, tokenLimit: plan.tokenBudgetWeekly, messageLimit: plan.messageLimitWeekly },
-      { type: "monthly", start: monthlyStart, tokenLimit: plan.tokenBudgetMonthly + extraTokens, messageLimit: plan.messageLimitDaily * 30 },
+      {
+        type: "daily",
+        start: dailyStart,
+        tokenLimit: plan.tokenBudgetDaily,
+        messageLimit: plan.messageLimitDaily,
+      },
+      {
+        type: "weekly",
+        start: weeklyStart,
+        tokenLimit: plan.tokenBudgetWeekly,
+        messageLimit: plan.messageLimitWeekly,
+      },
+      {
+        type: "monthly",
+        start: monthlyStart,
+        tokenLimit: plan.tokenBudgetMonthly + extraTokens,
+        messageLimit: plan.messageLimitDaily * 30,
+      },
     ];
 
     const allWindows: WindowUsage[] = windowDefs.map((def) => {
-      const row = (rows || []).find(
-        (r: any) => r.window_type === def.type
-      );
+      const row = (rows || []).find((r: any) => r.window_type === def.type);
 
       const tokensUsed = row?.tokens_used || 0;
       const messagesUsed = row?.messages_used || 0;
       const tokenPct = def.tokenLimit > 0 ? Math.round((tokensUsed / def.tokenLimit) * 100) : 0;
-      const messagePct = def.messageLimit > 0 ? Math.round((messagesUsed / def.messageLimit) * 100) : 0;
+      const messagePct =
+        def.messageLimit > 0 ? Math.round((messagesUsed / def.messageLimit) * 100) : 0;
 
       return {
         windowType: def.type,
@@ -276,9 +291,12 @@ export async function recordUsage(
 
         if (packs && packs.length > 0) {
           const deduct = Math.min(packs[0].tokens_remaining, Number(total));
-          await supabase.from("extra_packs").update({
-            tokens_remaining: Math.max(0, packs[0].tokens_remaining - deduct),
-          }).eq("id", packs[0].id);
+          await supabase
+            .from("extra_packs")
+            .update({
+              tokens_remaining: Math.max(0, packs[0].tokens_remaining - deduct),
+            })
+            .eq("id", packs[0].id);
         }
       }
     }
@@ -295,7 +313,9 @@ export async function markWarningSent(
   const supabase = getSupabase();
   if (!supabase) return;
   try {
-    await supabase.from("usage_windows").update({ warning_sent: true })
+    await supabase
+      .from("usage_windows")
+      .update({ warning_sent: true })
       .eq("user_id", userId)
       .eq("window_type", windowType)
       .eq("window_start", windowStart);

@@ -68,7 +68,6 @@ export default function Approach() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "380px 1fr",
           borderTop: "1px solid var(--l-border)",
         }}
         className="lg:grid-cols-[380px_1fr] grid-cols-1"
@@ -85,13 +84,9 @@ export default function Approach() {
                 textAlign: "left",
                 padding: "32px 40px",
                 background: i === activeStep ? "var(--l-surface)" : "transparent",
-                borderBottom:
-                  i < APPROACH_STEPS.length - 1
-                    ? "1px solid var(--l-border)"
-                    : "none",
-                borderLeft: i === activeStep
-                  ? "3px solid var(--l-accent)"
-                  : "3px solid transparent",
+                borderBottom: i < APPROACH_STEPS.length - 1 ? "1px solid var(--l-border)" : "none",
+                borderLeft:
+                  i === activeStep ? "3px solid var(--l-accent)" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 150ms, border-color 150ms",
               }}
@@ -186,10 +181,10 @@ function BarRow({
     if (!barRef.current) return;
     if (animate) {
       barRef.current.style.transitionDelay = `${delay}ms`;
-      barRef.current.style.width = `${pct}%`;
+      barRef.current.style.transform = `scaleX(${pct / 100})`;
     } else {
       barRef.current.style.transitionDelay = "0ms";
-      barRef.current.style.width = "0%";
+      barRef.current.style.transform = "scaleX(0)";
     }
   }, [animate, pct, delay]);
 
@@ -235,9 +230,11 @@ function BarRow({
           ref={barRef}
           style={{
             height: "100%",
-            width: "0%",
+            width: "100%",
             background: isEmma ? "var(--l-green)" : "var(--l-surface2)",
-            transition: "width 1s ease",
+            transition: "transform 1s ease",
+            transform: "scaleX(0)",
+            transformOrigin: "left",
           }}
         />
       </div>
