@@ -52,7 +52,6 @@ export default function Capabilities() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
           border: "1px solid var(--l-border)",
           gap: "1px",
           background: "var(--l-border)",
