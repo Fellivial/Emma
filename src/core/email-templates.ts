@@ -28,10 +28,7 @@ interface RenderedEmail {
 export function generateUnsubscribeUrl(userId: string): string {
   const key = process.env.EMMA_ENCRYPTION_KEY;
   if (!key) throw new Error("EMMA_ENCRYPTION_KEY is required to generate unsubscribe tokens");
-  const token = crypto
-    .createHmac("sha256", key)
-    .update(`${userId}:unsubscribe`)
-    .digest("hex");
+  const token = crypto.createHmac("sha256", key).update(`${userId}:unsubscribe`).digest("hex");
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return `${base}/api/emma/unsubscribe?token=${token}&uid=${userId}`;
 }
@@ -52,7 +49,10 @@ export function renderEmail(templateId: string, ctx: EmailContext): RenderedEmai
   } catch {
     return {
       subject: "A message from Emma",
-      html: wrapHtml(`<p style="color:#e8dfe6;">Hey ${ctx.name}. Something went wrong rendering this email, but I'm still here.</p>`, ctx),
+      html: wrapHtml(
+        `<p style="color:#e8dfe6;">Hey ${ctx.name}. Something went wrong rendering this email, but I'm still here.</p>`,
+        ctx
+      ),
       text: `Hey ${ctx.name}. Something went wrong, but I'm still here.\n\n${ctx.upgradeUrl}`,
     };
   }
