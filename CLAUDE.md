@@ -150,11 +150,10 @@ Key routing rules:
 - Strategy/scope → invoke /plan-ceo-review
 - Architecture → invoke /plan-eng-review
 - Design system/plan review → invoke /design-consultation or /plan-design-review
-- Full review pipeline → invoke /autoplan
-- Bugs/errors → invoke /investigate
-- QA/testing site behavior → invoke /qa or /qa-only
 - Code review/diff check → invoke /review
+- Full review + QA pipeline → invoke /review then /qa
+- Bugs/errors → invoke /investigate
+- Performance issues → invoke /benchmark
+- QA/testing site behavior → invoke /qa or /qa-only
 - Visual polish → invoke /design-review
 - Ship/deploy/PR → invoke /ship or /land-and-deploy
-- Save progress → invoke /context-save
-- Resume context → invoke /context-restore
