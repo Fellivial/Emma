@@ -68,7 +68,6 @@ export default function Approach() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "380px 1fr",
           borderTop: "1px solid var(--l-border)",
         }}
         className="lg:grid-cols-[380px_1fr] grid-cols-1"
