@@ -164,6 +164,9 @@ export default function Hero() {
                   color: "rgba(0,0,0,0.58)",
                   textDecoration: "none",
                   transition: "color 150ms",
+                  padding: "12px 4px",
+                  display: "inline-flex",
+                  alignItems: "center",
                 }}
                 onMouseEnter={(e) =>
                   ((e.currentTarget as HTMLAnchorElement).style.color = "#000")
@@ -184,11 +187,12 @@ export default function Hero() {
                 fontSize: "12px",
                 color: "var(--l-accent)",
                 background: "#000",
-                padding: "9px 22px",
+                padding: "12px 22px",
                 textDecoration: "none",
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
-                display: "inline-block",
+                display: "inline-flex",
+                alignItems: "center",
               }}
             >
               Get Early Access
@@ -204,7 +208,7 @@ export default function Hero() {
               background: "none",
               border: "none",
               cursor: "pointer",
-              padding: "4px",
+              padding: "14px 11px",
               display: "flex",
               flexDirection: "column",
               gap: "5px",
