@@ -81,7 +81,8 @@ describe("checkUsage — enterprise bypass", () => {
 
 describe("checkUsage — fail-open contract", () => {
   it("returns ok when Supabase is not configured (no env vars)", async () => {
-    vi.unstubAllEnvs();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
   });

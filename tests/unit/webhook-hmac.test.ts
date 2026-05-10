@@ -62,6 +62,7 @@ const minimalEvent = JSON.stringify({
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fake.supabase.co");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fake-key");
   vi.stubEnv("LEMONSQUEEZY_WEBHOOK_SECRET", WEBHOOK_SECRET);
@@ -69,7 +70,8 @@ beforeEach(() => {
 
 describe("LemonSqueezy webhook — configuration guards", () => {
   it("returns 501 when DB is not configured", async () => {
-    vi.unstubAllEnvs();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
     vi.stubEnv("LEMONSQUEEZY_WEBHOOK_SECRET", WEBHOOK_SECRET);
     const req = makeRequest(minimalEvent, validHmac(minimalEvent));
     const res = await POST(req);

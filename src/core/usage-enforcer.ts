@@ -92,18 +92,14 @@ function getMonthlyStart(anchorDay: number, tz: string): Date {
 // ─── Extra Pack Helper ───────────────────────────────────────────────────────
 
 async function getExtraTokens(userId: string, supabase: any): Promise<number> {
-  try {
-    const { data } = await supabase
-      .from("extra_packs")
-      .select("tokens_remaining")
-      .eq("user_id", userId)
-      .gt("valid_until", new Date().toISOString())
-      .gt("tokens_remaining", 0);
+  const { data } = await supabase
+    .from("extra_packs")
+    .select("tokens_remaining")
+    .eq("user_id", userId)
+    .gt("valid_until", new Date().toISOString())
+    .gt("tokens_remaining", 0);
 
-    return (data || []).reduce((sum: number, p: any) => sum + (p.tokens_remaining || 0), 0);
-  } catch {
-    return 0;
-  }
+  return (data || []).reduce((sum: number, p: any) => sum + (p.tokens_remaining || 0), 0);
 }
 
 // ─── Main Check ──────────────────────────────────────────────────────────────
