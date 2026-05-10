@@ -89,13 +89,16 @@ export async function POST(req: NextRequest) {
             .single();
 
           if (membership) {
-            await supabase.from("clients").update({
-              token_budget_monthly: plan.tokenBudgetMonthly,
-              token_budget_daily: plan.tokenBudgetDaily,
-              message_limit_daily: plan.messageLimitDaily,
-              tools_enabled: plan.toolsEnabled,
-              updated_at: new Date().toISOString(),
-            }).eq("id", membership.client_id);
+            await supabase
+              .from("clients")
+              .update({
+                token_budget_monthly: plan.tokenBudgetMonthly,
+                token_budget_daily: plan.tokenBudgetDaily,
+                message_limit_daily: plan.messageLimitDaily,
+                tools_enabled: plan.toolsEnabled,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", membership.client_id);
 
             audit({
               userId,
@@ -119,13 +122,16 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (membership) {
-          await supabase.from("clients").update({
-            token_budget_monthly: FREE_TIER_CONFIG.tokenBudgetMonthly,
-            token_budget_daily: FREE_TIER_CONFIG.tokenBudgetDaily,
-            message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
-            tools_enabled: FREE_TIER_CONFIG.toolsEnabled,
-            updated_at: new Date().toISOString(),
-          }).eq("id", membership.client_id);
+          await supabase
+            .from("clients")
+            .update({
+              token_budget_monthly: FREE_TIER_CONFIG.tokenBudgetMonthly,
+              token_budget_daily: FREE_TIER_CONFIG.tokenBudgetDaily,
+              message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
+              tools_enabled: FREE_TIER_CONFIG.toolsEnabled,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", membership.client_id);
         }
         break;
       }
@@ -140,10 +146,13 @@ export async function POST(req: NextRequest) {
 
         if (membership) {
           // Grace period: reduce to free daily limit
-          await supabase.from("clients").update({
-            message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
-            updated_at: new Date().toISOString(),
-          }).eq("id", membership.client_id);
+          await supabase
+            .from("clients")
+            .update({
+              message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", membership.client_id);
         }
         break;
       }
@@ -151,12 +160,15 @@ export async function POST(req: NextRequest) {
       default:
         // Check for extra pack one-time purchase
         if (eventName === "order_created") {
-          const orderVariantId = String(
-            event.data?.attributes?.first_order_item?.variant_id || ""
-          );
+          const orderVariantId = String(event.data?.attributes?.first_order_item?.variant_id || "");
           const extraPackVariantId = process.env.LEMONSQUEEZY_VARIANT_EXTRA_PACK;
 
-          if (orderVariantId && extraPackVariantId && orderVariantId === extraPackVariantId && userId) {
+          if (
+            orderVariantId &&
+            extraPackVariantId &&
+            orderVariantId === extraPackVariantId &&
+            userId
+          ) {
             await supabase.from("extra_packs").insert({
               user_id: userId,
               tokens_granted: 500_000,
