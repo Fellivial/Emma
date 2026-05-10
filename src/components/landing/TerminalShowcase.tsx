@@ -56,7 +56,6 @@ export default function TerminalShowcase() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "180px 1fr 180px",
           gap: "0",
           border: "1px solid var(--l-border)",
           maxWidth: "1000px",
