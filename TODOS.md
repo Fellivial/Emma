@@ -58,12 +58,14 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 **Effort:** S (human ~1 hr / CC ~30 min)
 **Depends on:** First client confirmed (so we know the subdomain to configure)
 
-### SMS Notification (Twilio)
-**What:** Send SMS to business owner's phone when a lead is captured.
-**Why:** More immediate than email. Design doc mentioned SMS. Design doc mentioned SMS. "You just got a text" is impressive in a live demo.
-**How to apply:** `twilio` npm package + `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` env vars + `owner_phone` in ClientConfig.
-**Effort:** S (human ~2 hrs / CC ~1 hr)
-**Depends on:** First client asking for it, or email proving insufficient
+### Lead Notification — Email or WhatsApp Business
+**What:** Notify the business owner when a lead is captured via intake. Two options: (A) email via Resend (already wired in the app), or (B) WhatsApp Business API message.
+**Why:** Immediate notification is the demo "wow factor" — owner sees the lead arrive in real time. Resend is zero-infra since it's already integrated. WhatsApp Business is more personal and harder to miss than email for SMBs in markets where WhatsApp is primary.
+**How to apply:**
+- Email: `resend.emails.send()` call in `/api/intake/[slug]/chat` route when `complete === true` + `owner_email` in ClientConfig. ~30 min.
+- WhatsApp: Meta Cloud API (`https://graph.facebook.com/v18.0/{phone_number_id}/messages`) + `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` env vars + `owner_whatsapp` in ClientConfig. ~2 hrs.
+**Effort:** S — Email (CC ~30 min) / WhatsApp (CC ~2 hrs)
+**Depends on:** First SMB client confirmed and requesting notifications
 
 ---
 
@@ -85,6 +87,7 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 
 ## Known TODOs in Code
 
-- `src/app/api/emma/referral/route.ts:168` — Extend referrer subscription via LemonSqueezy (not implemented)
-- `src/app/api/emma/waitlist-manage/route.ts:67` — Send invite email (not implemented)
-- `src/app/api/waitlist/route.ts:122,149` — Create auth account + send welcome/confirmation emails (not implemented)
+- `src/app/api/emma/referral/route.ts:182` — Extend referrer subscription by 1 month via LemonSqueezy API (not implemented)
+- `src/app/api/emma/waitlist-manage/route.ts:76` — Send invite email via Resend when a waitlist entry is promoted (not implemented)
+- `src/app/api/waitlist/route.ts:143` — Create Supabase auth account + send welcome email when spot is available (not implemented)
+- `src/app/api/waitlist/route.ts:174` — Send waitlist confirmation email when added to queue (not implemented)
