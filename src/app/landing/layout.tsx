@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   Bebas_Neue,
   Barlow_Condensed,
@@ -36,6 +36,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "Emma — AI Companion System",
   description:
     "Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities.",
@@ -53,6 +54,9 @@ export const metadata: Metadata = {
       "Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities.",
   },
   robots: { index: true, follow: true },
+};
+
+export const viewport: Viewport = {
   themeColor: "#e8547a",
 };
 

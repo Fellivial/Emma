@@ -1,145 +1,156 @@
-# EMMA L5 — Visual Embodiment (Live2D Avatar)
+# Emma — AI Companion System
 
-46 source files, 6 API routes, 6 pillars online. Emma now has a face.
+Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities. Built on Next.js + Supabase + Anthropic.
+
+## Quick Start
+
+```bash
+npm install
+cp .env.local.example .env.local   # fill in required vars
+npm run dev                         # localhost:3000
+```
+
+## Commands
+
+```bash
+npm run dev          # Next.js dev server
+npm run build        # Production build + type check
+npm run lint         # ESLint
+npm run format       # Prettier
+npm test             # Vitest (all tests)
+npm run test:watch   # Watch mode
+npm run test:coverage # Coverage report
+```
 
 ## Architecture
 
 ```
 src/
 ├── app/
-│   ├── api/emma/
-│   │   ├── route.ts              # Brain — NLU + all context + expression output
-│   │   ├── vision/route.ts       # Vision — webcam → Claude Vision
-│   │   ├── memory/route.ts       # Memory — CRUD + extraction
-│   │   ├── tts/route.ts          # TTS — ElevenLabs → Web Speech
-│   │   ├── mqtt/route.ts         # MQTT — IoT bridge
-│   │   └── emotion/route.ts      # Emotion — facial expression via Claude Vision
-│   ├── globals.css
-│   ├── layout.tsx
-│   └── page.tsx                  # L5 Shell — avatar layout modes (side/overlay/pip)
+│   ├── api/
+│   │   ├── emma/
+│   │   │   ├── route.ts            # Brain — streaming SSE to Anthropic
+│   │   │   ├── memory/route.ts     # Memory CRUD + extraction
+│   │   │   ├── vision/route.ts     # Claude Vision scene analysis
+│   │   │   ├── emotion/route.ts    # Emotion detection via Claude
+│   │   │   ├── tts/route.ts        # ElevenLabs TTS
+│   │   │   ├── settings/route.ts   # User settings GET/PUT
+│   │   │   ├── usage/route.ts      # Usage stats
+│   │   │   ├── tasks/route.ts      # Autonomous tasks CRUD
+│   │   │   └── agent/route.ts      # Agentic loop execution
+│   │   ├── intake/[slug]/
+│   │   │   └── chat/route.ts       # SMB intake chat (public, per-client metering)
+│   │   ├── lemon/webhook/route.ts  # LemonSqueezy subscription webhooks
+│   │   └── integrations/           # OAuth start + callback per service
+│   ├── app/page.tsx                # Main chat shell (client component)
+│   ├── intake/[slug]/page.tsx      # SMB intake UI (public)
+│   ├── landing/                    # Marketing landing page
+│   ├── onboarding/                 # New user onboarding flow
+│   └── settings/                   # Profile, usage, billing, integrations, tasks
 ├── components/
-│   ├── AvatarCanvas.tsx           # Live2D canvas + CSS placeholder + expression indicator + layout controls
-│   ├── ChatMessage.tsx / ChatPanel.tsx / InputBar.tsx
-│   ├── Dashboard.tsx              # 5-pillar status view
-│   ├── DeviceCard.tsx / DevicePanel.tsx (9 tabs)
-│   ├── Header.tsx                 # All status indicators
-│   ├── MemoryPanel.tsx / MqttPanel.tsx / NotificationToast.tsx
-│   ├── RoutineBuilder.tsx / RoutinePanel.tsx / SchedulePanel.tsx
-│   ├── TimelinePanel.tsx / UserPanel.tsx / VisionPanel.tsx
-│   └── ActionLog.tsx
+│   ├── landing/                    # Landing page sections + footer
+│   └── ...                         # Chat, avatar, panels, settings UI
 ├── core/
-│   ├── avatar-engine.ts           # Live2D controller: expressions, lip sync, idle, layout
-│   ├── autonomy-engine.ts / command-parser.ts / device-graph.ts
-│   ├── emotion-engine.ts / memory-engine.ts / memory-shared.ts
-│   ├── mqtt-bridge.ts / mqtt-client.ts / multi-user-engine.ts
-│   ├── notifications-engine.ts / personas.ts / routines-engine.ts
-│   ├── scheduler-engine.ts / timeline-engine.ts
-│   ├── vision-engine.ts / voice-engine.ts
-│   └── (17 core engines total)
-├── lib/utils.ts
-├── types/emma.ts + speech.d.ts
-└── public/live2d/emma/            # Live2D model files go here
+│   ├── personas.ts                 # System prompt builder
+│   ├── models.ts                   # Anthropic model IDs (single source of truth)
+│   ├── memory-engine.ts / memory-db.ts
+│   ├── client-config.ts            # Per-client config from Supabase `clients` table
+│   ├── usage-enforcer.ts           # Multi-window token/message metering
+│   ├── avatar-engine.ts            # Live2D: 10 expressions, lip sync, 3 layout modes
+│   ├── emotion-engine.ts           # User emotional state detection
+│   ├── autonomy-engine.ts          # Autonomy tiers (1=notify, 2=suggest, 3=execute)
+│   ├── routines-engine.ts          # Built-in + user-defined workflows
+│   ├── integrations/adapter.ts     # OAuth token store + service adapters
+│   ├── security/sanitise.ts        # Prompt injection detection + input cleaning
+│   ├── security/encryption.ts      # AES-256-GCM field encryption
+│   └── pricing.ts                  # Plan definitions and limits
+└── middleware.ts                   # Supabase SSR auth gate
 ```
 
-## Setup
+## Request Flow
+
+Every `/app` chat message:
+
+1. `sanitiseInput()` — injection detection, length limits
+2. `checkUsage()` — multi-window metering (daily / weekly / monthly)
+3. `POST /api/emma` — streaming SSE brain route
+4. `parseEmmaResponse()` — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
+5. Avatar, TTS, and timeline update on the client
+
+## SMB Intake
+
+Public widget deployed at `/intake/[slug]` for any `clients` record in the database. No auth required.
+
+- **Neutral persona** — hardcoded intake assistant prompt, never uses per-client persona
+- **Lead capture** — collects name + contact + reason via conversation; emits `[INTAKE_COMPLETE:]` tag server-side
+- **Per-client metering** — tokens and messages tracked under `client:<slug>` (not user ID)
+- **IP rate limiting** — 20 messages/minute per IP+slug (in-memory)
+- **Lead storage** — written to `leads` table via service role; RLS denies all non-service-role access
+- **Email notification** — Resend fires after lead is saved (non-fatal if it fails)
+- **AI disclosure** — "This service uses artificial intelligence. You are interacting with an AI, not a human." per Tennessee SB 2652
+
+## Auth & Middleware
+
+`src/middleware.ts` gates all routes via Supabase SSR. Public paths:
+
+- `/login`, `/auth/callback`
+- `/landing`, `/waitlist`
+- `/intake/*`
+- `/api/waitlist`, `/api/emma/webhook`, `/api/emma/unsubscribe`
+
+When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev without Supabase).
+
+## Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ✅ | Brain, vision, memory, emotion |
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Auth + DB |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Client-side auth |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Server-side DB (bypasses RLS) |
+| `EMMA_ENCRYPTION_KEY` | ✅ | AES-256 field encryption (`openssl rand -hex 32`) |
+| `NEXT_PUBLIC_APP_URL` | ✅ | Base URL for OG images and email links |
+| `RESEND_API_KEY` | — | Email sequences + intake lead notifications |
+| `EMAIL_FROM` | — | Sender address for Resend |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail + Google Calendar OAuth |
+| `EMMA_ADMIN_EMAILS` | — | Comma-separated emails allowed into `/admin` |
+| `CRON_SECRET` | — | Authenticates Vercel cron calls |
+| `LEMONSQUEEZY_API_KEY` | — | Billing checkout + subscription management |
+| `LEMONSQUEEZY_STORE_ID` | — | Billing checkout session creation |
+| `LEMONSQUEEZY_WEBHOOK_SECRET` | — | Webhook signature verification |
+| `LEMONSQUEEZY_VARIANT_EXTRA_PACK` | — | Variant ID for $9 Extra Response Pack |
+
+## Database
+
+Run `supabase/schema.sql` in the Supabase SQL Editor before first use (auth, memory, usage, integrations).
+
+Apply migrations in order:
 
 ```bash
-tar -xzf emma-l5.tar.gz && cd emma-l1
-npm install
-cp .env.local.example .env.local   # ANTHROPIC_API_KEY required
-npm run dev
+supabase db push
 ```
 
-## Pillar 6 — Live2D Avatar
+Key tables: `users`, `memories`, `usage_events`, `integration_tokens`, `clients`, `leads`.
 
-### How It Works
+## Plans & Usage Limits
 
-1. **System prompt** instructs Emma to append `[emotion: <expression>]` to every response
-2. **Command parser** extracts the tag alongside `[EMMA_CMD]` and `[EMMA_ROUTINE]` blocks
-3. **Avatar engine** receives the expression → transitions the Live2D model
-4. **Lip sync** animates mouth open/close based on response text length
-5. **Idle system** switches to `idle_bored` after 30s inactivity
-6. **Auto-neutral** returns to `neutral` 3s after each expression peak
+Four tiers defined in `src/core/pricing.ts`: `free`, `starter`, `pro`, `enterprise`.
 
-### 10 Expressions
+Limits are multi-window — daily / weekly / monthly, whichever hits first blocks. 80% of any window triggers an in-persona warning. 100% → hard block + Extra Response pack offer. Enterprise skips enforcement entirely.
 
-| Expression | Trigger | Emoji (placeholder) |
-|---|---|---|
-| `neutral` | Default / idle | 😌 |
-| `smirk` | Teasing, "mmm" lines | 😏 |
-| `warm` | Genuine care, "baby" approval | 🥰 |
-| `concerned` | User distress detected | 😟 |
-| `amused` | "Ahh", user did something clever | 😄 |
-| `skeptical` | Calling out deflection | 🤨 |
-| `listening` | While waiting for response | 👂 |
-| `flirty` | Peak persona energy (sparingly) | 😘 |
-| `sad` | Deep empathy | 😢 |
-| `idle_bored` | 30s inactivity | 🙄 |
+## Testing
 
-### 3 Layout Modes
+Tests live in `tests/unit/` and `tests/integration/`. Vitest with `@` path alias.
 
-**Side** — Avatar panel (280px) left of chat. Full visibility, non-intrusive.
-
-**Overlay** — Avatar behind chat at 30% opacity. Immersive, mobile-friendly.
-
-**PiP** — Floating 144x176px card in bottom-right corner. Minimal footprint.
-
-Switch between modes via layout buttons on the avatar canvas.
-
-### Placeholder Mode
-
-If no Live2D model files are in `public/live2d/emma/`, the avatar runs in **placeholder mode** — an animated emoji face that still reacts to all 10 expressions. No model files needed to test the full pipeline.
-
-### Adding a Real Live2D Model
-
-1. Get a Cubism 4 model (free samples at https://www.live2d.com/en/learn/sample/)
-2. Place files in `public/live2d/emma/`
-3. Ensure entry point is `emma.model3.json`
-4. Add expression files (`expressions/*.exp3.json`) named to match the 10 expression IDs
-5. Add motion files (`motions/Idle/`, `motions/Talk/`, etc.)
-6. Refresh — the avatar engine auto-detects and loads the model
-
-See `public/live2d/emma/README.md` for full file structure.
-
-### Expression Transition Timing
-
-| Expression | Fade Duration |
-|---|---|
-| neutral | 600ms |
-| smirk | 400ms (left corner leads) |
-| warm | 500ms (slow bloom) |
-| concerned | 300ms (quick shift) |
-| amused | 250ms (quick pop) |
-| flirty | 700ms (slow, deliberate) |
-| sad | 600ms (gradual) |
-| skeptical | 350ms (one brow leads) |
-
-## All 6 Pillars
-
-| Pillar | Status | Key |
-|--------|--------|-----|
-| P1 — Voice | ✅ | ElevenLabs TTS + Web Speech STT |
-| P2 — Vision | ✅ | Webcam + Claude Vision scene analysis |
-| P3 — Brain | ✅ | Device graph + MQTT bridge + command parser |
-| P4 — Personality | ✅ | Mommy persona + memory + emotion + multi-user |
-| P5 — Proactive | ✅ | Scheduler + autonomy tiers + notifications + timeline |
-| P6 — Avatar | ✅ | Live2D / placeholder + expression pipeline + lip sync |
-
-## Full Pipeline (L5)
-
+```bash
+npx vitest run tests/unit/sanitise.test.ts   # single file
+npm test                                       # all tests
 ```
-User input
-  → text emotion analysis → EmotionState
-  → avatar.setListening()
-  → POST /api/emma (all context: devices + memory + vision + user + emotion)
-    → System prompt includes [emotion: X] instruction
-    → Claude response: persona text + [EMMA_CMD] + [EMMA_ROUTINE] + [emotion: X]
-  ← parseEmmaResponse() extracts: text, commands, routineId, expression
-  → avatar.setExpression(expression)  ← Live2D transitions
-  → avatar.startTalking(text)         ← lip sync animation
-  → voice.speak(text)                 ← ElevenLabs/Web Speech TTS
-  → applyCommands()                   ← device graph + MQTT publish
-  → timeline.log()                    ← audit trail
-  → auto-return to neutral after 3s + fade duration
-  → idle_bored after 30s inactivity
-```
+
+Coverage targets `src/core/**` and `src/lib/**`.
+
+## Avatar
+
+Live2D controller with 10 expressions (`neutral`, `smirk`, `warm`, `concerned`, `amused`, `skeptical`, `listening`, `flirty`, `sad`, `idle_bored`) and 3 layout modes (side, overlay, PiP).
+
+If no model files are present in `public/live2d/emma/`, the avatar runs in placeholder mode — animated emoji that reacts to all 10 expressions. No model files needed to test the full pipeline.
