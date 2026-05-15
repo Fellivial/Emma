@@ -137,7 +137,7 @@ export const PLANS: Record<string, Plan> = {
 
   starter: {
     id: "starter",
-    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
+    lemonVariantId: process.env.NEXT_PUBLIC_LEMON_VARIANT_STARTER ?? "",
     name: "Starter",
     price: 29,
     tokenBudgetMonthly: STARTER_BUDGET,
@@ -192,7 +192,7 @@ export const PLANS: Record<string, Plan> = {
 
   pro: {
     id: "pro",
-    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
+    lemonVariantId: process.env.NEXT_PUBLIC_LEMON_VARIANT_PRO ?? "",
     name: "Pro",
     price: 79,
     tokenBudgetMonthly: PRO_BUDGET,
@@ -254,7 +254,7 @@ export const PLANS: Record<string, Plan> = {
 
   enterprise: {
     id: "enterprise",
-    lemonVariantId: "REPLACE_WITH_LEMON_VARIANT_ID",
+    lemonVariantId: "",
     name: "Enterprise",
     price: null,
     tokenBudgetMonthly: ENTERPRISE_BUDGET,

@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
         // Check for extra pack one-time purchase
         if (eventName === "order_created") {
           const orderVariantId = String(event.data?.attributes?.first_order_item?.variant_id || "");
-          const extraPackVariantId = process.env.LEMONSQUEEZY_VARIANT_EXTRA_PACK;
+          const extraPackVariantId = process.env.NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK;
 
           if (
             orderVariantId &&

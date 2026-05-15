@@ -29,7 +29,7 @@ export default function BillingPage() {
       const res = await fetch("/api/lemon/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantId: process.env.NEXT_PUBLIC_LEMON_EXTRA_PACK_VARIANT }),
+        body: JSON.stringify({ variantId: process.env.NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK }),
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;

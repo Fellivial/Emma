@@ -97,7 +97,9 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `LEMONSQUEEZY_API_KEY` | Billing — checkout + subscription management |
 | `LEMONSQUEEZY_STORE_ID` | Billing — checkout session creation |
 | `LEMONSQUEEZY_WEBHOOK_SECRET` | Billing — webhook signature verification |
-| `LEMONSQUEEZY_VARIANT_EXTRA_PACK` | LemonSqueezy variant ID for the $9 Extra Response Pack |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | LemonSqueezy variant ID for the Starter plan ($29/mo) |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | LemonSqueezy variant ID for the Pro plan ($79/mo) |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | LemonSqueezy variant ID for the $9 Extra Response Pack |
 
 ## Database Setup
 
