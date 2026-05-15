@@ -1,39 +1,5 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
-import {
-  Bebas_Neue,
-  Barlow_Condensed,
-  Barlow,
-  JetBrains_Mono,
-} from "next/font/google";
-
-const bebasNeue = Bebas_Neue({
-  weight: "400",
-  subsets: ["latin"],
-  variable: "--font-l-display",
-  display: "swap",
-});
-
-const barlowCondensed = Barlow_Condensed({
-  weight: ["700", "900"],
-  subsets: ["latin"],
-  variable: "--font-l-cond",
-  display: "swap",
-});
-
-const barlow = Barlow({
-  weight: ["400", "500", "600"],
-  subsets: ["latin"],
-  variable: "--font-l-body",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  weight: ["400", "500"],
-  subsets: ["latin"],
-  variable: "--font-l-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
@@ -62,16 +28,27 @@ export const viewport: Viewport = {
 
 export default function LandingLayout({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={[
-        bebasNeue.variable,
-        barlowCondensed.variable,
-        barlow.variable,
-        jetbrainsMono.variable,
-      ].join(" ")}
-      style={{ background: "var(--l-bg)", color: "var(--l-text)" }}
-    >
-      {children}
-    </div>
+    <>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@700,900&family=Barlow:wght@400,500,600&family=JetBrains+Mono:wght@400,500&display=swap"
+      />
+      <div
+        style={
+          {
+            background: "var(--l-bg)",
+            color: "var(--l-text)",
+            "--font-l-display": "'Bebas Neue', sans-serif",
+            "--font-l-cond": "'Barlow Condensed', sans-serif",
+            "--font-l-body": "'Barlow', sans-serif",
+            "--font-l-mono": "'JetBrains Mono', monospace",
+          } as React.CSSProperties
+        }
+      >
+        {children}
+      </div>
+    </>
   );
 }
