@@ -38,15 +38,21 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
   const [loading, setLoading] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Seed greeting on mount
   useEffect(() => {
     sessionIdRef.current = getSessionId(slug);
-    sendMessage(null); // kick off with empty user turn to get opening greeting
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Kick off opening greeting only after consent is given
+  useEffect(() => {
+    if (consented) sendMessage(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consented]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -140,7 +146,7 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
         <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>Emma</span>
       </header>
 
-      {/* Tennessee AI disclosure banner */}
+      {/* Tennessee AI disclosure banner — always visible */}
       <div
         aria-label="AI disclosure"
         style={{
@@ -155,7 +161,89 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
         This service uses artificial intelligence. You are interacting with an AI, not a human.
       </div>
 
+      {/* Consent gate — shown before any PII is collected */}
+      {!consented && (
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "2rem 1.5rem",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 480,
+              width: "100%",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "1rem",
+              padding: "2rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem",
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "#f5f0f7",
+              }}
+            >
+              Before we begin
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.6, color: "rgba(255,255,255,0.7)" }}>
+              Emma is an AI assistant, not a human. To handle your inquiry, this conversation may
+              collect your name, contact details, and messages. Your information will only be used
+              to respond to your request.
+            </p>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.75rem",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                color: "rgba(255,255,255,0.85)",
+                lineHeight: 1.5,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                style={{ marginTop: "0.2rem", accentColor: "var(--l-accent, #e8547a)", cursor: "pointer" }}
+              />
+              I understand I am chatting with an AI and consent to my information being used to
+              respond to my inquiry.
+            </label>
+            <button
+              onClick={() => setConsented(true)}
+              disabled={!consentChecked}
+              style={{
+                background: "var(--l-accent, #e8547a)",
+                border: "none",
+                borderRadius: "0.5rem",
+                padding: "0.75rem 1.5rem",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                cursor: consentChecked ? "pointer" : "not-allowed",
+                opacity: consentChecked ? 1 : 0.4,
+                alignSelf: "flex-start",
+              }}
+            >
+              Start chat
+            </button>
+          </div>
+        </main>
+      )}
+
       {/* Message list */}
+      {consented && (
       <main
         aria-live="polite"
         style={{
@@ -244,9 +332,10 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
 
         <div ref={bottomRef} />
       </main>
+      )}
 
       {/* Input — pinned above keyboard on mobile via flex column layout */}
-      {!complete && (
+      {consented && !complete && (
         <form
           onSubmit={handleSubmit}
           style={{

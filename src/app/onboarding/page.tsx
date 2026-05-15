@@ -43,6 +43,7 @@ export default function OnboardingPage() {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiDisclosureAcknowledged, setAiDisclosureAcknowledged] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -197,13 +198,27 @@ export default function OnboardingPage() {
                 I manage your environment, I remember everything, and I pay attention. Let me get to
                 know you real quick.
               </p>
-              <p className="text-xs text-emma-200/25 leading-relaxed mb-6 px-2">
-                This service uses artificial intelligence. You are interacting with an AI, not a
-                human.
-              </p>
+              <div className="rounded-xl border border-surface-border bg-surface p-4 mb-6 text-left">
+                <p className="text-xs text-emma-200/60 leading-relaxed mb-3">
+                  Emma is an AI assistant, not a human. By continuing you acknowledge you are
+                  interacting with an artificial intelligence system as required by applicable law.
+                </p>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aiDisclosureAcknowledged}
+                    onChange={(e) => setAiDisclosureAcknowledged(e.target.checked)}
+                    className="mt-0.5 accent-emma-300 cursor-pointer"
+                  />
+                  <span className="text-xs text-emma-200/50 leading-relaxed">
+                    I understand I am interacting with an AI, not a human.
+                  </span>
+                </label>
+              </div>
               <button
                 onClick={() => setStep("name")}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer hover:opacity-90 transition-opacity"
+                disabled={!aiDisclosureAcknowledged}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Let's go
               </button>

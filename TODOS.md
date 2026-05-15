@@ -13,19 +13,11 @@ Work considered and explicitly deferred. Pick these up once the SMB demo sprint 
 **Effort:** M (human ~1 week / CC ~2 days)
 **Depends on:** 2 SMB deployments revealing pattern
 
-### Regulatory Disclosure in Onboarding
-**What:** Add clear AI disclosure ("This is an AI assistant") before the first consumer message. Required by Tennessee law (Q1 2026) and pending in 4 other states.
-**Why:** Developer liability for emotional harm in Tennessee as of Q1 2026. Blocking for consumer self-serve launch.
-**How to apply:** Consumer onboarding flow, first message before chat begins. Also add to intake persona greeting for good measure.
-**Effort:** S (human ~2 hrs / CC ~30 min)
-**Depends on:** Consumer launch decision
+### ~~Regulatory Disclosure in Onboarding~~ ✅ Done (2026-05-16)
+Intro step now shows a bordered disclosure card with a required checkbox. "Let's go" is disabled until acknowledged.
 
-### Consent / AI Disclosure Footer on Intake Page
-**What:** Add a consent notice and AI disclosure to `/intake/[slug]` before visitors submit any personal information.
-**Why:** The intake page collects name/phone/email from anonymous visitors. Tennessee AI disclosure law (Q1 2026) requires disclosing AI involvement. GDPR requires consent before collecting PII from EU visitors.
-**How to apply:** Footer on intake page with "This conversation is handled by an AI assistant" + checkbox consent before first message or before lead save.
-**Effort:** S (human ~1 hr / CC ~20 min)
-**Depends on:** Intake page built
+### ~~Consent / AI Disclosure Footer on Intake Page~~ ✅ Done (2026-05-16)
+Consent gate added to `/intake/[slug]` — checkbox must be checked before chat starts. Tennessee disclosure banner remains always-visible above the gate.
 
 ### PII Retention Policy for Leads Table
 **What:** Auto-delete lead records older than a configurable retention window (default 90 days).
