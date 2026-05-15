@@ -195,7 +195,14 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
             >
               Before we begin
             </h2>
-            <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.6, color: "rgba(255,255,255,0.7)" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.9rem",
+                lineHeight: 1.6,
+                color: "rgba(255,255,255,0.7)",
+              }}
+            >
               Emma is an AI assistant, not a human. To handle your inquiry, this conversation may
               collect your name, contact details, and messages. Your information will only be used
               to respond to your request.
@@ -215,7 +222,11 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
                 type="checkbox"
                 checked={consentChecked}
                 onChange={(e) => setConsentChecked(e.target.checked)}
-                style={{ marginTop: "0.2rem", accentColor: "var(--l-accent, #e8547a)", cursor: "pointer" }}
+                style={{
+                  marginTop: "0.2rem",
+                  accentColor: "var(--l-accent, #e8547a)",
+                  cursor: "pointer",
+                }}
               />
               I understand I am chatting with an AI and consent to my information being used to
               respond to my inquiry.
@@ -244,94 +255,94 @@ export default function IntakePage({ params }: { params: { slug: string } }) {
 
       {/* Message list */}
       {consented && (
-      <main
-        aria-live="polite"
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "1.5rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-          maxWidth: 640,
-          width: "100%",
-          margin: "0 auto",
-          boxSizing: "border-box",
-        }}
-      >
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-            }}
-          >
+        <main
+          aria-live="polite"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "1.5rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            maxWidth: 640,
+            width: "100%",
+            margin: "0 auto",
+            boxSizing: "border-box",
+          }}
+        >
+          {messages.map((msg, i) => (
             <div
+              key={i}
               style={{
-                maxWidth: "80%",
-                padding: "0.65rem 1rem",
-                borderRadius:
-                  msg.role === "user" ? "1rem 1rem 0.25rem 1rem" : "1rem 1rem 1rem 0.25rem",
-                background:
-                  msg.role === "user" ? "var(--l-accent, #e8547a)" : "rgba(255,255,255,0.08)",
-                fontSize: "0.9rem",
-                lineHeight: 1.5,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
+                display: "flex",
+                justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
               }}
             >
-              {msg.content}
+              <div
+                style={{
+                  maxWidth: "80%",
+                  padding: "0.65rem 1rem",
+                  borderRadius:
+                    msg.role === "user" ? "1rem 1rem 0.25rem 1rem" : "1rem 1rem 1rem 0.25rem",
+                  background:
+                    msg.role === "user" ? "var(--l-accent, #e8547a)" : "rgba(255,255,255,0.08)",
+                  fontSize: "0.9rem",
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {msg.content}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          {loading && (
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <div
+                style={{
+                  padding: "0.65rem 1rem",
+                  borderRadius: "1rem 1rem 1rem 0.25rem",
+                  background: "rgba(255,255,255,0.08)",
+                  fontSize: "0.9rem",
+                  color: "rgba(255,255,255,0.4)",
+                }}
+              >
+                ...
+              </div>
+            </div>
+          )}
+
+          {complete && (
             <div
+              role="status"
               style={{
-                padding: "0.65rem 1rem",
-                borderRadius: "1rem 1rem 1rem 0.25rem",
-                background: "rgba(255,255,255,0.08)",
-                fontSize: "0.9rem",
-                color: "rgba(255,255,255,0.4)",
+                textAlign: "center",
+                padding: "1.5rem",
+                color: "rgba(255,255,255,0.5)",
+                fontSize: "0.85rem",
               }}
             >
-              ...
+              Thanks! Someone will be in touch soon.
             </div>
-          </div>
-        )}
+          )}
 
-        {complete && (
-          <div
-            role="status"
-            style={{
-              textAlign: "center",
-              padding: "1.5rem",
-              color: "rgba(255,255,255,0.5)",
-              fontSize: "0.85rem",
-            }}
-          >
-            Thanks! Someone will be in touch soon.
-          </div>
-        )}
+          {error && (
+            <div
+              role="alert"
+              style={{
+                textAlign: "center",
+                padding: "1rem",
+                color: "#f87171",
+                fontSize: "0.85rem",
+              }}
+            >
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div
-            role="alert"
-            style={{
-              textAlign: "center",
-              padding: "1rem",
-              color: "#f87171",
-              fontSize: "0.85rem",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </main>
+          <div ref={bottomRef} />
+        </main>
       )}
 
       {/* Input — pinned above keyboard on mobile via flex column layout */}
