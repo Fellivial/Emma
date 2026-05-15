@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, Shield, Package } from "lucide-react";
 import { PLANS, EXTRA_PACK, type Plan } from "@/core/pricing";
 
 export default function BillingPage() {
-  const [currentPlan] = useState("free");
+  const [currentPlan, setCurrentPlan] = useState("free");
   const [loading, setLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/emma/usage")
+      .then((r) => r.json())
+      .then((d) => { if (d.planId) setCurrentPlan(d.planId); })
+      .catch(() => {});
+  }, []);
 
   const handleSubscribe = async (variantId: string) => {
     if (!variantId) return;

@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
             await supabase
               .from("clients")
               .update({
+                plan_id: plan.id,
                 token_budget_monthly: plan.tokenBudgetMonthly,
                 token_budget_daily: plan.tokenBudgetDaily,
                 message_limit_daily: plan.messageLimitDaily,
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
           await supabase
             .from("clients")
             .update({
+              plan_id: "free",
               token_budget_monthly: FREE_TIER_CONFIG.tokenBudgetMonthly,
               token_budget_daily: FREE_TIER_CONFIG.tokenBudgetDaily,
               message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
