@@ -197,6 +197,9 @@ export default function OnboardingPage() {
                 I manage your environment, I remember everything, and I pay attention. Let me get to
                 know you real quick.
               </p>
+              <p className="text-xs text-emma-200/25 leading-relaxed mb-6 px-2">
+                This service uses artificial intelligence. You are interacting with an AI, not a human.
+              </p>
               <button
                 onClick={() => setStep("name")}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer hover:opacity-90 transition-opacity"

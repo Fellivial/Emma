@@ -29,10 +29,21 @@ export async function middleware(request: NextRequest) {
   });
 
   // Refresh session
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // Public routes — no auth required
-  const publicPaths = ["/login", "/auth/callback", "/landing", "/api/waitlist", "/api/emma/webhook", "/waitlist", "/api/emma/unsubscribe"];
+  const publicPaths = [
+    "/login",
+    "/auth/callback",
+    "/landing",
+    "/api/waitlist",
+    "/api/emma/webhook",
+    "/waitlist",
+    "/api/emma/unsubscribe",
+    "/intake/",
+  ];
   const isPublic = publicPaths.some((p) => request.nextUrl.pathname.startsWith(p));
 
   // API routes — auth checked inside each route

@@ -110,10 +110,11 @@ async function getExtraTokens(userId: string, supabase: any): Promise<number> {
 // ─── Main Check ──────────────────────────────────────────────────────────────
 
 export async function checkUsage(
-  userId: string,
+  userId: string | null,
   planId: string,
   userTimezone: string = "UTC",
-  billingAnchorDay: number = 1
+  billingAnchorDay: number = 1,
+  clientId?: string
 ): Promise<EnforcementResult> {
   const plan = getPlan(planId);
 
@@ -125,6 +126,8 @@ export async function checkUsage(
   const supabase = getSupabase();
   if (!supabase) return { status: "ok", planId, allWindows: [] };
 
+  const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
+
   try {
     const dailyStart = getDailyStart(userTimezone);
     const weeklyStart = getWeeklyStart(userTimezone);
@@ -134,15 +137,15 @@ export async function checkUsage(
     const { data: rows } = await supabase
       .from("usage_windows")
       .select("window_type, window_start, tokens_used, messages_used, warning_sent")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveId)
       .or(
         `and(window_type.eq.daily,window_start.eq.${dailyStart.toISOString()}),` +
           `and(window_type.eq.weekly,window_start.eq.${weeklyStart.toISOString()}),` +
           `and(window_type.eq.monthly,window_start.eq.${monthlyStart.toISOString()})`
       );
 
-    // Get extra pack tokens (stacks on monthly limit)
-    const extraTokens = await getExtraTokens(userId, supabase);
+    // Get extra pack tokens (stacks on monthly limit; not applicable for anonymous client metering)
+    const extraTokens = clientId ? 0 : await getExtraTokens(effectiveId, supabase);
 
     // Build window usage objects
     const windowDefs: Array<{
@@ -230,16 +233,18 @@ export async function checkUsage(
 // ─── Record Usage ────────────────────────────────────────────────────────────
 
 export async function recordUsage(
-  userId: string,
+  userId: string | null,
   inputTokens: number,
   outputTokens: number,
   planId: string,
   userTimezone: string = "UTC",
-  billingAnchorDay: number = 1
+  billingAnchorDay: number = 1,
+  clientId?: string
 ): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
 
+  const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
   const total = BigInt(inputTokens + outputTokens);
   const dailyStart = getDailyStart(userTimezone);
   const weeklyStart = getWeeklyStart(userTimezone);
@@ -254,7 +259,7 @@ export async function recordUsage(
   for (const w of windows) {
     try {
       await supabase.rpc("increment_usage_window", {
-        p_user_id: userId,
+        p_user_id: effectiveId,
         p_window_type: w.type,
         p_window_start: w.start.toISOString(),
         p_tokens: Number(total),
@@ -265,25 +270,24 @@ export async function recordUsage(
     }
   }
 
-  // Deduct from extra packs if monthly plan tokens exhausted
+  // Deduct from extra packs if monthly plan tokens exhausted (not applicable for anonymous client metering)
   try {
     const plan = getPlan(planId);
-    if (plan && plan.tokenBudgetMonthly < 999_999_999) {
+    if (!clientId && plan && plan.tokenBudgetMonthly < 999_999_999) {
       const { data: monthRow } = await supabase
         .from("usage_windows")
         .select("tokens_used")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveId)
         .eq("window_type", "monthly")
         .eq("window_start", monthlyStart.toISOString())
         .single();
 
       if (monthRow && monthRow.tokens_used > plan.tokenBudgetMonthly) {
-        const overage = monthRow.tokens_used - plan.tokenBudgetMonthly;
         // Deduct from oldest valid pack
         const { data: packs } = await supabase
           .from("extra_packs")
           .select("id, tokens_remaining")
-          .eq("user_id", userId)
+          .eq("user_id", effectiveId)
           .gt("valid_until", new Date().toISOString())
           .gt("tokens_remaining", 0)
           .order("created_at", { ascending: true })
@@ -306,17 +310,19 @@ export async function recordUsage(
 // ─── Mark Warning Sent ───────────────────────────────────────────────────────
 
 export async function markWarningSent(
-  userId: string,
+  userId: string | null,
   windowType: string,
-  windowStart: string
+  windowStart: string,
+  clientId?: string
 ): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
+  const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
   try {
     await supabase
       .from("usage_windows")
       .update({ warning_sent: true })
-      .eq("user_id", userId)
+      .eq("user_id", effectiveId)
       .eq("window_type", windowType)
       .eq("window_start", windowStart);
   } catch {}
