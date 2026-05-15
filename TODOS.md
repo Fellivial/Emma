@@ -44,12 +44,8 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 **Effort:** M (human ~1 day / CC ~4-5 hrs)
 **Depends on:** First client explicitly requesting it
 
-### Slug Enumeration Protection
-**What:** Make `/intake/unknown-slug` indistinguishable from a disabled (but known) slug at the HTTP response level.
-**Why:** A 404 on unknown slugs vs. a loaded page on real slugs reveals the full tenant list to any attacker iterating common names. Exposes which businesses are Emma customers before they've announced it.
-**How to apply:** Return a generic "This intake page is unavailable" page (not 404) for both unknown and inactive slugs. Only the business owner's admin page reveals slug validity.
-**Effort:** XS (human ~30 min / CC ~10 min)
-**Depends on:** First SMB client confirmed (slug enumeration only matters when there are real slugs)
+### ~~Slug Enumeration Protection~~ ✅ Done (2026-05-16)
+`/intake/[slug]/page.tsx` is now a server component. Unknown slugs render the same static "This intake page is unavailable" page as inactive slugs — HTTP 200 in both cases so status codes reveal nothing. Chat UI extracted to `_components/IntakeChat.tsx`.
 
 ### Subdomain Routing (Vercel Wildcard)
 **What:** Route `theirclinic.emma.yourdomain.com` → parse Host header for slug → load client config.
