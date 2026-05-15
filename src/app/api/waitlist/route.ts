@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -140,9 +141,35 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // TODO: Create Supabase auth account + send welcome email
-        // await supabase.auth.admin.createUser({ email, ... })
-        // await resend.emails.send({ to: email, subject: "Welcome — let's set Emma up for you", ... })
+        if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.RESEND_API_KEY) {
+          try {
+            const { data: linkData } = await supabase.auth.admin.generateLink({
+              type: "magiclink",
+              email: email.toLowerCase().trim(),
+            });
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://emma.ai";
+            const loginUrl = linkData?.properties?.action_link ?? `${appUrl}/login`;
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            await resend.emails.send({
+              from: process.env.EMAIL_FROM ?? "noreply@example.com",
+              to: email.toLowerCase().trim(),
+              subject: "Welcome to Emma — you're in",
+              text: [
+                `Hey ${name.trim()},`,
+                "",
+                "Your spot is ready. Click the link below to set up your account:",
+                "",
+                loginUrl,
+                "",
+                "The link expires in 24 hours.",
+                "",
+                "— Emma",
+              ].join("\n"),
+            });
+          } catch (emailErr) {
+            console.error("[waitlist] welcome email failed", emailErr);
+          }
+        }
 
         return NextResponse.json({
           result: "accepted",
@@ -171,8 +198,25 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // TODO: Send waitlist confirmation email
-        // await resend.emails.send({ to: email, subject: `You're #${entry.position} — Emma has your spot reserved`, ... })
+        if (process.env.RESEND_API_KEY) {
+          try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            await resend.emails.send({
+              from: process.env.EMAIL_FROM ?? "noreply@example.com",
+              to: email.toLowerCase().trim(),
+              subject: `You're #${entry?.position} on the Emma waitlist`,
+              text: [
+                `Hey ${name.trim()},`,
+                "",
+                `You're #${entry?.position} on the waitlist. We review applications personally and will reach out when a spot opens.`,
+                "",
+                "— Emma",
+              ].join("\n"),
+            });
+          } catch (emailErr) {
+            console.error("[waitlist] confirmation email failed", emailErr);
+          }
+        }
 
         return NextResponse.json({
           result: "waitlisted",

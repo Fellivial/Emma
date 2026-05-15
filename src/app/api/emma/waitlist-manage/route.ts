@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -73,12 +74,30 @@ export async function POST(req: NextRequest) {
         .eq("id", waitlistId)
         .single();
 
-      // TODO: Send invite email
-      // await resend.emails.send({
-      //   to: entry.email,
-      //   subject: "Your spot is ready",
-      //   html: `Hey ${entry.name}, your Emma spot is ready. You have 48 hours: <a href="...">Claim your spot</a>`
-      // })
+      if (entry && process.env.RESEND_API_KEY) {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://emma.ai";
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM ?? "noreply@example.com",
+            to: entry.email,
+            subject: "Your Emma spot is ready",
+            text: [
+              `Hey ${entry.name},`,
+              "",
+              "Your spot on Emma is ready. Claim it before it expires in 48 hours:",
+              "",
+              `${appUrl}/login`,
+              "",
+              "After you sign in, your access will be activated automatically.",
+              "",
+              "— Emma",
+            ].join("\n"),
+          });
+        } catch (emailErr) {
+          console.error("[waitlist-manage] invite email failed", emailErr);
+        }
+      }
 
       return NextResponse.json({ invited: true, email: entry?.email, expiresAt });
     }

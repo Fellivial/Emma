@@ -3,6 +3,8 @@ import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
 import * as crypto from "crypto";
+import { Resend } from "resend";
+import { lemonSqueezySetup, createDiscount } from "@lemonsqueezy/lemonsqueezy.js";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,7 +29,7 @@ function generateCode(userId: string): string {
  *   { action: "list" }              → List all referrals made by current user
  *   { action: "track", code, email } → Track a signup from a referral link (called at signup)
  *   { action: "convert", code }     → Mark referral as converted (called when referred user pays)
- *   { action: "reward", referralId } → Apply reward to referrer (1 month free)
+ *   { action: "reward", referralId } → Apply reward to referrer (20% discount code)
  */
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
@@ -154,7 +156,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ converted: true });
     }
 
-    // ── Apply reward (1 month free to referrer) ──────────────────────────
+    // ── Apply reward (20% discount code for referrer) ────────────────────
     if (action === "reward") {
       const user = await getUser();
       if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -170,6 +172,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 
+      // Look up referrer before update so we can notify them
+      const { data: referral } = await supabase
+        .from("referrals")
+        .select("referrer_id")
+        .eq("id", referralId)
+        .single();
+
       await supabase
         .from("referrals")
         .update({
@@ -179,15 +188,59 @@ export async function POST(req: NextRequest) {
         })
         .eq("id", referralId);
 
-      // TODO: Extend referrer's subscription by 1 month via LemonSqueezy API
-      // await updateSubscription(subId, { pause: null, trialEndsAt: currentEnd + 30 days })
+      // Create a 20% one-time discount code + notify referrer (non-fatal)
+      if (referral?.referrer_id) {
+        try {
+          const { data: userData } = await supabase.auth.admin.getUserById(referral.referrer_id);
+          const referrerEmail = userData?.user?.email;
+          const storeId = process.env.LEMONSQUEEZY_STORE_ID;
+          const lemonKey = process.env.LEMONSQUEEZY_API_KEY;
+
+          if (storeId && lemonKey) {
+            lemonSqueezySetup({ apiKey: lemonKey });
+            const discountCode = `EMMA-REF-${referralId.slice(0, 8).toUpperCase()}`;
+            await createDiscount({
+              storeId: parseInt(storeId, 10),
+              name: "Referral Reward — 20% off",
+              code: discountCode,
+              amount: 20,
+              amountType: "percent",
+              duration: "once",
+              maxRedemptions: 1,
+              expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+
+            if (referrerEmail && process.env.RESEND_API_KEY) {
+              const resend = new Resend(process.env.RESEND_API_KEY);
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://emma.ai";
+              await resend.emails.send({
+                from: process.env.EMAIL_FROM ?? "noreply@example.com",
+                to: referrerEmail,
+                subject: "You've earned 20% off Emma",
+                text: [
+                  "Someone you referred just joined Emma. Here's your reward:",
+                  "",
+                  `Discount code: ${discountCode}`,
+                  "20% off your next billing cycle — one use, 90-day expiry.",
+                  "",
+                  `Redeem at: ${appUrl}/settings/billing`,
+                  "",
+                  "— Emma",
+                ].join("\n"),
+              });
+            }
+          }
+        } catch (rewardErr) {
+          console.error("[referral] discount creation failed", rewardErr);
+        }
+      }
 
       audit({
         userId: user.id,
         action: "write",
         resource: "billing",
         resourceId: referralId,
-        reason: "Referral reward applied (1 month free)",
+        reason: "Referral reward applied — 20% discount code created",
       }).catch(() => {});
 
       return NextResponse.json({ rewarded: true });

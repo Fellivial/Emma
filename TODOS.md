@@ -87,7 +87,4 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 
 ## Known TODOs in Code
 
-- `src/app/api/emma/referral/route.ts:182` — Extend referrer subscription by 1 month via LemonSqueezy API (not implemented)
-- `src/app/api/emma/waitlist-manage/route.ts:76` — Send invite email via Resend when a waitlist entry is promoted (not implemented)
-- `src/app/api/waitlist/route.ts:143` — Create Supabase auth account + send welcome email when spot is available (not implemented)
-- `src/app/api/waitlist/route.ts:174` — Send waitlist confirmation email when added to queue (not implemented)
+- `src/app/api/emma/referral/route.ts` — ~~Extend referrer subscription by 1 month~~ → **20% discount code via LemonSqueezy + Resend notification** ✅ Done (2026-05-16)
