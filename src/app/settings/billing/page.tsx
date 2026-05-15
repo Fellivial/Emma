@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, Shield, Package } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Check, Shield, Package, CheckCircle } from "lucide-react";
 import { PLANS, EXTRA_PACK, type Plan } from "@/core/pricing";
 
 export default function BillingPage() {
   const [currentPlan, setCurrentPlan] = useState("free");
   const [loading, setLoading] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const paymentSuccess = searchParams.get("success") === "true";
 
   useEffect(() => {
     fetch("/api/emma/usage")
@@ -55,6 +58,16 @@ export default function BillingPage() {
         <h1 className="text-xl font-light text-emma-100">Billing</h1>
         <p className="text-xs text-emma-300/50 mt-1">Plans, add-ons, and enterprise.</p>
       </div>
+      {/* Payment success banner */}
+      {paymentSuccess && (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/6 px-4 py-3 mb-6">
+          <CheckCircle size={15} className="text-emerald-400 shrink-0" />
+          <p className="text-sm text-emerald-300/80">
+            Payment confirmed — your plan is now active.
+          </p>
+        </div>
+      )}
+
       {/* Plan tiers (Free, Starter, Pro) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
         {plans.map((plan) => (
