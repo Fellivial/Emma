@@ -19,19 +19,11 @@ Intro step now shows a bordered disclosure card with a required checkbox. "Let's
 ### ~~Consent / AI Disclosure Footer on Intake Page~~ ✅ Done (2026-05-16)
 Consent gate added to `/intake/[slug]` — checkbox must be checked before chat starts. Tennessee disclosure banner remains always-visible above the gate.
 
-### PII Retention Policy for Leads Table
-**What:** Auto-delete lead records older than a configurable retention window (default 90 days).
-**Why:** The `leads` table stores visitor names, phone numbers, and email addresses indefinitely. GDPR right-to-erasure liability. Data hoarding risk. Required before processing real visitor data.
-**How to apply:** Supabase scheduled function or cron job (`/api/emma/cron/leads-cleanup`) + `retention_days` field in `ClientConfig`.
-**Effort:** S (human ~2 hrs / CC ~30 min)
-**Depends on:** First SMB client going live with real visitors
+### ~~PII Retention Policy for Leads Table~~ ✅ Done (2026-05-16)
+`/api/emma/cron/leads-cleanup` deletes leads older than 90 days. Runs daily at 03:00 UTC via Vercel cron.
 
-### Admin Lead View `/admin/[slug]`
-**What:** Simple authenticated page for the business owner to see all captured leads from their intake flow.
-**Why:** Currently the owner gets email only. Once they have 10+ leads, they want a table. This is the upgrade from "email per lead" to "lead management."
-**How to apply:** Auth via Supabase magic link for the client owner. Query `leads` table by `client_slug`.
-**Effort:** S (human ~4 hrs / CC ~1 hr)
-**Depends on:** First SMB client going live
+### ~~Admin Lead View `/admin/[slug]`~~ ✅ Done (2026-05-16)
+`/admin/[slug]` — server-rendered leads table, auth-gated to client members only. Ownership verified via `client_members` before any data is shown.
 
 ---
 
