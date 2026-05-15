@@ -91,6 +91,42 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
 }
 
 /**
+ * Load client config by slug, returning null if not found or DB unavailable.
+ * Unlike loadClientConfig, does NOT fall back to DEFAULT_CONFIG — callers
+ * that need to distinguish "unknown slug" from "default" must use this.
+ */
+export async function loadClientConfigOrNull(slug: string): Promise<ClientConfig | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.from("clients").select("*").eq("slug", slug).single();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      slug: data.slug,
+      name: data.name,
+      personaName: data.persona_name,
+      personaPrompt: data.persona_prompt,
+      personaGreeting: data.persona_greeting,
+      voiceId: data.voice_id,
+      toolsEnabled: data.tools_enabled || DEFAULT_CONFIG.toolsEnabled,
+      tokenBudgetMonthly: data.token_budget_monthly,
+      tokenBudgetDaily: data.token_budget_daily,
+      messageLimitDaily: data.message_limit_daily,
+      planId: data.plan_id || "free",
+      autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
+      proactiveVision: data.proactive_vision ?? false,
+      verticalId: data.vertical_id ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Load client config for a user (via client_members join).
  */
 export async function loadClientConfigForUser(userId: string): Promise<ClientConfig> {

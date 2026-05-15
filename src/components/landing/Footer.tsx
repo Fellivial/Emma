@@ -126,6 +126,18 @@ export default function Footer() {
             fontSize: "10px",
             color: "var(--l-muted2)",
             letterSpacing: "0.08em",
+            textAlign: "center",
+            flex: "1 1 auto",
+          }}
+        >
+          This service uses artificial intelligence. You are interacting with an AI, not a human.
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-l-mono)",
+            fontSize: "10px",
+            color: "var(--l-muted2)",
+            letterSpacing: "0.08em",
           }}
         >
           All systems{" "}
