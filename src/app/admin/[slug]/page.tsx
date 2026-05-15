@@ -17,11 +17,7 @@ function getServiceSupabase() {
   return createClient(url, key);
 }
 
-export default async function ClientLeadsPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function ClientLeadsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
   const user = await getUser();
@@ -70,7 +66,9 @@ export default async function ClientLeadsPage({
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-sm font-semibold text-emma-200/70">Leads</h1>
-            <p className="text-[10px] text-emma-200/25">{client.name} · {slug}</p>
+            <p className="text-[10px] text-emma-200/25">
+              {client.name} · {slug}
+            </p>
           </div>
           <span className="text-xs text-emma-200/25">
             {rows.length} lead{rows.length !== 1 ? "s" : ""}

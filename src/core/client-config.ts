@@ -10,6 +10,21 @@
 import { createClient } from "@supabase/supabase-js";
 import type { AutonomyTier } from "@/types/emma";
 
+export interface FormField {
+  id: string;
+  label: string;
+  type: "text" | "email" | "tel" | "textarea" | "select" | "radio";
+  required: boolean;
+  savesTo: "name" | "contact" | "notes" | string;
+  options?: string[];
+}
+
+export interface FormStep {
+  id: string;
+  title: string;
+  fields: FormField[];
+}
+
 export interface ClientConfig {
   id: string;
   slug: string;
@@ -26,6 +41,7 @@ export interface ClientConfig {
   autonomyTier: AutonomyTier;
   proactiveVision: boolean;
   verticalId: string | null;
+  formSteps: FormStep[] | null;
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -44,6 +60,7 @@ const DEFAULT_CONFIG: ClientConfig = {
   autonomyTier: 2,
   proactiveVision: false,
   verticalId: null,
+  formSteps: null,
 };
 
 function getSupabase() {
@@ -84,6 +101,7 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: data.proactive_vision ?? false,
       verticalId: data.vertical_id ?? null,
+      formSteps: (data.form_steps as FormStep[] | null) ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -120,6 +138,7 @@ export async function loadClientConfigOrNull(slug: string): Promise<ClientConfig
       autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: data.proactive_vision ?? false,
       verticalId: data.vertical_id ?? null,
+      formSteps: (data.form_steps as FormStep[] | null) ?? null,
     };
   } catch {
     return null;
@@ -159,6 +178,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       autonomy_tier: number | null;
       proactive_vision: boolean | null;
       vertical_id: string | null;
+      form_steps: FormStep[] | null;
     };
     return {
       id: c.id,
@@ -176,6 +196,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       autonomyTier: (c.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: c.proactive_vision ?? false,
       verticalId: c.vertical_id ?? null,
+      formSteps: (c.form_steps as FormStep[] | null) ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;

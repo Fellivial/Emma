@@ -5,6 +5,7 @@ import { sanitiseInput } from "@/core/security/sanitise";
 import { checkUsage, recordUsage } from "@/core/usage-enforcer";
 import { loadClientConfigOrNull } from "@/core/client-config";
 import { Resend } from "resend";
+import { syncLeadToHubSpot } from "@/lib/hubspot";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,8 @@ export async function POST(
 
       if (!dbErr) {
         leadSaved = true;
+        // ── HubSpot deal sync (non-fatal) ────────────────────────────────
+        syncLeadToHubSpot(supabase, config.id, { name, contact, notes }).catch(() => {});
         // ── Resend notification to business owner ────────────────────────
         const resendKey = process.env.RESEND_API_KEY;
         const fromEmail = process.env.EMAIL_FROM ?? "noreply@example.com";

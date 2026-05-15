@@ -59,13 +59,13 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 
 ## P3 — Future
 
-### Multi-step Intake Forms
-**What:** Configurable intake question sequences (not just open chat). For high-volume use cases where consistency matters more than consistency matters more than personality.
+### ~~Multi-step Intake Forms~~ ✅ Done (2026-05-16)
+**What:** Configurable intake question sequences (not just open chat). For high-volume use cases where consistency matters more than personality.
 **Why:** Some SMB verticals (medical intake, legal intake) need specific questions in a specific order with validation.
 **Effort:** M
 **Depends on:** Client pattern revealing this need
 
-### HubSpot Deal Sync
+### ~~HubSpot Deal Sync~~ ✅ Done (2026-05-16)
 **What:** Auto-create a HubSpot deal when a lead is captured via intake.
 **Why:** SMBs with established HubSpot workflows want leads to flow in automatically.
 **Effort:** S (HubSpot integration already exists in codebase)

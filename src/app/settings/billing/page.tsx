@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, Shield, Package, CheckCircle } from "lucide-react";
 import { PLANS, EXTRA_PACK, type Plan } from "@/core/pricing";
 
-export default function BillingPage() {
+function BillingPageInner() {
   const [currentPlan, setCurrentPlan] = useState("free");
   const [loading, setLoading] = useState<string | null>(null);
   const searchParams = useSearchParams();
@@ -138,6 +138,14 @@ export default function BillingPage() {
         Token usage is metered monthly. Weekly = monthly ÷ 4. Daily = weekly ÷ 7.
       </p>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense>
+      <BillingPageInner />
+    </Suspense>
   );
 }
 

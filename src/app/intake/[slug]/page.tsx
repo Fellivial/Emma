@@ -1,5 +1,6 @@
 import { loadClientConfigOrNull } from "@/core/client-config";
 import IntakeChat from "./_components/IntakeChat";
+import IntakeForm from "./_components/IntakeForm";
 
 // ─── Unavailable page ─────────────────────────────────────────────────────────
 // Rendered for both unknown slugs and inactive clients.
@@ -52,6 +53,10 @@ export default async function IntakePage({ params }: { params: Promise<{ slug: s
   const config = await loadClientConfigOrNull(slug);
 
   if (!config) return <IntakeUnavailable />;
+
+  if (config.formSteps?.length) {
+    return <IntakeForm slug={slug} steps={config.formSteps} />;
+  }
 
   return <IntakeChat slug={slug} />;
 }
