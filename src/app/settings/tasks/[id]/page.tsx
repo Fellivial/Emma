@@ -119,7 +119,10 @@ export default function TaskDetailPage() {
       {/* Header */}
       <div className="border-b border-surface-border bg-emma-950/80 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link href="/settings/tasks" className="text-emma-200/30 hover:text-emma-300 transition-colors">
+          <Link
+            href="/settings/tasks"
+            className="text-emma-200/30 hover:text-emma-300 transition-colors"
+          >
             <ArrowLeft size={18} />
           </Link>
           <div className="flex-1 min-w-0">
@@ -141,8 +144,12 @@ export default function TaskDetailPage() {
               <div className="w-5 h-5 rounded-full bg-emma-300/20 flex items-center justify-center">
                 <span className="text-[9px] text-emma-300 font-semibold">E</span>
               </div>
-              <span className="text-[10px] text-emma-300/60 font-medium tracking-widest uppercase">Emma's notes</span>
-              <span className="text-[10px] text-emma-200/15">{formatTime(summary.generated_at)}</span>
+              <span className="text-[10px] text-emma-300/60 font-medium tracking-widest uppercase">
+                Emma's notes
+              </span>
+              <span className="text-[10px] text-emma-200/15">
+                {formatTime(summary.generated_at)}
+              </span>
             </div>
             <p className="text-sm font-light text-emma-100/75 leading-relaxed">{summary.summary}</p>
           </section>
@@ -151,8 +158,12 @@ export default function TaskDetailPage() {
         {/* Step timeline */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-emma-200/40 tracking-wider">Step Timeline</span>
-            <span className="text-[10px] text-emma-200/20">{steps.length} steps · {formatTokens(task.token_cost)} tokens</span>
+            <span className="text-xs font-medium text-emma-200/40 tracking-wider">
+              Step Timeline
+            </span>
+            <span className="text-[10px] text-emma-200/20">
+              {steps.length} steps · {formatTokens(task.token_cost)} tokens
+            </span>
           </div>
 
           {steps.length === 0 ? (
@@ -168,7 +179,9 @@ export default function TaskDetailPage() {
                   return (
                     <div key={s.id} className="relative pl-9">
                       {/* Node */}
-                      <div className={`absolute left-2 top-3 w-3 h-3 rounded-full border ${stepNodeStyle(s.status, s.risk_level)}`} />
+                      <div
+                        className={`absolute left-2 top-3 w-3 h-3 rounded-full border ${stepNodeStyle(s.status, s.risk_level)}`}
+                      />
 
                       <button
                         onClick={() => toggleStep(s.step_number)}
@@ -176,13 +189,19 @@ export default function TaskDetailPage() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-emma-200/20 w-5 shrink-0">{s.step_number}</span>
+                            <span className="text-[10px] text-emma-200/20 w-5 shrink-0">
+                              {s.step_number}
+                            </span>
                             <span className="text-xs font-mono text-emma-200/50">{s.action}</span>
                             {s.risk_level === "dangerous" && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-400/10 text-red-300/60 border border-red-400/15">dangerous</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-400/10 text-red-300/60 border border-red-400/15">
+                                dangerous
+                              </span>
                             )}
                             {s.risk_level === "moderate" && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300/60 border border-amber-400/15">moderate</span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300/60 border border-amber-400/15">
+                                moderate
+                              </span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
@@ -195,7 +214,9 @@ export default function TaskDetailPage() {
                         </div>
 
                         {!expanded && (
-                          <p className="text-[11px] text-emma-200/30 mt-1 truncate font-light">{s.output}</p>
+                          <p className="text-[11px] text-emma-200/30 mt-1 truncate font-light">
+                            {s.output}
+                          </p>
                         )}
                       </button>
 
@@ -204,7 +225,9 @@ export default function TaskDetailPage() {
                           {/* Input */}
                           {Object.keys(s.input).length > 0 && (
                             <div className="p-3 border-b border-surface-border">
-                              <p className="text-[10px] text-emma-200/25 mb-1.5 uppercase tracking-widest">Input</p>
+                              <p className="text-[10px] text-emma-200/25 mb-1.5 uppercase tracking-widest">
+                                Input
+                              </p>
                               <div className="font-mono text-[11px] text-emma-200/35">
                                 {Object.entries(s.input).map(([k, v]) => (
                                   <div key={k}>
@@ -216,8 +239,12 @@ export default function TaskDetailPage() {
                           )}
                           {/* Output */}
                           <div className="p-3">
-                            <p className="text-[10px] text-emma-200/25 mb-1.5 uppercase tracking-widest">Output</p>
-                            <p className="text-[11px] text-emma-200/50 font-light whitespace-pre-wrap break-words">{s.output}</p>
+                            <p className="text-[10px] text-emma-200/25 mb-1.5 uppercase tracking-widest">
+                              Output
+                            </p>
+                            <p className="text-[11px] text-emma-200/50 font-light whitespace-pre-wrap break-words">
+                              {s.output}
+                            </p>
                           </div>
                         </div>
                       )}
@@ -236,13 +263,16 @@ export default function TaskDetailPage() {
               onClick={() => setShowMemory((v) => !v)}
               className="flex items-center gap-2 mb-3 cursor-pointer group"
             >
-              <span className="text-xs font-medium text-emma-200/40 tracking-wider">Task Memory</span>
+              <span className="text-xs font-medium text-emma-200/40 tracking-wider">
+                Task Memory
+              </span>
               <ChevronRight
                 size={12}
                 className={`text-emma-200/25 transition-transform ${showMemory ? "rotate-90" : ""}`}
               />
               <span className="text-[10px] text-emma-200/20">
-                {Object.keys(ctx.outputVars).length} variable{Object.keys(ctx.outputVars).length !== 1 ? "s" : ""}
+                {Object.keys(ctx.outputVars).length} variable
+                {Object.keys(ctx.outputVars).length !== 1 ? "s" : ""}
               </span>
             </button>
 
@@ -251,7 +281,9 @@ export default function TaskDetailPage() {
                 {Object.entries(ctx.outputVars).map(([k, v]) => (
                   <div key={k} className="p-3">
                     <p className="text-[10px] text-emma-300/50 font-mono mb-1">{`{{${k}}}`}</p>
-                    <p className="text-[11px] text-emma-200/50 font-light whitespace-pre-wrap break-words line-clamp-4">{v}</p>
+                    <p className="text-[11px] text-emma-200/50 font-light whitespace-pre-wrap break-words line-clamp-4">
+                      {v}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -282,19 +314,22 @@ export default function TaskDetailPage() {
           <section>
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={13} className="text-emma-300/60" />
-              <span className="text-xs font-medium text-emma-200/40 tracking-wider">Related Patterns</span>
+              <span className="text-xs font-medium text-emma-200/40 tracking-wider">
+                Related Patterns
+              </span>
             </div>
             <div className="flex flex-col gap-2">
               {patterns.map((p) => (
-                <div
-                  key={p.id}
-                  className="rounded-xl border border-emma-300/10 bg-emma-300/2 p-3"
-                >
+                <div key={p.id} className="rounded-xl border border-emma-300/10 bg-emma-300/2 p-3">
                   <p className="text-[11px] text-emma-100/60 font-light mb-1">{p.suggestion}</p>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-emma-200/20 capitalize">{p.pattern_type.replace("_", " ")}</span>
+                    <span className="text-[10px] text-emma-200/20 capitalize">
+                      {p.pattern_type.replace("_", " ")}
+                    </span>
                     <span className="text-[10px] text-emma-200/15">{p.frequency}×</span>
-                    <span className={`text-[10px] ${p.status === "accepted" ? "text-emerald-300/60" : p.status === "dismissed" ? "text-emma-200/15" : "text-amber-300/60"}`}>
+                    <span
+                      className={`text-[10px] ${p.status === "accepted" ? "text-emerald-300/60" : p.status === "dismissed" ? "text-emma-200/15" : "text-amber-300/60"}`}
+                    >
                       {p.status}
                     </span>
                   </div>
@@ -330,7 +365,9 @@ function StatusBadge({ status }: { status: string }) {
     pending: "bg-amber-400/10 text-amber-300 border-amber-400/20",
   };
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.failed}`}>
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.failed}`}
+    >
       {status.replace(/_/g, " ")}
     </span>
   );

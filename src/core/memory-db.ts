@@ -80,7 +80,13 @@ export async function addMemoryForUser(
   }
 
   if (data) {
-    audit({ userId, action: "write", resource: "memory", resourceId: id, reason: `Store ${entry.category}:${entry.key}` }).catch(() => {});
+    audit({
+      userId,
+      action: "write",
+      resource: "memory",
+      resourceId: id,
+      reason: `Store ${entry.category}:${entry.key}`,
+    }).catch(() => {});
   }
 
   return data ? rowToMemoryEntry(data) : null;
@@ -115,7 +121,13 @@ export async function deleteMemoryForUser(userId: string, memoryId: string): Pro
     return false;
   }
 
-  audit({ userId, action: "delete", resource: "memory", resourceId: memoryId, reason: "User-initiated memory deletion" }).catch(() => {});
+  audit({
+    userId,
+    action: "delete",
+    resource: "memory",
+    resourceId: memoryId,
+    reason: "User-initiated memory deletion",
+  }).catch(() => {});
   return true;
 }
 
@@ -141,18 +153,16 @@ export async function incrementUsage(
 
   // If RPC doesn't exist yet, fall back to manual upsert
   if (error) {
-    await supabase
-      .from("usage")
-      .upsert(
-        {
-          user_id: userId,
-          date: today,
-          message_count: messages,
-          token_count: tokens,
-          api_calls: 1,
-        },
-        { onConflict: "user_id,date" }
-      );
+    await supabase.from("usage").upsert(
+      {
+        user_id: userId,
+        date: today,
+        message_count: messages,
+        token_count: tokens,
+        api_calls: 1,
+      },
+      { onConflict: "user_id,date" }
+    );
   }
 }
 
@@ -189,7 +199,14 @@ export async function getOrCreateConversation(userId: string): Promise<string | 
 export async function saveMessage(
   conversationId: string,
   userId: string,
-  msg: { id: string; role: string; content: string; display: string; expression?: string; tokenEstimate?: number }
+  msg: {
+    id: string;
+    role: string;
+    content: string;
+    display: string;
+    expression?: string;
+    tokenEstimate?: number;
+  }
 ): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;

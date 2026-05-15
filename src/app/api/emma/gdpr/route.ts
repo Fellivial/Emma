@@ -86,7 +86,10 @@ export async function POST(req: NextRequest) {
       // Safety: require email confirmation
       if (confirmEmail !== user.email) {
         return NextResponse.json(
-          { error: "Email confirmation required. Send { confirmEmail: 'your@email.com' } to proceed." },
+          {
+            error:
+              "Email confirmation required. Send { confirmEmail: 'your@email.com' } to proceed.",
+          },
           { status: 400 }
         );
       }
@@ -141,13 +144,12 @@ export async function POST(req: NextRequest) {
       try {
         await supabase.from("tasks").delete().eq("user_id", user.id);
         deletionLog.push("tasks: cleared");
-      } catch { deletionLog.push("tasks: skipped"); }
+      } catch {
+        deletionLog.push("tasks: skipped");
+      }
 
       // 7. Profile
-      const { error: profileErr } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", user.id);
+      const { error: profileErr } = await supabase.from("profiles").delete().eq("id", user.id);
       deletionLog.push(profileErr ? "profile: failed" : "profile: deleted");
 
       // Note: We do NOT delete the auth.users entry here.
@@ -162,7 +164,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ error: "Unknown action. Use 'export' or 'delete'." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Unknown action. Use 'export' or 'delete'." },
+      { status: 400 }
+    );
   } catch (err) {
     console.error("[GDPR] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

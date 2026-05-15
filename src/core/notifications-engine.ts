@@ -62,9 +62,7 @@ export function useNotifications(
   }, []);
 
   const dismiss = useCallback((id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, dismissed: true } : n))
-    );
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, dismissed: true } : n)));
     const timer = timersRef.current.get(id);
     if (timer) {
       clearTimeout(timer);

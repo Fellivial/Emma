@@ -74,7 +74,10 @@ export async function POST(req: NextRequest) {
             max_tokens: 512,
             system: MEMORY_EXTRACTION_PROMPT,
             messages: [
-              { role: "user", content: `Extract memories from this conversation:\n\n${body.conversationText}` },
+              {
+                role: "user",
+                content: `Extract memories from this conversation:\n\n${body.conversationText}`,
+              },
             ],
           }),
         });
@@ -84,8 +87,10 @@ export async function POST(req: NextRequest) {
         }
 
         const data = await res.json();
-        const rawText = data.content?.map((b: { type: string; text?: string }) =>
-          b.type === "text" ? b.text : "").join("") || "[]";
+        const rawText =
+          data.content
+            ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
+            .join("") || "[]";
 
         let parsed: Array<{ category: string; key: string; value: string; confidence: number }>;
         try {

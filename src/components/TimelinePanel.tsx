@@ -45,8 +45,7 @@ const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
 export function TimelinePanel({ entries }: TimelinePanelProps) {
   const [filter, setFilter] = useState<FilterKey>("all");
 
-  const filtered =
-    filter === "all" ? entries : entries.filter((e) => e.type === filter);
+  const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter);
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
@@ -114,9 +113,7 @@ export function TimelinePanel({ entries }: TimelinePanelProps) {
                           via {SOURCE_LABELS[entry.source]}
                         </span>
                         {entry.room && (
-                          <span className="text-[9px] text-emma-200/10">
-                            {entry.room}
-                          </span>
+                          <span className="text-[9px] text-emma-200/10">{entry.room}</span>
                         )}
                       </div>
                     </div>

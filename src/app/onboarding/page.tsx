@@ -198,7 +198,8 @@ export default function OnboardingPage() {
                 know you real quick.
               </p>
               <p className="text-xs text-emma-200/25 leading-relaxed mb-6 px-2">
-                This service uses artificial intelligence. You are interacting with an AI, not a human.
+                This service uses artificial intelligence. You are interacting with an AI, not a
+                human.
               </p>
               <button
                 onClick={() => setStep("name")}

@@ -46,7 +46,10 @@ export function UserPanel({ users, activeUser, onSwitch, onAdd, onRemove }: User
               <div className="flex items-center gap-2.5">
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-base"
-                  style={{ backgroundColor: `${user.color}15`, border: `1px solid ${user.color}30` }}
+                  style={{
+                    backgroundColor: `${user.color}15`,
+                    border: `1px solid ${user.color}30`,
+                  }}
                 >
                   {user.avatar}
                 </div>
@@ -64,7 +67,10 @@ export function UserPanel({ users, activeUser, onSwitch, onAdd, onRemove }: User
                 )}
                 {user.id !== "user-primary" && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); onRemove(user.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(user.id);
+                    }}
                     className="p-1 text-emma-200/10 hover:text-red-400/50 cursor-pointer transition-colors"
                   >
                     <Trash2 size={11} />
@@ -92,7 +98,9 @@ export function UserPanel({ users, activeUser, onSwitch, onAdd, onRemove }: User
                 key={av}
                 onClick={() => setNewAvatar(av)}
                 className={`w-7 h-7 rounded-md flex items-center justify-center text-sm cursor-pointer ${
-                  newAvatar === av ? "bg-emma-300/15 border border-emma-300/25" : "hover:bg-surface-hover"
+                  newAvatar === av
+                    ? "bg-emma-300/15 border border-emma-300/25"
+                    : "hover:bg-surface-hover"
                 }`}
               >
                 {av}

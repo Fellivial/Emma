@@ -34,19 +34,64 @@ const FLAGS: Record<string, FeatureFlag> = {
 
   // Advanced features (on by default for Pro+)
   vision: { name: "vision", description: "Screen awareness", default: false, requiresOptIn: true },
-  routines: { name: "routines", description: "Device routines", default: false, requiresOptIn: true },
-  agent: { name: "agent", description: "Autonomous agent loop", default: false, requiresOptIn: true },
-  webhooks: { name: "webhooks", description: "Webhook triggers", default: false, requiresOptIn: true },
+  routines: {
+    name: "routines",
+    description: "Device routines",
+    default: false,
+    requiresOptIn: true,
+  },
+  agent: {
+    name: "agent",
+    description: "Autonomous agent loop",
+    default: false,
+    requiresOptIn: true,
+  },
+  webhooks: {
+    name: "webhooks",
+    description: "Webhook triggers",
+    default: false,
+    requiresOptIn: true,
+  },
 
   // Experimental features (off by default, opt-in only)
-  proactive_speech: { name: "proactive_speech", description: "Emma speaks unprompted", default: true, requiresOptIn: false },
-  audio_lip_sync: { name: "audio_lip_sync", description: "Audio-driven lip sync", default: true, requiresOptIn: false },
-  encryption: { name: "encryption", description: "Field-level encryption", default: false, requiresOptIn: true },
+  proactive_speech: {
+    name: "proactive_speech",
+    description: "Emma speaks unprompted",
+    default: true,
+    requiresOptIn: false,
+  },
+  audio_lip_sync: {
+    name: "audio_lip_sync",
+    description: "Audio-driven lip sync",
+    default: true,
+    requiresOptIn: false,
+  },
+  encryption: {
+    name: "encryption",
+    description: "Field-level encryption",
+    default: false,
+    requiresOptIn: true,
+  },
 
   // Future features (not built yet, gated)
-  multi_language: { name: "multi_language", description: "Multi-language support", default: false, requiresOptIn: true },
-  mobile_app: { name: "mobile_app", description: "Mobile app access", default: false, requiresOptIn: true },
-  api_access: { name: "api_access", description: "External API access", default: false, requiresOptIn: true },
+  multi_language: {
+    name: "multi_language",
+    description: "Multi-language support",
+    default: false,
+    requiresOptIn: true,
+  },
+  mobile_app: {
+    name: "mobile_app",
+    description: "Mobile app access",
+    default: false,
+    requiresOptIn: true,
+  },
+  api_access: {
+    name: "api_access",
+    description: "External API access",
+    default: false,
+    requiresOptIn: true,
+  },
 };
 
 // ─── In-memory client feature cache ──────────────────────────────────────────
@@ -54,7 +99,9 @@ const FLAGS: Record<string, FeatureFlag> = {
 const clientFeaturesCache: Map<string, { features: string[]; loadedAt: number }> = new Map();
 const CACHE_TTL = 60_000; // 1 minute
 
-async function getClientFeatures(clientId: string): Promise<{ toolsEnabled: string[]; planId: string }> {
+async function getClientFeatures(
+  clientId: string
+): Promise<{ toolsEnabled: string[]; planId: string }> {
   const cached = clientFeaturesCache.get(clientId);
   if (cached && Date.now() - cached.loadedAt < CACHE_TTL) {
     return { toolsEnabled: cached.features, planId: "" };

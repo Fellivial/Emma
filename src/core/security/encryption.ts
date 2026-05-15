@@ -40,9 +40,9 @@ export function encrypt(plaintext: string): string {
     if (!(globalThis as any).__emmaEncryptionWarned) {
       console.warn(
         "[EMMA] WARNING: EMMA_ENCRYPTION_KEY is not set. " +
-        "Memory values and sensitive data are stored as PLAINTEXT. " +
-        "Set this env var before handling real user data. " +
-        "Generate with: openssl rand -hex 32"
+          "Memory values and sensitive data are stored as PLAINTEXT. " +
+          "Set this env var before handling real user data. " +
+          "Generate with: openssl rand -hex 32"
       );
       (globalThis as any).__emmaEncryptionWarned = true;
     }
@@ -107,10 +107,7 @@ export function isEncryptionEnabled(): boolean {
  * Encrypt an object's sensitive fields in-place.
  * Only encrypts string values for specified keys.
  */
-export function encryptFields<T extends Record<string, unknown>>(
-  obj: T,
-  fields: string[]
-): T {
+export function encryptFields<T extends Record<string, unknown>>(obj: T, fields: string[]): T {
   const result = { ...obj };
   for (const field of fields) {
     if (typeof result[field] === "string") {
@@ -123,10 +120,7 @@ export function encryptFields<T extends Record<string, unknown>>(
 /**
  * Decrypt an object's sensitive fields in-place.
  */
-export function decryptFields<T extends Record<string, unknown>>(
-  obj: T,
-  fields: string[]
-): T {
+export function decryptFields<T extends Record<string, unknown>>(obj: T, fields: string[]): T {
   const result = { ...obj };
   for (const field of fields) {
     if (typeof result[field] === "string") {

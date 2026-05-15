@@ -68,7 +68,11 @@ export async function addMemories(entries: MemoryEntry[]): Promise<MemoryEntry[]
       (e) => e.key === entry.key && e.category === entry.category
     );
     if (existingIdx >= 0) {
-      store.entries[existingIdx] = { ...store.entries[existingIdx], ...entry, timestamp: Date.now() };
+      store.entries[existingIdx] = {
+        ...store.entries[existingIdx],
+        ...entry,
+        timestamp: Date.now(),
+      };
     } else {
       store.entries.push(entry);
     }

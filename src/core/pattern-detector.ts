@@ -70,7 +70,8 @@ async function generateSuggestion(
       { maxRetries: 1 }
     );
 
-    if (!res.ok) return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
+    if (!res.ok)
+      return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
     const data = await res.json();
     return data.content?.[0]?.text?.trim() || "";
   } catch {
@@ -93,15 +94,17 @@ function goalSlug(goal: string): string {
 }
 
 function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
+  const m = a.length,
+    n = b.length;
   const dp = Array.from({ length: m + 1 }, (_, i) =>
     Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
   );
   for (let i = 1; i <= m; i++)
     for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
   return dp[m][n];
 }
 
@@ -112,7 +115,9 @@ function isSimilar(a: string, b: string): boolean {
 }
 
 // Group goals into clusters of similar tasks
-function clusterGoals(goals: Array<{ goal: string; createdAt: Date }>): Map<string, Array<{ goal: string; createdAt: Date }>> {
+function clusterGoals(
+  goals: Array<{ goal: string; createdAt: Date }>
+): Map<string, Array<{ goal: string; createdAt: Date }>> {
   const clusters = new Map<string, Array<{ goal: string; createdAt: Date }>>();
   const slugMap = new Map<string, string>(); // slug → representative slug
 
@@ -179,13 +184,16 @@ export async function detectPatterns(userId: string): Promise<DetectedPattern[]>
     // Daily: ≥5 distinct days in last 14 days
     const last14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const recentDays = new Set(
-      items
-        .filter((i) => i.createdAt >= last14)
-        .map((i) => i.createdAt.toDateString())
+      items.filter((i) => i.createdAt >= last14).map((i) => i.createdAt.toDateString())
     );
 
     if (recentDays.size >= 5) {
-      const suggestion = await generateSuggestion(apiKey, "daily", rep, items.map((i) => i.goal));
+      const suggestion = await generateSuggestion(
+        apiKey,
+        "daily",
+        rep,
+        items.map((i) => i.goal)
+      );
       patterns.push({
         userId,
         patternType: "daily",
@@ -209,7 +217,12 @@ export async function detectPatterns(userId: string): Promise<DetectedPattern[]>
     const weeksWithActivity = weekCounts.filter((c) => c > 0).length;
 
     if (weeksWithActivity >= 3) {
-      const suggestion = await generateSuggestion(apiKey, "weekly", rep, items.map((i) => i.goal));
+      const suggestion = await generateSuggestion(
+        apiKey,
+        "weekly",
+        rep,
+        items.map((i) => i.goal)
+      );
       patterns.push({
         userId,
         patternType: "weekly",

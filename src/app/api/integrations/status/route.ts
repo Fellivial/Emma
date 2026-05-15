@@ -20,7 +20,10 @@ export async function GET() {
     if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 501 });
 
     const { data: membership } = await supabase
-      .from("client_members").select("client_id").eq("user_id", user.id).single();
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", user.id)
+      .single();
 
     const integrations: Record<string, any> = {};
 

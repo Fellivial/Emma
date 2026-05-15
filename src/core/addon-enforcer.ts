@@ -86,10 +86,7 @@ export async function checkAutonomousAccess(
 /**
  * Record an autonomous action usage tick. Fire-and-forget — never throws.
  */
-export async function consumeAutonomousAction(
-  clientId: string,
-  tokensUsed: number
-): Promise<void> {
+export async function consumeAutonomousAction(clientId: string, tokensUsed: number): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
 

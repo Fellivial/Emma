@@ -105,9 +105,7 @@ export function buildSystemNotification(
 /**
  * Build an anomaly notification from vision.
  */
-export function buildAnomalyNotification(
-  anomaly: string
-): EmmaNotification {
+export function buildAnomalyNotification(anomaly: string): EmmaNotification {
   return {
     id: uid(),
     timestamp: Date.now(),
@@ -116,9 +114,7 @@ export function buildAnomalyNotification(
     title: "👁️ Anomaly Detected",
     message: anomaly,
     dismissed: false,
-    actions: [
-      { label: "Noted", action: "dismiss" },
-    ],
+    actions: [{ label: "Noted", action: "dismiss" }],
     autoExpire: 10000,
   };
 }

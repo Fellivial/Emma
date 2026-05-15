@@ -11,9 +11,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
   return (
     <div
-      className={`flex items-end gap-2 animate-fade-in ${
-        isUser ? "justify-end" : "justify-start"
-      }`}
+      className={`flex items-end gap-2 animate-fade-in ${isUser ? "justify-end" : "justify-start"}`}
     >
       {/* Emma avatar */}
       {!isUser && (

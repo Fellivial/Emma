@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import {
-  lemonSqueezySetup,
-  createCheckout,
-} from "@lemonsqueezy/lemonsqueezy.js";
+import { lemonSqueezySetup, createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
 
 function initLemon() {
   const key = process.env.LEMONSQUEEZY_API_KEY;

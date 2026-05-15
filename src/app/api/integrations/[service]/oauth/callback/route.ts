@@ -85,16 +85,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       : null;
 
     // Upsert integration
-    await supabase.from("client_integrations").upsert({
-      client_id: oauthState.client_id,
-      service: oauthState.service,
-      status: "connected",
-      access_token: encryptedAccess,
-      refresh_token: encryptedRefresh,
-      token_expires_at: expiresAt,
-      account_identifier: accountEmail,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "client_id,service" });
+    await supabase.from("client_integrations").upsert(
+      {
+        client_id: oauthState.client_id,
+        service: oauthState.service,
+        status: "connected",
+        access_token: encryptedAccess,
+        refresh_token: encryptedRefresh,
+        token_expires_at: expiresAt,
+        account_identifier: accountEmail,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,service" }
+    );
 
     // Audit
     audit({

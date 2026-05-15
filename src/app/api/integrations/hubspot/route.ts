@@ -25,19 +25,30 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: membership } = await supabase
-      .from("client_members").select("client_id").eq("user_id", user.id).single();
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", user.id)
+      .single();
     if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
 
-    await supabase.from("client_integrations").upsert({
-      client_id: membership.client_id,
-      service: "hubspot",
-      status: "connected",
-      access_token: encrypt(apiKey.trim()),
-      account_identifier: "HubSpot API Key",
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "client_id,service" });
+    await supabase.from("client_integrations").upsert(
+      {
+        client_id: membership.client_id,
+        service: "hubspot",
+        status: "connected",
+        access_token: encrypt(apiKey.trim()),
+        account_identifier: "HubSpot API Key",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,service" }
+    );
 
-    audit({ userId: user.id, action: "write", resource: "integration", reason: "HubSpot API key connected" }).catch(() => {});
+    audit({
+      userId: user.id,
+      action: "write",
+      resource: "integration",
+      reason: "HubSpot API key connected",
+    }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

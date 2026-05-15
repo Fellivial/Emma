@@ -111,10 +111,7 @@ export function persistContext(ctx: TaskContext): void {
   const supabase = getSupabase();
   if (!supabase) return;
 
-  void supabase
-    .from("tasks")
-    .update({ context_snapshot: ctx })
-    .eq("id", ctx.taskId);
+  void supabase.from("tasks").update({ context_snapshot: ctx }).eq("id", ctx.taskId);
 }
 
 /**

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase();
     if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 501 });
 
-    const { apiKey, voiceId } = await req.json() as { apiKey: string; voiceId?: string };
+    const { apiKey, voiceId } = (await req.json()) as { apiKey: string; voiceId?: string };
 
     // Validate key format
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim().startsWith("sk_")) {
@@ -81,21 +81,27 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: membership } = await supabase
-      .from("client_members").select("client_id").eq("user_id", user.id).single();
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", user.id)
+      .single();
     if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
 
-    await supabase.from("client_integrations").upsert({
-      client_id: membership.client_id,
-      service: "elevenlabs",
-      status: "connected",
-      access_token: encrypt(trimmedKey),
-      voice_id: voiceId || null,
-      account_identifier: accountName,
-      metadata: {
-        voiceName: verifiedVoiceName || (voiceId ? null : "Rachel (default)"),
+    await supabase.from("client_integrations").upsert(
+      {
+        client_id: membership.client_id,
+        service: "elevenlabs",
+        status: "connected",
+        access_token: encrypt(trimmedKey),
+        voice_id: voiceId || null,
+        account_identifier: accountName,
+        metadata: {
+          voiceName: verifiedVoiceName || (voiceId ? null : "Rachel (default)"),
+        },
+        updated_at: new Date().toISOString(),
       },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "client_id,service" });
+      { onConflict: "client_id,service" }
+    );
 
     audit({
       userId: user.id,
@@ -125,14 +131,17 @@ export async function PATCH(req: NextRequest) {
     const supabase = getSupabase();
     if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 501 });
 
-    const { voiceId } = await req.json() as { voiceId: string };
+    const { voiceId } = (await req.json()) as { voiceId: string };
 
     if (!voiceId || !/^[a-zA-Z0-9]{15,30}$/.test(voiceId)) {
       return NextResponse.json({ error: "Invalid Voice ID format" }, { status: 400 });
     }
 
     const { data: membership } = await supabase
-      .from("client_members").select("client_id").eq("user_id", user.id).single();
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", user.id)
+      .single();
     if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
 
     // Load existing integration — must be connected

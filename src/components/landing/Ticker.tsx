@@ -67,10 +67,7 @@ export default function Ticker() {
               >
                 {item}
               </span>
-              <span
-                aria-hidden="true"
-                style={{ color: "var(--l-accent)", fontSize: "11px" }}
-              >
+              <span aria-hidden="true" style={{ color: "var(--l-accent)", fontSize: "11px" }}>
                 •
               </span>
             </span>
@@ -104,10 +101,7 @@ export default function Ticker() {
               >
                 {item}
               </span>
-              <span
-                aria-hidden="true"
-                style={{ color: "var(--l-accent)", fontSize: "11px" }}
-              >
+              <span aria-hidden="true" style={{ color: "var(--l-accent)", fontSize: "11px" }}>
                 •
               </span>
             </span>

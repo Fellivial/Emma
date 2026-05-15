@@ -12,7 +12,10 @@ function getSupabase() {
 }
 
 function generateAffiliateCode(name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10);
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 10);
   const rand = crypto.randomBytes(3).toString("hex");
   return `${slug}-${rand}`;
 }
@@ -40,32 +43,44 @@ export async function POST(req: NextRequest) {
       const user = await getUser();
       if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase());
+      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase());
       if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 
-      const { name, email, commissionRate = 0.20, commissionMonths = 3 } = body;
+      const { name, email, commissionRate = 0.2, commissionMonths = 3 } = body;
       if (!name || !email) {
         return NextResponse.json({ error: "name and email required" }, { status: 400 });
       }
 
       const code = generateAffiliateCode(name);
 
-      const { data, error } = await supabase.from("affiliates").insert({
-        name,
-        email: email.toLowerCase(),
-        affiliate_code: code,
-        commission_rate: commissionRate,
-        commission_months: commissionMonths,
-      }).select("id, affiliate_code").single();
+      const { data, error } = await supabase
+        .from("affiliates")
+        .insert({
+          name,
+          email: email.toLowerCase(),
+          affiliate_code: code,
+          commission_rate: commissionRate,
+          commission_months: commissionMonths,
+        })
+        .select("id, affiliate_code")
+        .single();
 
       if (error) {
-        if (error.code === "23505") return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+        if (error.code === "23505")
+          return NextResponse.json({ error: "Email already registered" }, { status: 409 });
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      audit({ userId: user.id, action: "write", resource: "profile", reason: `Registered affiliate: ${name} (${email})` }).catch(() => {});
+      audit({
+        userId: user.id,
+        action: "write",
+        resource: "profile",
+        reason: `Registered affiliate: ${name} (${email})`,
+      }).catch(() => {});
 
       return NextResponse.json({
         affiliate: data,
@@ -78,7 +93,9 @@ export async function POST(req: NextRequest) {
       const user = await getUser();
       if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase());
+      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase());
       if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
@@ -155,7 +172,8 @@ export async function POST(req: NextRequest) {
         .eq("status", "active")
         .single();
 
-      if (!affiliate) return NextResponse.json({ error: "Invalid affiliate code" }, { status: 404 });
+      if (!affiliate)
+        return NextResponse.json({ error: "Invalid affiliate code" }, { status: 404 });
 
       await supabase.from("affiliate_referrals").insert({
         affiliate_id: affiliate.id,
@@ -170,9 +188,12 @@ export async function POST(req: NextRequest) {
         .eq("id", affiliate.id)
         .single();
 
-      await supabase.from("affiliates").update({
-        total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
-      }).eq("id", affiliate.id);
+      await supabase
+        .from("affiliates")
+        .update({
+          total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
+        })
+        .eq("id", affiliate.id);
 
       return NextResponse.json({ tracked: true });
     }
@@ -192,22 +213,27 @@ export async function POST(req: NextRequest) {
 
       if (!affiliate) return NextResponse.json({ error: "Invalid affiliate" }, { status: 404 });
 
-      const commission = (monthlyRevenue || 0) * (affiliate.commission_rate || 0.20);
+      const commission = (monthlyRevenue || 0) * (affiliate.commission_rate || 0.2);
 
-      await supabase.from("affiliate_referrals").update({
-        status: "converted",
-        plan_id: planId,
-        monthly_revenue: monthlyRevenue || 0,
-        commission_paid: commission,
-        converted_at: new Date().toISOString(),
-      })
+      await supabase
+        .from("affiliate_referrals")
+        .update({
+          status: "converted",
+          plan_id: planId,
+          monthly_revenue: monthlyRevenue || 0,
+          commission_paid: commission,
+          converted_at: new Date().toISOString(),
+        })
         .eq("affiliate_id", affiliate.id)
         .eq("referred_email", email.toLowerCase());
 
       // Update total earned
-      await supabase.from("affiliates").update({
-        total_earned: (affiliate as any).total_earned + commission,
-      }).eq("id", affiliate.id);
+      await supabase
+        .from("affiliates")
+        .update({
+          total_earned: (affiliate as any).total_earned + commission,
+        })
+        .eq("id", affiliate.id);
 
       return NextResponse.json({ converted: true, commission });
     }

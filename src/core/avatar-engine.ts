@@ -6,8 +6,16 @@ import type { AvatarExpression, AvatarState, AvatarLayout } from "@/types/emma";
 // ─── Timing Constants ────────────────────────────────────────────────────────
 
 const TRANSITION_DURATIONS: Partial<Record<AvatarExpression, number>> = {
-  neutral: 600, smirk: 400, warm: 500, concerned: 300, amused: 250,
-  flirty: 700, sad: 600, skeptical: 350, listening: 300, idle_bored: 500,
+  neutral: 600,
+  smirk: 400,
+  warm: 500,
+  concerned: 300,
+  amused: 250,
+  flirty: 700,
+  sad: 600,
+  skeptical: 350,
+  listening: 300,
+  idle_bored: 500,
 };
 
 const IDLE_BORED_TIMEOUT = 30_000;
@@ -23,8 +31,15 @@ const MICRO_MOVE_MAX = 12000;
 
 // ─── Idle Behavior Definitions ───────────────────────────────────────────────
 
-type IdleBehavior = "blink" | "slow_blink" | "double_blink" | "breath_deep" |
-  "head_micro" | "look_away" | "weight_shift" | "sigh";
+type IdleBehavior =
+  | "blink"
+  | "slow_blink"
+  | "double_blink"
+  | "breath_deep"
+  | "head_micro"
+  | "look_away"
+  | "weight_shift"
+  | "sigh";
 
 interface IdleVariant {
   type: IdleBehavior;
@@ -109,7 +124,9 @@ export function useAvatar(): UseAvatarReturn {
     if (!core) return;
 
     const setParam = (id: string, value: number) => {
-      try { core.setParameterValueById(id, value); } catch {}
+      try {
+        core.setParameterValueById(id, value);
+      } catch {}
     };
 
     switch (variant.type) {
@@ -228,7 +245,9 @@ export function useAvatar(): UseAvatarReturn {
     // 30s → bored expression
     idleTimerRef.current = setTimeout(() => {
       if (modelRef.current) {
-        try { modelRef.current.expression("idle_bored"); } catch {}
+        try {
+          modelRef.current.expression("idle_bored");
+        } catch {}
       }
       setState((s) => ({ ...s, expression: "idle_bored" }));
     }, IDLE_BORED_TIMEOUT);
@@ -275,10 +294,10 @@ export function useAvatar(): UseAvatarReturn {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const model = await Live2DModel.from("/live2d/emma/emma.model3.json", {
+        const model = (await Live2DModel.from("/live2d/emma/emma.model3.json", {
           autoInteract: true,
           autoUpdate: true,
-        }) as any;
+        })) as any;
 
         model.anchor.set(0.5, 0.5);
         model.scale.set(0.25);
@@ -291,14 +310,20 @@ export function useAvatar(): UseAvatarReturn {
         // Hit area interactions
         model.on("hit", (hitAreas: string[]) => {
           if (hitAreas.includes("Head")) {
-            try { model.motion("Tap_Head"); } catch {}
+            try {
+              model.motion("Tap_Head");
+            } catch {}
             setState((s) => ({ ...s, expression: "amused" }));
           }
           if (hitAreas.includes("Body")) {
-            try { model.motion("Tap_Body"); } catch {}
+            try {
+              model.motion("Tap_Body");
+            } catch {}
             setState((s) => ({ ...s, expression: "skeptical" }));
             setTimeout(() => {
-              try { model.expression("flirty"); } catch {}
+              try {
+                model.expression("flirty");
+              } catch {}
               setState((s) => ({ ...s, expression: "flirty" }));
             }, 800);
           }
@@ -326,143 +351,171 @@ export function useAvatar(): UseAvatarReturn {
 
   // ── Set Expression ─────────────────────────────────────────────────────────
 
-  const setExpression = useCallback((expr: AvatarExpression) => {
-    resetIdleTimer();
-    setState((s) => ({ ...s, expression: expr }));
+  const setExpression = useCallback(
+    (expr: AvatarExpression) => {
+      resetIdleTimer();
+      setState((s) => ({ ...s, expression: expr }));
 
-    if (modelRef.current) {
-      try { modelRef.current.expression(expr); } catch {}
-    }
+      if (modelRef.current) {
+        try {
+          modelRef.current.expression(expr);
+        } catch {}
+      }
 
-    if (expr !== "neutral" && expr !== "idle_bored" && expr !== "listening") {
-      if (neutralTimerRef.current) clearTimeout(neutralTimerRef.current);
-      neutralTimerRef.current = setTimeout(() => {
-        if (modelRef.current) {
-          try { modelRef.current.expression("neutral"); } catch {}
-        }
-        setState((s) => ({ ...s, expression: "neutral" }));
-      }, NEUTRAL_DELAY + (TRANSITION_DURATIONS[expr] || 400));
-    }
-  }, [resetIdleTimer]);
+      if (expr !== "neutral" && expr !== "idle_bored" && expr !== "listening") {
+        if (neutralTimerRef.current) clearTimeout(neutralTimerRef.current);
+        neutralTimerRef.current = setTimeout(
+          () => {
+            if (modelRef.current) {
+              try {
+                modelRef.current.expression("neutral");
+              } catch {}
+            }
+            setState((s) => ({ ...s, expression: "neutral" }));
+          },
+          NEUTRAL_DELAY + (TRANSITION_DURATIONS[expr] || 400)
+        );
+      }
+    },
+    [resetIdleTimer]
+  );
 
   // ── Audio-Driven Lip Sync ──────────────────────────────────────────────────
 
-  const startTalkingWithAudio = useCallback((audioBlob: Blob) => {
-    resetIdleTimer();
-    setState((s) => ({ ...s, talking: true }));
-
-    if (modelRef.current) {
-      try { modelRef.current.motion("Talk", 0, 2); } catch {}
-    }
-
-    // Create audio context + analyzer
-    const url = URL.createObjectURL(audioBlob);
-    const audio = new Audio(url);
-
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
-    }
-    const ctx = audioCtxRef.current;
-    const source = ctx.createMediaElementSource(audio);
-    const analyzer = ctx.createAnalyser();
-    analyzer.fftSize = 256;
-    analyzer.smoothingTimeConstant = 0.5;
-    source.connect(analyzer);
-    analyzer.connect(ctx.destination);
-
-    const dataArray = new Uint8Array(analyzer.frequencyBinCount);
-
-    const animate = () => {
-      analyzer.getByteFrequencyData(dataArray);
-
-      // Average amplitude in speech range (85-300Hz → bins ~1-8 at 256 FFT / 44.1kHz)
-      let sum = 0;
-      const speechBins = Math.min(16, dataArray.length);
-      for (let i = 0; i < speechBins; i++) {
-        sum += dataArray[i];
-      }
-      const avg = sum / speechBins / 255; // 0-1
-      const mouthOpen = Math.min(1, avg * 2.5); // Amplify for visible movement
+  const startTalkingWithAudio = useCallback(
+    (audioBlob: Blob) => {
+      resetIdleTimer();
+      setState((s) => ({ ...s, talking: true }));
 
       if (modelRef.current) {
-        const core = modelRef.current?.internalModel?.coreModel;
-        if (core) {
-          try { core.setParameterValueById("ParamMouthOpenY", mouthOpen); } catch {}
+        try {
+          modelRef.current.motion("Talk", 0, 2);
+        } catch {}
+      }
+
+      // Create audio context + analyzer
+      const url = URL.createObjectURL(audioBlob);
+      const audio = new Audio(url);
+
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      const source = ctx.createMediaElementSource(audio);
+      const analyzer = ctx.createAnalyser();
+      analyzer.fftSize = 256;
+      analyzer.smoothingTimeConstant = 0.5;
+      source.connect(analyzer);
+      analyzer.connect(ctx.destination);
+
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+
+      const animate = () => {
+        analyzer.getByteFrequencyData(dataArray);
+
+        // Average amplitude in speech range (85-300Hz → bins ~1-8 at 256 FFT / 44.1kHz)
+        let sum = 0;
+        const speechBins = Math.min(16, dataArray.length);
+        for (let i = 0; i < speechBins; i++) {
+          sum += dataArray[i];
         }
-      }
+        const avg = sum / speechBins / 255; // 0-1
+        const mouthOpen = Math.min(1, avg * 2.5); // Amplify for visible movement
 
-      lipSyncFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    audio.onplay = () => {
-      if (ctx.state === "suspended") ctx.resume();
-      animate();
-    };
-
-    audio.onended = () => {
-      if (lipSyncFrameRef.current) {
-        cancelAnimationFrame(lipSyncFrameRef.current);
-        lipSyncFrameRef.current = null;
-      }
-      if (modelRef.current) {
-        const core = modelRef.current?.internalModel?.coreModel;
-        if (core) {
-          try { core.setParameterValueById("ParamMouthOpenY", 0); } catch {}
-        }
-      }
-      URL.revokeObjectURL(url);
-      setState((s) => ({ ...s, talking: false }));
-    };
-
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      setState((s) => ({ ...s, talking: false }));
-    };
-
-    audio.play().catch(() => {
-      URL.revokeObjectURL(url);
-      setState((s) => ({ ...s, talking: false }));
-    });
-  }, [resetIdleTimer]);
-
-  // ── Text-Based Lip Sync (fallback) ─────────────────────────────────────────
-
-  const startTalking = useCallback((text: string) => {
-    resetIdleTimer();
-    setState((s) => ({ ...s, talking: true }));
-
-    if (modelRef.current) {
-      try { modelRef.current.motion("Talk", 0, 2); } catch {}
-    }
-
-    const words = text.split(" ").length;
-    const durationMs = words * 250;
-    const startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      if (elapsed >= durationMs) {
         if (modelRef.current) {
           const core = modelRef.current?.internalModel?.coreModel;
           if (core) {
-            try { core.setParameterValueById("ParamMouthOpenY", 0); } catch {}
+            try {
+              core.setParameterValueById("ParamMouthOpenY", mouthOpen);
+            } catch {}
           }
         }
-        setState((s) => ({ ...s, talking: false }));
-        return;
-      }
-      if (modelRef.current) {
-        const phase = (elapsed / 150) * Math.PI;
-        const mouthOpen = Math.abs(Math.sin(phase)) * 0.7;
-        const core = modelRef.current?.internalModel?.coreModel;
-        if (core) {
-          try { core.setParameterValueById("ParamMouthOpenY", mouthOpen); } catch {}
+
+        lipSyncFrameRef.current = requestAnimationFrame(animate);
+      };
+
+      audio.onplay = () => {
+        if (ctx.state === "suspended") ctx.resume();
+        animate();
+      };
+
+      audio.onended = () => {
+        if (lipSyncFrameRef.current) {
+          cancelAnimationFrame(lipSyncFrameRef.current);
+          lipSyncFrameRef.current = null;
         }
+        if (modelRef.current) {
+          const core = modelRef.current?.internalModel?.coreModel;
+          if (core) {
+            try {
+              core.setParameterValueById("ParamMouthOpenY", 0);
+            } catch {}
+          }
+        }
+        URL.revokeObjectURL(url);
+        setState((s) => ({ ...s, talking: false }));
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        setState((s) => ({ ...s, talking: false }));
+      };
+
+      audio.play().catch(() => {
+        URL.revokeObjectURL(url);
+        setState((s) => ({ ...s, talking: false }));
+      });
+    },
+    [resetIdleTimer]
+  );
+
+  // ── Text-Based Lip Sync (fallback) ─────────────────────────────────────────
+
+  const startTalking = useCallback(
+    (text: string) => {
+      resetIdleTimer();
+      setState((s) => ({ ...s, talking: true }));
+
+      if (modelRef.current) {
+        try {
+          modelRef.current.motion("Talk", 0, 2);
+        } catch {}
       }
-      lipSyncFrameRef.current = requestAnimationFrame(animate);
-    };
-    animate();
-  }, [resetIdleTimer]);
+
+      const words = text.split(" ").length;
+      const durationMs = words * 250;
+      const startTime = Date.now();
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        if (elapsed >= durationMs) {
+          if (modelRef.current) {
+            const core = modelRef.current?.internalModel?.coreModel;
+            if (core) {
+              try {
+                core.setParameterValueById("ParamMouthOpenY", 0);
+              } catch {}
+            }
+          }
+          setState((s) => ({ ...s, talking: false }));
+          return;
+        }
+        if (modelRef.current) {
+          const phase = (elapsed / 150) * Math.PI;
+          const mouthOpen = Math.abs(Math.sin(phase)) * 0.7;
+          const core = modelRef.current?.internalModel?.coreModel;
+          if (core) {
+            try {
+              core.setParameterValueById("ParamMouthOpenY", mouthOpen);
+            } catch {}
+          }
+        }
+        lipSyncFrameRef.current = requestAnimationFrame(animate);
+      };
+      animate();
+    },
+    [resetIdleTimer]
+  );
 
   const stopTalking = useCallback(() => {
     if (lipSyncFrameRef.current) {
@@ -472,9 +525,13 @@ export function useAvatar(): UseAvatarReturn {
     if (modelRef.current) {
       const core = modelRef.current?.internalModel?.coreModel;
       if (core) {
-        try { core.setParameterValueById("ParamMouthOpenY", 0); } catch {}
+        try {
+          core.setParameterValueById("ParamMouthOpenY", 0);
+        } catch {}
       }
-      try { modelRef.current.motion("Idle", undefined, 1); } catch {}
+      try {
+        modelRef.current.motion("Idle", undefined, 1);
+      } catch {}
     }
     setState((s) => ({ ...s, talking: false }));
   }, []);
@@ -500,22 +557,39 @@ export function useAvatar(): UseAvatarReturn {
     if (neutralTimerRef.current) clearTimeout(neutralTimerRef.current);
     if (idleBehaviorRef.current) clearTimeout(idleBehaviorRef.current);
     if (audioCtxRef.current) {
-      try { audioCtxRef.current.close(); } catch {}
+      try {
+        audioCtxRef.current.close();
+      } catch {}
       audioCtxRef.current = null;
     }
     if (appRef.current) {
-      try { appRef.current.destroy(true); } catch {}
+      try {
+        appRef.current.destroy(true);
+      } catch {}
       appRef.current = null;
     }
     modelRef.current = null;
     setState((s) => ({ ...s, loaded: false }));
   }, []);
 
-  useEffect(() => { return () => { destroy(); }; }, [destroy]);
+  useEffect(() => {
+    return () => {
+      destroy();
+    };
+  }, [destroy]);
 
   return {
-    state, canvasRef, init, setExpression, startTalking,
-    startTalkingWithAudio, stopTalking, setListening,
-    setLayout, toggleVisible, destroy, resetIdleTimer,
+    state,
+    canvasRef,
+    init,
+    setExpression,
+    startTalking,
+    startTalkingWithAudio,
+    stopTalking,
+    setListening,
+    setLayout,
+    toggleVisible,
+    destroy,
+    resetIdleTimer,
   };
 }

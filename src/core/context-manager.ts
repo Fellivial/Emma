@@ -6,21 +6,21 @@ import type { ApiMessage } from "@/types/emma";
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 export interface ContextConfig {
-  maxTokens: number;            // Total budget (100k)
-  systemPromptReserve: number;  // Reserved for system prompt
-  responseReserve: number;      // Reserved for max_tokens response
-  summaryTriggerRatio: number;  // Trigger summarization when messages exceed this % of budget
-  minMessagesToKeep: number;    // Always keep at least this many recent messages
+  maxTokens: number; // Total budget (100k)
+  systemPromptReserve: number; // Reserved for system prompt
+  responseReserve: number; // Reserved for max_tokens response
+  summaryTriggerRatio: number; // Trigger summarization when messages exceed this % of budget
+  minMessagesToKeep: number; // Always keep at least this many recent messages
   minMessagesToSummarize: number; // Don't summarize fewer than this
 }
 
 export const DEFAULT_CONFIG: ContextConfig = {
   maxTokens: 100_000,
-  systemPromptReserve: 6_000,   // System prompt is ~3-5k, pad to 6k
-  responseReserve: 1_500,       // max_tokens 1024 + overhead
-  summaryTriggerRatio: 0.75,    // Summarize when 75% of message budget used
-  minMessagesToKeep: 10,        // Always keep last 10 messages
-  minMessagesToSummarize: 6,    // Need at least 6 old messages before summarizing
+  systemPromptReserve: 6_000, // System prompt is ~3-5k, pad to 6k
+  responseReserve: 1_500, // max_tokens 1024 + overhead
+  summaryTriggerRatio: 0.75, // Summarize when 75% of message budget used
+  minMessagesToKeep: 10, // Always keep last 10 messages
+  minMessagesToSummarize: 6, // Need at least 6 old messages before summarizing
 };
 
 // ─── Token Estimation ────────────────────────────────────────────────────────
@@ -70,10 +70,10 @@ export interface ContextBudget {
   total: number;
   systemPrompt: number;
   response: number;
-  messages: number;         // Budget available for messages
-  used: number;             // Currently used by messages
-  remaining: number;        // How much room left
-  utilization: number;      // 0-1 ratio
+  messages: number; // Budget available for messages
+  used: number; // Currently used by messages
+  remaining: number; // How much room left
+  utilization: number; // 0-1 ratio
   overBudget: boolean;
   needsSummarization: boolean;
 }
@@ -155,12 +155,7 @@ export function trimToFit(
     // Find the first non-summary message to remove
     // Never remove index 0 if it's a summary — it's the compressed history
     const removeIdx = current.findIndex(
-      (m, i) =>
-        !(
-          i === 0 &&
-          typeof m.content === "string" &&
-          m.content.startsWith("[SUMMARY]")
-        )
+      (m, i) => !(i === 0 && typeof m.content === "string" && m.content.startsWith("[SUMMARY]"))
     );
 
     if (removeIdx === -1 || current.length <= config.minMessagesToKeep) break;
@@ -187,12 +182,13 @@ export function buildSummarizationPayload(
 
   text += "New messages to incorporate:\n";
   for (const msg of oldMessages) {
-    const content = typeof msg.content === "string"
-      ? msg.content
-      : msg.content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text)
-          .join(" ");
+    const content =
+      typeof msg.content === "string"
+        ? msg.content
+        : msg.content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join(" ");
     text += `${msg.role}: ${content}\n`;
   }
 
@@ -223,9 +219,7 @@ interface UseContextManagerReturn {
   config: ContextConfig;
 }
 
-export function useContextManager(
-  config: ContextConfig = DEFAULT_CONFIG
-): UseContextManagerReturn {
+export function useContextManager(config: ContextConfig = DEFAULT_CONFIG): UseContextManagerReturn {
   const [stats, setStats] = useState<ContextStats>({
     budget: {
       total: config.maxTokens,
@@ -247,9 +241,7 @@ export function useContextManager(
   const summarizingRef = useRef(false);
 
   const processMessages = useCallback(
-    async (
-      messages: ApiMessage[]
-    ): Promise<{ managed: ApiMessage[]; summarized: boolean }> => {
+    async (messages: ApiMessage[]): Promise<{ managed: ApiMessage[]; summarized: boolean }> => {
       const budget = calculateBudget(messages, config.systemPromptReserve, config);
 
       // ── Case 1: Under budget, no action needed ────────────────────────

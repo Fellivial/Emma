@@ -12,7 +12,10 @@ function getSupabase() {
 }
 
 function generateCode(userId: string): string {
-  const hash = crypto.createHash("sha256").update(userId + Date.now()).digest("hex");
+  const hash = crypto
+    .createHash("sha256")
+    .update(userId + Date.now())
+    .digest("hex");
   return `emma-${hash.slice(0, 8)}`;
 }
 
@@ -68,7 +71,12 @@ export async function POST(req: NextRequest) {
         status: "pending",
       });
 
-      audit({ userId: user.id, action: "write", resource: "profile", reason: "Generated referral code" }).catch(() => {});
+      audit({
+        userId: user.id,
+        action: "write",
+        resource: "profile",
+        reason: "Generated referral code",
+      }).catch(() => {});
 
       return NextResponse.json({
         code,
@@ -90,7 +98,8 @@ export async function POST(req: NextRequest) {
       const stats = {
         total: referrals?.length || 0,
         signedUp: referrals?.filter((r) => r.status !== "pending").length || 0,
-        converted: referrals?.filter((r) => r.status === "converted" || r.status === "rewarded").length || 0,
+        converted:
+          referrals?.filter((r) => r.status === "converted" || r.status === "rewarded").length || 0,
         rewarded: referrals?.filter((r) => r.status === "rewarded").length || 0,
       };
 
@@ -154,21 +163,32 @@ export async function POST(req: NextRequest) {
       if (!referralId) return NextResponse.json({ error: "referralId required" }, { status: 400 });
 
       // Only admin or system can apply rewards
-      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase());
+      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase());
       if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 
-      await supabase.from("referrals").update({
-        status: "rewarded",
-        reward_applied: true,
-        rewarded_at: new Date().toISOString(),
-      }).eq("id", referralId);
+      await supabase
+        .from("referrals")
+        .update({
+          status: "rewarded",
+          reward_applied: true,
+          rewarded_at: new Date().toISOString(),
+        })
+        .eq("id", referralId);
 
       // TODO: Extend referrer's subscription by 1 month via LemonSqueezy API
       // await updateSubscription(subId, { pause: null, trialEndsAt: currentEnd + 30 days })
 
-      audit({ userId: user.id, action: "write", resource: "billing", resourceId: referralId, reason: "Referral reward applied (1 month free)" }).catch(() => {});
+      audit({
+        userId: user.id,
+        action: "write",
+        resource: "billing",
+        resourceId: referralId,
+        reason: "Referral reward applied (1 month free)",
+      }).catch(() => {});
 
       return NextResponse.json({ rewarded: true });
     }

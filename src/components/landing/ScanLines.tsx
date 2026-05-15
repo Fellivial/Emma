@@ -34,7 +34,9 @@ export default function ScanLines({ direction = "ltr" }: ScanLinesProps) {
       {[0, 1, 2, 3, 4].map((i) => (
         <div
           key={i}
-          ref={(el) => { barsRef.current[i] = el; }}
+          ref={(el) => {
+            barsRef.current[i] = el;
+          }}
           style={{
             height: "3px",
             background: "var(--l-accent)",

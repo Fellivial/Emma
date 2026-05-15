@@ -17,28 +17,127 @@ function FlowDiagram() {
       </defs>
 
       {/* Connection lines */}
-      <line x1="155" y1="80" x2="277" y2="80" stroke="rgba(232,84,122,0.2)" strokeWidth="1" strokeDasharray="4 4" />
-      <line x1="423" y1="80" x2="545" y2="80" stroke="rgba(34,197,94,0.2)" strokeWidth="1" strokeDasharray="4 4" />
+      <line
+        x1="155"
+        y1="80"
+        x2="277"
+        y2="80"
+        stroke="rgba(232,84,122,0.2)"
+        strokeWidth="1"
+        strokeDasharray="4 4"
+      />
+      <line
+        x1="423"
+        y1="80"
+        x2="545"
+        y2="80"
+        stroke="rgba(34,197,94,0.2)"
+        strokeWidth="1"
+        strokeDasharray="4 4"
+      />
 
       {/* Arrow heads */}
       <polygon points="277,75 277,85 288,80" fill="rgba(232,84,122,0.35)" />
       <polygon points="545,75 545,85 556,80" fill="rgba(34,197,94,0.35)" />
 
       {/* YOUR PRESENCE box */}
-      <rect x="10" y="50" width="145" height="60" fill="none" stroke="rgba(232,84,122,0.28)" strokeWidth="1" />
-      <text x="82" y="76" textAnchor="middle" fontFamily="monospace" fontSize="8" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">YOUR</text>
-      <text x="82" y="93" textAnchor="middle" fontFamily="monospace" fontSize="11" fill="rgba(242,240,234,0.65)" letterSpacing="1.2">PRESENCE</text>
+      <rect
+        x="10"
+        y="50"
+        width="145"
+        height="60"
+        fill="none"
+        stroke="rgba(232,84,122,0.28)"
+        strokeWidth="1"
+      />
+      <text
+        x="82"
+        y="76"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="8"
+        fill="rgba(232,84,122,0.5)"
+        letterSpacing="1.5"
+      >
+        YOUR
+      </text>
+      <text
+        x="82"
+        y="93"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="11"
+        fill="rgba(242,240,234,0.65)"
+        letterSpacing="1.2"
+      >
+        PRESENCE
+      </text>
 
       {/* EMMA box (highlighted) */}
-      <rect x="277" y="38" width="146" height="84" fill="rgba(232,84,122,0.08)" stroke="rgba(232,84,122,0.7)" strokeWidth="1.5" />
+      <rect
+        x="277"
+        y="38"
+        width="146"
+        height="84"
+        fill="rgba(232,84,122,0.08)"
+        stroke="rgba(232,84,122,0.7)"
+        strokeWidth="1.5"
+      />
       {/* Inner concentric ring */}
-      <rect x="283" y="44" width="134" height="72" fill="none" stroke="rgba(232,84,122,0.18)" strokeWidth="1" />
-      <text x="350" y="90" textAnchor="middle" fontFamily="sans-serif" fontSize="26" fontWeight="bold" fill="#e8547a" letterSpacing="4">EMMA</text>
+      <rect
+        x="283"
+        y="44"
+        width="134"
+        height="72"
+        fill="none"
+        stroke="rgba(232,84,122,0.18)"
+        strokeWidth="1"
+      />
+      <text
+        x="350"
+        y="90"
+        textAnchor="middle"
+        fontFamily="sans-serif"
+        fontSize="26"
+        fontWeight="bold"
+        fill="#e8547a"
+        letterSpacing="4"
+      >
+        EMMA
+      </text>
 
       {/* RESPONSE box */}
-      <rect x="545" y="50" width="145" height="60" fill="none" stroke="rgba(34,197,94,0.28)" strokeWidth="1" />
-      <text x="617" y="76" textAnchor="middle" fontFamily="monospace" fontSize="8" fill="rgba(34,197,94,0.5)" letterSpacing="1.5">REAL-TIME</text>
-      <text x="617" y="93" textAnchor="middle" fontFamily="monospace" fontSize="11" fill="rgba(242,240,234,0.65)" letterSpacing="1.2">RESPONSE</text>
+      <rect
+        x="545"
+        y="50"
+        width="145"
+        height="60"
+        fill="none"
+        stroke="rgba(34,197,94,0.28)"
+        strokeWidth="1"
+      />
+      <text
+        x="617"
+        y="76"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="8"
+        fill="rgba(34,197,94,0.5)"
+        letterSpacing="1.5"
+      >
+        REAL-TIME
+      </text>
+      <text
+        x="617"
+        y="93"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="11"
+        fill="rgba(242,240,234,0.65)"
+        letterSpacing="1.2"
+      >
+        RESPONSE
+      </text>
 
       {/* Animated particles — path 1 (presence → emma) */}
       {particles1.map((delay, i) => (
@@ -46,7 +145,13 @@ function FlowDiagram() {
           <animateMotion dur="1.6s" begin={`${delay * 1.6}s`} repeatCount="indefinite">
             <mpath href="#flowPath1" />
           </animateMotion>
-          <animate attributeName="opacity" values="0;1;1;0" dur="1.6s" begin={`${delay * 1.6}s`} repeatCount="indefinite" />
+          <animate
+            attributeName="opacity"
+            values="0;1;1;0"
+            dur="1.6s"
+            begin={`${delay * 1.6}s`}
+            repeatCount="indefinite"
+          />
         </circle>
       ))}
 
@@ -56,7 +161,13 @@ function FlowDiagram() {
           <animateMotion dur="1.6s" begin={`${delay * 1.6}s`} repeatCount="indefinite">
             <mpath href="#flowPath2" />
           </animateMotion>
-          <animate attributeName="opacity" values="0;1;1;0" dur="1.6s" begin={`${delay * 1.6}s`} repeatCount="indefinite" />
+          <animate
+            attributeName="opacity"
+            values="0;1;1;0"
+            dur="1.6s"
+            begin={`${delay * 1.6}s`}
+            repeatCount="indefinite"
+          />
         </circle>
       ))}
     </svg>

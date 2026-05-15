@@ -58,8 +58,7 @@ export default function Pricing() {
             marginBottom: "48px",
           }}
         >
-          Automation unlocks on Starter and above.
-          Bring your own ElevenLabs key on any plan.
+          Automation unlocks on Starter and above. Bring your own ElevenLabs key on any plan.
         </p>
       </div>
 
@@ -82,9 +81,7 @@ export default function Pricing() {
               padding: "40px 28px",
               display: "flex",
               flexDirection: "column",
-              borderTop: plan.featured
-                ? "2px solid var(--l-accent)"
-                : "2px solid transparent",
+              borderTop: plan.featured ? "2px solid var(--l-accent)" : "2px solid transparent",
             }}
           >
             {/* Plan name */}
@@ -188,9 +185,7 @@ export default function Pricing() {
                 borderRadius: 0,
                 background: plan.featured ? "var(--l-accent)" : "transparent",
                 color: plan.featured ? "var(--l-accent-dark)" : "var(--l-muted)",
-                border: plan.featured
-                  ? "none"
-                  : "1px solid var(--l-border2)",
+                border: plan.featured ? "none" : "1px solid var(--l-border2)",
               }}
             >
               {plan.cta}

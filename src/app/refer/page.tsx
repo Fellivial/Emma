@@ -56,7 +56,9 @@ export default function ReferPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(link);
@@ -75,7 +77,9 @@ export default function ReferPage() {
           </Link>
           <div>
             <h1 className="text-sm font-semibold text-emma-300 tracking-wider">Refer & Earn</h1>
-            <p className="text-[10px] text-emma-200/25">Share Emma — get 1 month free for every friend who subscribes</p>
+            <p className="text-[10px] text-emma-200/25">
+              Share Emma — get 1 month free for every friend who subscribes
+            </p>
           </div>
         </div>
       </div>
@@ -93,10 +97,14 @@ export default function ReferPage() {
 
         {/* Referral link */}
         {loading ? (
-          <div className="text-center text-sm text-emma-200/20 py-8">Loading your referral link…</div>
+          <div className="text-center text-sm text-emma-200/20 py-8">
+            Loading your referral link…
+          </div>
         ) : (
           <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
-            <label className="text-[10px] text-emma-200/25 uppercase tracking-widest mb-2 block">Your referral link</label>
+            <label className="text-[10px] text-emma-200/25 uppercase tracking-widest mb-2 block">
+              Your referral link
+            </label>
             <div className="flex items-center gap-2">
               <input
                 readOnly
@@ -126,7 +134,9 @@ export default function ReferPage() {
         </div>
 
         {/* Referral history */}
-        <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">Referral History</h2>
+        <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">
+          Referral History
+        </h2>
         {activeReferrals.length === 0 ? (
           <div className="text-center text-sm text-emma-200/20 py-8 rounded-xl border border-surface-border bg-surface">
             No referrals yet. Share your link to get started.
@@ -134,10 +144,15 @@ export default function ReferPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {activeReferrals.map((r) => (
-              <div key={r.id} className="flex items-center justify-between py-3 px-4 rounded-xl border border-surface-border bg-surface">
+              <div
+                key={r.id}
+                className="flex items-center justify-between py-3 px-4 rounded-xl border border-surface-border bg-surface"
+              >
                 <div>
                   <div className="text-sm font-light text-emma-200/60">{r.referred_email}</div>
-                  <div className="text-[10px] text-emma-200/20">{new Date(r.created_at).toLocaleDateString()}</div>
+                  <div className="text-[10px] text-emma-200/20">
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </div>
                 </div>
                 <StatusBadge status={r.status} />
               </div>
@@ -147,11 +162,17 @@ export default function ReferPage() {
 
         {/* Affiliate pitch */}
         <div className="mt-8 rounded-xl border border-amber-400/10 bg-amber-400/3 p-5">
-          <h3 className="text-sm font-medium text-amber-300/70 mb-1">Are you a consultant or agency?</h3>
+          <h3 className="text-sm font-medium text-amber-300/70 mb-1">
+            Are you a consultant or agency?
+          </h3>
           <p className="text-xs font-light text-emma-200/30 mb-3">
-            Earn 20% commission on every client you refer for the first 3 months. Contact us to join the affiliate program.
+            Earn 20% commission on every client you refer for the first 3 months. Contact us to join
+            the affiliate program.
           </p>
-          <a href="mailto:affiliate@emma.ai" className="text-xs text-emma-300 hover:text-emma-300/80 transition-colors">
+          <a
+            href="mailto:affiliate@emma.ai"
+            className="text-xs text-emma-300 hover:text-emma-300/80 transition-colors"
+          >
             Apply for affiliate access →
           </a>
         </div>
@@ -189,7 +210,9 @@ function StatusBadge({ status }: { status: string }) {
     rewarded: "bg-amber-400/10 text-amber-300 border-amber-400/20",
   };
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.pending}`}>
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.pending}`}
+    >
       {status.replace("_", " ")}
     </span>
   );

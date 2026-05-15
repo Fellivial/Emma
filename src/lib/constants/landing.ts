@@ -12,10 +12,10 @@ import type {
 } from "@/lib/types/landing";
 
 export const NAV_LINKS: NavLink[] = [
-  { label: "Product",      href: "#capabilities" },
+  { label: "Product", href: "#capabilities" },
   { label: "Capabilities", href: "#capabilities" },
-  { label: "Pricing",      href: "#pricing" },
-  { label: "FAQ",          href: "#faq" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
 ];
 
 export const TICKER_ITEMS: string[] = [
@@ -92,10 +92,10 @@ export const CAPABILITIES: Capability[] = [
 ];
 
 export const STATS: StatItem[] = [
-  { label: "Latency",    value: "<200ms", sub: "Local inference, no round-trip" },
-  { label: "Memory",     value: "∞",      sub: "Persistent, server-side" },
-  { label: "Cost/Token", value: "$0",     sub: "Free tier, always available" },
-  { label: "Pillars",    value: "5",      sub: "Integrated into one system", numeric: 5 },
+  { label: "Latency", value: "<200ms", sub: "Local inference, no round-trip" },
+  { label: "Memory", value: "∞", sub: "Persistent, server-side" },
+  { label: "Cost/Token", value: "$0", sub: "Free tier, always available" },
+  { label: "Pillars", value: "5", sub: "Integrated into one system", numeric: 5 },
 ];
 
 export const TERMINAL_LINES: TerminalLine[] = [
@@ -117,11 +117,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: "Free",
     price: "$0",
     period: "300K tokens/mo · Forever",
-    features: [
-      "Chat interface",
-      "Web Speech TTS",
-      "Basic Live2D avatar",
-    ],
+    features: ["Chat interface", "Web Speech TTS", "Basic Live2D avatar"],
     cta: "Get Started",
     ctaHref: "/register",
   },

@@ -15,15 +15,15 @@ export function ContextIndicator({ stats }: ContextIndicatorProps) {
     budget.utilization > 0.9
       ? "bg-red-400"
       : budget.utilization > 0.7
-      ? "bg-amber-400"
-      : "bg-emma-300/50";
+        ? "bg-amber-400"
+        : "bg-emma-300/50";
 
   const textColor =
     budget.utilization > 0.9
       ? "text-red-300/60"
       : budget.utilization > 0.7
-      ? "text-amber-300/40"
-      : "text-emma-200/20";
+        ? "text-amber-300/40"
+        : "text-emma-200/20";
 
   return (
     <div className="flex items-center gap-2 px-4 py-1 border-t border-surface-border bg-emma-950/40">
@@ -37,7 +37,9 @@ export function ContextIndicator({ stats }: ContextIndicatorProps) {
 
       {/* Stats */}
       <div className={`flex items-center gap-2 text-[9px] font-mono ${textColor}`}>
-        <span>{formatTokens(budget.used)}/{formatTokens(budget.messages)}</span>
+        <span>
+          {formatTokens(budget.used)}/{formatTokens(budget.messages)}
+        </span>
         <span>•</span>
         <span>{stats.messageCount} msgs</span>
         {stats.summaryExists && (

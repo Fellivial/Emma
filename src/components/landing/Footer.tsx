@@ -140,8 +140,7 @@ export default function Footer() {
             letterSpacing: "0.08em",
           }}
         >
-          All systems{" "}
-          <span style={{ color: "var(--l-green)" }}>online</span>
+          All systems <span style={{ color: "var(--l-green)" }}>online</span>
         </span>
       </div>
     </footer>

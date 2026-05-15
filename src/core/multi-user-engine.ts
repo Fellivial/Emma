@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { UserProfile, UserPreferences, AutonomyTier, DEFAULT_USER_PREFERENCES } from "@/types/emma";
+import type {
+  UserProfile,
+  UserPreferences,
+  AutonomyTier,
+  DEFAULT_USER_PREFERENCES,
+} from "@/types/emma";
 import { uid } from "@/lib/utils";
 
 // ─── Default Users ───────────────────────────────────────────────────────────
@@ -49,40 +54,40 @@ export function useMultiUser(): UseMultiUserReturn {
     setActiveUserId(id);
   }, []);
 
-  const addUser = useCallback((name: string, avatar: string, role: UserProfile["role"] = "member") => {
-    const newUser: UserProfile = {
-      id: `user-${uid()}`,
-      name,
-      avatar,
-      color: ACCENT_COLORS[users.length % ACCENT_COLORS.length],
-      role,
-      preferences: { ...DEFAULT_PREFS },
-      createdAt: Date.now(),
-    };
-    setUsers((prev) => [...prev, newUser]);
-    return newUser;
-  }, [users.length]);
+  const addUser = useCallback(
+    (name: string, avatar: string, role: UserProfile["role"] = "member") => {
+      const newUser: UserProfile = {
+        id: `user-${uid()}`,
+        name,
+        avatar,
+        color: ACCENT_COLORS[users.length % ACCENT_COLORS.length],
+        role,
+        preferences: { ...DEFAULT_PREFS },
+        createdAt: Date.now(),
+      };
+      setUsers((prev) => [...prev, newUser]);
+      return newUser;
+    },
+    [users.length]
+  );
 
-  const removeUser = useCallback((id: string) => {
-    if (id === "user-primary") return; // Can't remove primary
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    if (activeUserId === id) setActiveUserId("user-primary");
-  }, [activeUserId]);
+  const removeUser = useCallback(
+    (id: string) => {
+      if (id === "user-primary") return; // Can't remove primary
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      if (activeUserId === id) setActiveUserId("user-primary");
+    },
+    [activeUserId]
+  );
 
   const updatePreferences = useCallback((userId: string, prefs: Partial<UserPreferences>) => {
     setUsers((prev) =>
-      prev.map((u) =>
-        u.id === userId
-          ? { ...u, preferences: { ...u.preferences, ...prefs } }
-          : u
-      )
+      prev.map((u) => (u.id === userId ? { ...u, preferences: { ...u.preferences, ...prefs } } : u))
     );
   }, []);
 
   const updateProfile = useCallback((userId: string, updates: Partial<UserProfile>) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, ...updates } : u))
-    );
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updates } : u)));
   }, []);
 
   const setAutonomyOverride = useCallback(
@@ -115,8 +120,14 @@ export function useMultiUser(): UseMultiUserReturn {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ACCENT_COLORS = [
-  "#e8a0bf", "#7ee8a0", "#a0c4e8", "#e8d4a0",
-  "#c4a0e8", "#e8a0a0", "#a0e8e8", "#e8bfa0",
+  "#e8a0bf",
+  "#7ee8a0",
+  "#a0c4e8",
+  "#e8d4a0",
+  "#c4a0e8",
+  "#e8a0a0",
+  "#a0e8e8",
+  "#e8bfa0",
 ];
 
 /**

@@ -34,9 +34,9 @@ export class RateLimitError extends EmmaError {
 
 interface RetryOptions {
   maxRetries: number;
-  baseDelay: number;      // ms
-  maxDelay: number;       // ms
-  retryOn?: number[];     // HTTP status codes to retry on
+  baseDelay: number; // ms
+  maxDelay: number; // ms
+  retryOn?: number[]; // HTTP status codes to retry on
 }
 
 const DEFAULT_RETRY: RetryOptions = {

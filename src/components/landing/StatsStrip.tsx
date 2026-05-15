@@ -4,7 +4,13 @@ import { useInView } from "@/lib/hooks/useInView";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { STATS } from "@/lib/constants/landing";
 
-function StatCell({ label, value, sub, numeric, enabled }: {
+function StatCell({
+  label,
+  value,
+  sub,
+  numeric,
+  enabled,
+}: {
   label: string;
   value: string;
   sub: string;

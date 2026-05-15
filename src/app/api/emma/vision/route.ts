@@ -125,9 +125,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ analysis } as VisionApiResponse);
   } catch (err) {
     console.error("[EMMA Vision API] Unexpected error:", err);
-    return NextResponse.json(
-      { analysis: null, error: String(err) } as VisionApiResponse,
-      { status: 500 }
-    );
+    return NextResponse.json({ analysis: null, error: String(err) } as VisionApiResponse, {
+      status: 500,
+    });
   }
 }

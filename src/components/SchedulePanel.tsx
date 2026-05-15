@@ -11,7 +11,13 @@ interface SchedulePanelProps {
 }
 
 const DAY_LABELS: Record<DayOfWeek, string> = {
-  mon: "M", tue: "T", wed: "W", thu: "T", fri: "F", sat: "S", sun: "S",
+  mon: "M",
+  tue: "T",
+  wed: "W",
+  thu: "T",
+  fri: "F",
+  sat: "S",
+  sun: "S",
 };
 
 const DAY_ORDER: DayOfWeek[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -51,9 +57,7 @@ export function SchedulePanel({ schedules, onToggle, onRemove }: SchedulePanelPr
               <div className="flex items-center gap-2">
                 <span className="text-base">{routine.icon}</span>
                 <div>
-                  <span className="text-xs font-medium text-emma-200/60">
-                    {routine.name}
-                  </span>
+                  <span className="text-xs font-medium text-emma-200/60">{routine.name}</span>
                   <div className="text-lg font-light text-emma-100 tracking-tight -mt-0.5">
                     {sched.time}
                   </div>
@@ -88,9 +92,7 @@ export function SchedulePanel({ schedules, onToggle, onRemove }: SchedulePanelPr
                   <span
                     key={day}
                     className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium ${
-                      active
-                        ? "bg-emma-300/15 text-emma-300"
-                        : "text-emma-200/10"
+                      active ? "bg-emma-300/15 text-emma-300" : "text-emma-200/10"
                     }`}
                   >
                     {DAY_LABELS[day]}

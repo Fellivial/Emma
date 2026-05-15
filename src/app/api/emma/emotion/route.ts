@@ -74,9 +74,9 @@ export async function POST(req: NextRequest) {
 
     const data = await res.json();
     const rawText =
-      data.content?.map((b: { type: string; text?: string }) =>
-        b.type === "text" ? b.text : ""
-      ).join("") || "";
+      data.content
+        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
+        .join("") || "";
 
     try {
       const cleaned = rawText.replace(/```json|```/g, "").trim();

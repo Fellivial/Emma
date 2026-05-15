@@ -33,17 +33,15 @@ export async function POST(req: NextRequest) {
     if (message) {
       const supabase = getSupabase();
       if (supabase) {
-        await supabase
-          .from("ingested_whatsapp")
-          .upsert(
-            {
-              from_number: message.from,
-              message_id: message.messageId,
-              body: message.text,
-              received_at: message.timestamp,
-            },
-            { onConflict: "message_id" }
-          );
+        await supabase.from("ingested_whatsapp").upsert(
+          {
+            from_number: message.from,
+            message_id: message.messageId,
+            body: message.text,
+            received_at: message.timestamp,
+          },
+          { onConflict: "message_id" }
+        );
       }
     }
 

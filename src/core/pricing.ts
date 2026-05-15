@@ -86,9 +86,9 @@ function derive(monthly: number): { tokenBudgetWeekly: number; tokenBudgetDaily:
 
 // ─── Budgets ─────────────────────────────────────────────────────────────────
 
-const FREE_BUDGET       = 300_000;
-const STARTER_BUDGET    = 1_000_000;
-const PRO_BUDGET        = 2_000_000;
+const FREE_BUDGET = 300_000;
+const STARTER_BUDGET = 1_000_000;
+const PRO_BUDGET = 2_000_000;
 const ENTERPRISE_BUDGET = 999_999_999;
 
 // ─── Plan Map ─────────────────────────────────────────────────────────────────
@@ -144,7 +144,16 @@ export const PLANS: Record<string, Plan> = {
     ...derive(STARTER_BUDGET),
     messageLimitDaily: 40,
     messageLimitWeekly: 200,
-    toolsEnabled: ["chat", "tts", "memory", "vision", "emotion_detection", "routines", "agent", "webhooks"],
+    toolsEnabled: [
+      "chat",
+      "tts",
+      "memory",
+      "vision",
+      "emotion_detection",
+      "routines",
+      "agent",
+      "webhooks",
+    ],
     ttsBackend: "web_speech",
     byokElevenLabs: true,
     elevenLabsPlan: "None",
@@ -191,8 +200,18 @@ export const PLANS: Record<string, Plan> = {
     messageLimitDaily: 80,
     messageLimitWeekly: 400,
     toolsEnabled: [
-      "chat", "tts", "memory", "vision", "emotion_detection", "routines",
-      "agent", "webhooks", "api_access", "multi_user", "custom_persona", "elevenlabs",
+      "chat",
+      "tts",
+      "memory",
+      "vision",
+      "emotion_detection",
+      "routines",
+      "agent",
+      "webhooks",
+      "api_access",
+      "multi_user",
+      "custom_persona",
+      "elevenlabs",
     ],
     ttsBackend: "web_speech",
     byokElevenLabs: true,
@@ -243,8 +262,18 @@ export const PLANS: Record<string, Plan> = {
     messageLimitDaily: 999999,
     messageLimitWeekly: 999999,
     toolsEnabled: [
-      "chat", "tts", "memory", "vision", "emotion_detection", "routines",
-      "agent", "webhooks", "api_access", "multi_user", "custom_persona", "elevenlabs",
+      "chat",
+      "tts",
+      "memory",
+      "vision",
+      "emotion_detection",
+      "routines",
+      "agent",
+      "webhooks",
+      "api_access",
+      "multi_user",
+      "custom_persona",
+      "elevenlabs",
       "encryption",
     ],
     ttsBackend: "elevenlabs_dedicated",

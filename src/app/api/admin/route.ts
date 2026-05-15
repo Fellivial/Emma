@@ -11,7 +11,9 @@ function getSupabase() {
 }
 
 function isAdmin(email: string | undefined): boolean {
-  const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase());
+  const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase());
   return adminEmails.includes(email?.toLowerCase() || "");
 }
 
@@ -44,12 +46,15 @@ export async function GET() {
     const enrichedClients = await Promise.all(
       (clients || []).map(async (client) => {
         const memberIds = (client.client_members || []).map((m: any) => m.user_id);
-        let monthlyTokens = 0, monthlyMessages = 0;
+        let monthlyTokens = 0,
+          monthlyMessages = 0;
 
         if (memberIds.length > 0) {
           const { data: usageData } = await supabase
-            .from("usage").select("token_count, message_count")
-            .in("user_id", memberIds).gte("date", monthStartStr);
+            .from("usage")
+            .select("token_count, message_count")
+            .in("user_id", memberIds)
+            .gte("date", monthStartStr);
           for (const row of usageData || []) {
             monthlyTokens += row.token_count || 0;
             monthlyMessages += row.message_count || 0;
@@ -58,11 +63,18 @@ export async function GET() {
 
         const plan = inferPlanFromBudget(client.token_budget_monthly || 0);
         return {
-          id: client.id, slug: client.slug, name: client.name,
-          plan, memberCount: memberIds.length,
+          id: client.id,
+          slug: client.slug,
+          name: client.name,
+          plan,
+          memberCount: memberIds.length,
           tokenBudget: client.token_budget_monthly,
-          monthlyTokens, monthlyMessages,
-          budgetUsed: client.token_budget_monthly > 0 ? Math.round((monthlyTokens / client.token_budget_monthly) * 100) : 0,
+          monthlyTokens,
+          monthlyMessages,
+          budgetUsed:
+            client.token_budget_monthly > 0
+              ? Math.round((monthlyTokens / client.token_budget_monthly) * 100)
+              : 0,
           estimatedCost: Math.round((monthlyTokens / 1_000_000) * 6 * 100) / 100,
           createdAt: client.created_at,
         };
@@ -73,9 +85,7 @@ export async function GET() {
     const currentMRR = enrichedClients.reduce((s, c) => s + getMRR(c.plan), 0);
 
     // Previous month MRR (clients that existed before this month)
-    const prevMonthClients = enrichedClients.filter(
-      (c) => new Date(c.createdAt) < monthStart
-    );
+    const prevMonthClients = enrichedClients.filter((c) => new Date(c.createdAt) < monthStart);
     const prevMRR = prevMonthClients.reduce((s, c) => s + getMRR(c.plan), 0);
     const mrrGrowth = prevMRR > 0 ? Math.round(((currentMRR - prevMRR) / prevMRR) * 100) : 0;
 
@@ -88,22 +98,26 @@ export async function GET() {
     const oldFreeClients = enrichedClients.filter(
       (c) => c.plan === "Free" && new Date(c.createdAt) < prevMonthStart
     ).length;
-    const churnRate = prevMonthClients.length > 0
-      ? Math.round((oldFreeClients / prevMonthClients.length) * 100)
-      : 0;
+    const churnRate =
+      prevMonthClients.length > 0
+        ? Math.round((oldFreeClients / prevMonthClients.length) * 100)
+        : 0;
 
     // ── Referrals ─────────────────────────────────────────────────────────
     const { data: referrals } = await supabase
-      .from("referrals").select("status, created_at")
+      .from("referrals")
+      .select("status, created_at")
       .gte("created_at", prevMonthStartStr);
     const referralStats = {
       total: referrals?.length || 0,
-      converted: referrals?.filter((r) => r.status === "converted" || r.status === "rewarded").length || 0,
+      converted:
+        referrals?.filter((r) => r.status === "converted" || r.status === "rewarded").length || 0,
     };
 
     // ── Affiliates ────────────────────────────────────────────────────────
     const { data: affiliates } = await supabase
-      .from("affiliates").select("total_referrals, total_earned, status");
+      .from("affiliates")
+      .select("total_referrals, total_earned, status");
     const affiliateStats = {
       active: affiliates?.filter((a) => a.status === "active").length || 0,
       totalReferrals: affiliates?.reduce((s, a) => s + (a.total_referrals || 0), 0) || 0,
@@ -111,8 +125,7 @@ export async function GET() {
     };
 
     // ── Channel Breakdown ─────────────────────────────────────────────────
-    const { data: waitlistSources } = await supabase
-      .from("waitlist").select("email");
+    const { data: waitlistSources } = await supabase.from("waitlist").select("email");
     const channels: Array<{ channel: string; signups: number }> = [];
 
     // ── Waitlist ──────────────────────────────────────────────────────────

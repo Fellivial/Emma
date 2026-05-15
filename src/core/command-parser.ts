@@ -1,12 +1,25 @@
-import type { EmmaCommand, ParsedResponse, AvatarExpression, AVATAR_EXPRESSIONS } from "@/types/emma";
+import type {
+  EmmaCommand,
+  ParsedResponse,
+  AvatarExpression,
+  AVATAR_EXPRESSIONS,
+} from "@/types/emma";
 
 const CMD_REGEX = /\[EMMA_CMD\](.*?)\[\/EMMA_CMD\]/gs;
 const ROUTINE_REGEX = /\[EMMA_ROUTINE\](.*?)\[\/EMMA_ROUTINE\]/gs;
 const EMOTION_REGEX = /\[emotion:\s*(\w+)\]/i;
 
 const VALID_EXPRESSIONS = new Set<string>([
-  "neutral", "smirk", "warm", "concerned", "amused",
-  "skeptical", "listening", "flirty", "sad", "idle_bored",
+  "neutral",
+  "smirk",
+  "warm",
+  "concerned",
+  "amused",
+  "skeptical",
+  "listening",
+  "flirty",
+  "sad",
+  "idle_bored",
 ]);
 
 /**
@@ -21,7 +34,13 @@ export function parseEmmaResponse(raw: string): ParsedResponse {
   while ((match = CMD_REGEX.exec(raw)) !== null) {
     try {
       const parsed = JSON.parse(match[1]) as EmmaCommand;
-      if (parsed.action && parsed.room && parsed.device && parsed.property && parsed.value !== undefined) {
+      if (
+        parsed.action &&
+        parsed.room &&
+        parsed.device &&
+        parsed.property &&
+        parsed.value !== undefined
+      ) {
         commands.push(parsed);
       }
     } catch {

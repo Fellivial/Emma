@@ -35,7 +35,10 @@ export async function summarizeTask(
 
   try {
     const stepsText = ctx.stepLog
-      .map((e) => `Step ${e.step} [${e.toolName}]${e.outputVar ? ` → $${e.outputVar}` : ""}: ${e.outputSummary}`)
+      .map(
+        (e) =>
+          `Step ${e.step} [${e.toolName}]${e.outputVar ? ` → $${e.outputVar}` : ""}: ${e.outputSummary}`
+      )
       .join("\n");
 
     const varsText = Object.entries(ctx.outputVars)
@@ -85,11 +88,7 @@ export async function summarizeTask(
   }
 }
 
-async function persistSummary(
-  taskId: string,
-  summary: string,
-  ctx: TaskContext
-): Promise<void> {
+async function persistSummary(taskId: string, summary: string, ctx: TaskContext): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
 

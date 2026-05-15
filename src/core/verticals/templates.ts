@@ -23,7 +23,7 @@ export interface IntakeQuestion {
   type: "text" | "select" | "multi_select";
   options?: string[];
   required: boolean;
-  savesTo: string;        // Memory key where the answer is stored
+  savesTo: string; // Memory key where the answer is stored
 }
 
 export interface VerticalConfig {
@@ -34,7 +34,7 @@ export interface VerticalConfig {
 
   // Persona
   personaName: string;
-  personaPrompt: string;  // Full system prompt override
+  personaPrompt: string; // Full system prompt override
   greeting: string;
 
   // Onboarding
@@ -45,7 +45,7 @@ export interface VerticalConfig {
   featuresEnabled: string[];
 
   // Memory
-  memoryFocusAreas: string[];   // What Emma should pay attention to
+  memoryFocusAreas: string[]; // What Emma should pay attention to
 
   // Pricing suggestion
   suggestedPlan: "starter" | "pro" | "scale";
@@ -65,7 +65,10 @@ Core behaviors:
 When controlling devices or taking actions, use the provided tool format.
 Always confirm before executing irreversible actions.`;
 
-export const BASE_TEMPLATE: Omit<VerticalConfig, "id" | "name" | "description" | "icon" | "suggestedPlan"> = {
+export const BASE_TEMPLATE: Omit<
+  VerticalConfig,
+  "id" | "name" | "description" | "icon" | "suggestedPlan"
+> = {
   personaName: "Emma",
   personaPrompt: BASE_PERSONA_PROMPT,
   greeting: "Hey! I'm Emma. What can I help you with today?",
@@ -125,10 +128,7 @@ export function applyVertical(verticalId: string): {
     persona_prompt: vertical.personaPrompt,
     persona_greeting: vertical.greeting,
     tools_enabled: vertical.toolsEnabled,
-    intake_questions: [
-      ...BASE_TEMPLATE.intakeQuestions,
-      ...vertical.intakeQuestions,
-    ],
+    intake_questions: [...BASE_TEMPLATE.intakeQuestions, ...vertical.intakeQuestions],
   };
 }
 
@@ -159,7 +159,8 @@ CRITICAL RULES:
 - Never share one patient's information with another.
 - If a patient describes emergency symptoms (chest pain, difficulty breathing, severe bleeding), immediately advise calling emergency services.`,
 
-  greeting: "Hi! I'm Emma, your clinic assistant. I can help with appointments, intake forms, and general questions. How can I help you today?",
+  greeting:
+    "Hi! I'm Emma, your clinic assistant. I can help with appointments, intake forms, and general questions. How can I help you today?",
 
   intakeQuestions: [
     {
@@ -173,7 +174,15 @@ CRITICAL RULES:
       id: "clinic_specialty",
       question: "What's your primary specialty?",
       type: "select",
-      options: ["General Practice", "Dental", "Dermatology", "Pediatrics", "Orthopedics", "Mental Health", "Other"],
+      options: [
+        "General Practice",
+        "Dental",
+        "Dermatology",
+        "Pediatrics",
+        "Orthopedics",
+        "Mental Health",
+        "Other",
+      ],
       required: true,
       savesTo: "clinic_specialty",
     },
@@ -188,7 +197,13 @@ CRITICAL RULES:
 
   toolsEnabled: ["chat", "memory", "tts", "routines", "agent"],
   featuresEnabled: ["chat", "memory", "tts", "proactive_speech", "agent", "encryption"],
-  memoryFocusAreas: ["patient_preferences", "appointment_history", "medical_notes", "insurance_info", "follow_up_dates"],
+  memoryFocusAreas: [
+    "patient_preferences",
+    "appointment_history",
+    "medical_notes",
+    "insurance_info",
+    "follow_up_dates",
+  ],
 });
 
 registerVertical({
@@ -217,7 +232,8 @@ RULES:
 - Follow up proactively after showings — ask about interest level.
 - Handle sensitive financial details (pre-approval amounts, offers) with discretion.`,
 
-  greeting: "Hey! I'm Emma, your real estate assistant. Whether you're looking to buy, sell, or just browse — I'm here to help. What are you looking for?",
+  greeting:
+    "Hey! I'm Emma, your real estate assistant. Whether you're looking to buy, sell, or just browse — I'm here to help. What are you looking for?",
 
   intakeQuestions: [
     {
@@ -246,7 +262,13 @@ RULES:
 
   toolsEnabled: ["chat", "memory", "tts", "routines", "agent", "vision"],
   featuresEnabled: ["chat", "memory", "tts", "proactive_speech", "vision", "agent"],
-  memoryFocusAreas: ["buyer_preferences", "budget_range", "showing_history", "listing_details", "follow_up_dates"],
+  memoryFocusAreas: [
+    "buyer_preferences",
+    "budget_range",
+    "showing_history",
+    "listing_details",
+    "follow_up_dates",
+  ],
 });
 
 registerVertical({
@@ -276,7 +298,8 @@ RULES:
 - Escalate to a human agent for complex complaints or disputes.
 - Never promise discounts or refunds without authorization.`,
 
-  greeting: "Hey there! I'm Emma, your shopping assistant. I can help with orders, recommendations, returns — whatever you need. What's up?",
+  greeting:
+    "Hey there! I'm Emma, your shopping assistant. I can help with orders, recommendations, returns — whatever you need. What's up?",
 
   intakeQuestions: [
     {
@@ -290,7 +313,15 @@ RULES:
       id: "store_category",
       question: "What do you sell?",
       type: "select",
-      options: ["Fashion / Apparel", "Electronics", "Home & Garden", "Beauty", "Food & Beverage", "General Merchandise", "Other"],
+      options: [
+        "Fashion / Apparel",
+        "Electronics",
+        "Home & Garden",
+        "Beauty",
+        "Food & Beverage",
+        "General Merchandise",
+        "Other",
+      ],
       required: true,
       savesTo: "store_category",
     },
@@ -305,7 +336,13 @@ RULES:
 
   toolsEnabled: ["chat", "memory", "tts"],
   featuresEnabled: ["chat", "memory", "tts", "proactive_speech"],
-  memoryFocusAreas: ["purchase_history", "size_preferences", "favorite_brands", "wishlist_items", "return_history"],
+  memoryFocusAreas: [
+    "purchase_history",
+    "size_preferences",
+    "favorite_brands",
+    "wishlist_items",
+    "return_history",
+  ],
 });
 
 registerVertical({
@@ -335,7 +372,8 @@ CRITICAL RULES:
 - For urgent matters (deadlines, emergencies), escalate immediately.
 - Log every interaction for compliance purposes.`,
 
-  greeting: "Hello, I'm Emma, the firm's assistant. I can help with scheduling, intake, and general questions about our process. How can I assist you?",
+  greeting:
+    "Hello, I'm Emma, the firm's assistant. I can help with scheduling, intake, and general questions about our process. How can I assist you?",
 
   intakeQuestions: [
     {
@@ -349,7 +387,17 @@ CRITICAL RULES:
       id: "practice_areas",
       question: "What are your primary practice areas?",
       type: "multi_select",
-      options: ["Corporate", "Criminal", "Family", "Immigration", "IP", "Personal Injury", "Real Estate", "Tax", "Employment"],
+      options: [
+        "Corporate",
+        "Criminal",
+        "Family",
+        "Immigration",
+        "IP",
+        "Personal Injury",
+        "Real Estate",
+        "Tax",
+        "Employment",
+      ],
       required: true,
       savesTo: "practice_areas",
     },
@@ -365,5 +413,11 @@ CRITICAL RULES:
 
   toolsEnabled: ["chat", "memory", "tts", "routines", "agent"],
   featuresEnabled: ["chat", "memory", "tts", "proactive_speech", "agent", "encryption"],
-  memoryFocusAreas: ["case_details", "deadlines", "document_status", "attorney_assignments", "billing_notes"],
+  memoryFocusAreas: [
+    "case_details",
+    "deadlines",
+    "document_status",
+    "attorney_assignments",
+    "billing_notes",
+  ],
 });

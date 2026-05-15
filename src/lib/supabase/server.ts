@@ -16,9 +16,7 @@ export async function createServerSupabase() {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         } catch {}
       },
     },
@@ -28,7 +26,9 @@ export async function createServerSupabase() {
 export async function getUser() {
   const supabase = await createServerSupabase();
   if (!supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return user;
 }
 

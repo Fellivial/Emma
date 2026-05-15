@@ -27,16 +27,10 @@ export async function GET(req: NextRequest) {
   if (!isLocalhost) {
     if (!cronSecret) {
       console.error("[CRON] CRON_SECRET is not set — rejecting request");
-      return NextResponse.json(
-        { error: "Cron not configured" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
     }
     if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
   // ─────────────────────────────────────────────────────────────────

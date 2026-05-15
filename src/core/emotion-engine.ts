@@ -70,33 +70,36 @@ export function useEmotion(): UseEmotionReturn {
 
   // ── Vision Expression (Claude Vision) ──────────────────────────────────────
 
-  const analyzeFromVision = useCallback(async (frameBase64: string): Promise<EmotionState | null> => {
-    setAnalyzing(true);
-    try {
-      const res = await fetch("/api/emma/emotion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ frame: frameBase64, source: "vision" }),
-      });
+  const analyzeFromVision = useCallback(
+    async (frameBase64: string): Promise<EmotionState | null> => {
+      setAnalyzing(true);
+      try {
+        const res = await fetch("/api/emma/emotion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frame: frameBase64, source: "vision" }),
+        });
 
-      const data = await res.json();
-      if (data.emotion) {
-        const state: EmotionState = {
-          ...data.emotion,
-          source: "vision",
-          timestamp: Date.now(),
-        };
-        visionRef.current = state;
-        pushHistory(state);
-        return state;
+        const data = await res.json();
+        if (data.emotion) {
+          const state: EmotionState = {
+            ...data.emotion,
+            source: "vision",
+            timestamp: Date.now(),
+          };
+          visionRef.current = state;
+          pushHistory(state);
+          return state;
+        }
+        return null;
+      } catch {
+        return null;
+      } finally {
+        setAnalyzing(false);
       }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      setAnalyzing(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // ── Text Sentiment (pattern matching) ──────────────────────────────────────
 

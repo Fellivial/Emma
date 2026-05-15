@@ -5,8 +5,8 @@ import type { AvatarExpression } from "@/types/emma";
 
 // ─── Proactive Trigger Configuration ─────────────────────────────────────────
 
-const IDLE_COMMENT_DELAY = 45_000;     // 45s of silence → she comments
-const IDLE_CONCERN_DELAY = 120_000;    // 2 min → she checks in
+const IDLE_COMMENT_DELAY = 45_000; // 45s of silence → she comments
+const IDLE_CONCERN_DELAY = 120_000; // 2 min → she checks in
 const LATE_NIGHT_CHECK_DELAY = 300_000; // 5 min at night → she nudges bedtime
 
 interface ProactiveMessage {
@@ -84,9 +84,18 @@ export function useProactiveSpeech(
   const firedRef = useRef<Set<string>>(new Set());
 
   const clearAllTimers = useCallback(() => {
-    if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
-    if (concernTimerRef.current) { clearTimeout(concernTimerRef.current); concernTimerRef.current = null; }
-    if (lateNightTimerRef.current) { clearTimeout(lateNightTimerRef.current); lateNightTimerRef.current = null; }
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    if (concernTimerRef.current) {
+      clearTimeout(concernTimerRef.current);
+      concernTimerRef.current = null;
+    }
+    if (lateNightTimerRef.current) {
+      clearTimeout(lateNightTimerRef.current);
+      lateNightTimerRef.current = null;
+    }
   }, []);
 
   const resetActivity = useCallback(() => {

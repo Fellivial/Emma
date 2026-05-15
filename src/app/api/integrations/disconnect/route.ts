@@ -23,19 +23,32 @@ export async function POST(req: NextRequest) {
     if (!service) return NextResponse.json({ error: "service required" }, { status: 400 });
 
     const { data: membership } = await supabase
-      .from("client_members").select("client_id").eq("user_id", user.id).single();
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", user.id)
+      .single();
     if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
 
-    await supabase.from("client_integrations").update({
-      status: "disconnected",
-      access_token: null,
-      refresh_token: null,
-      account_identifier: null,
-      token_expires_at: null,
-      updated_at: new Date().toISOString(),
-    }).eq("client_id", membership.client_id).eq("service", service);
+    await supabase
+      .from("client_integrations")
+      .update({
+        status: "disconnected",
+        access_token: null,
+        refresh_token: null,
+        account_identifier: null,
+        token_expires_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("client_id", membership.client_id)
+      .eq("service", service);
 
-    audit({ userId: user.id, action: "delete", resource: "integration", reason: `${service} disconnected`, ip: getClientIp(req) }).catch(() => {});
+    audit({
+      userId: user.id,
+      action: "delete",
+      resource: "integration",
+      reason: `${service} disconnected`,
+      ip: getClientIp(req),
+    }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

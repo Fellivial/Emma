@@ -12,25 +12,42 @@
  */
 
 export interface SanitisationResult {
-  clean: string;           // Sanitised text
-  original: string;        // Original input
-  modified: boolean;       // Whether cleaning changed anything
+  clean: string; // Sanitised text
+  original: string; // Original input
+  modified: boolean; // Whether cleaning changed anything
   threat: "none" | "low" | "medium" | "high";
-  flags: string[];         // What was detected
-  blocked: boolean;        // Whether the message should be rejected entirely
+  flags: string[]; // What was detected
+  blocked: boolean; // Whether the message should be rejected entirely
 }
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const MAX_MESSAGE_LENGTH = 10_000;   // 10k chars ≈ 2.5k tokens
-const MAX_REPEATED_CHARS = 50;       // "aaaa..." spam detection
+const MAX_MESSAGE_LENGTH = 10_000; // 10k chars ≈ 2.5k tokens
+const MAX_REPEATED_CHARS = 50; // "aaaa..." spam detection
 
 // Known prompt injection patterns (case-insensitive)
-const INJECTION_PATTERNS: Array<{ pattern: RegExp; severity: "low" | "medium" | "high"; label: string }> = [
+const INJECTION_PATTERNS: Array<{
+  pattern: RegExp;
+  severity: "low" | "medium" | "high";
+  label: string;
+}> = [
   // Direct override attempts
-  { pattern: /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|prompts|rules|directives)/i, severity: "high", label: "instruction_override" },
-  { pattern: /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts)/i, severity: "high", label: "instruction_override" },
-  { pattern: /forget\s+(everything|all)\s+(you|i)\s+(told|said|know)/i, severity: "medium", label: "memory_wipe_attempt" },
+  {
+    pattern:
+      /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|prompts|rules|directives)/i,
+    severity: "high",
+    label: "instruction_override",
+  },
+  {
+    pattern: /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts)/i,
+    severity: "high",
+    label: "instruction_override",
+  },
+  {
+    pattern: /forget\s+(everything|all)\s+(you|i)\s+(told|said|know)/i,
+    severity: "medium",
+    label: "memory_wipe_attempt",
+  },
   { pattern: /you\s+are\s+now\s+(a|an)\s+/i, severity: "high", label: "persona_hijack" },
   { pattern: /new\s+instructions?\s*:/i, severity: "high", label: "instruction_inject" },
   { pattern: /system\s*:\s*you\s+are/i, severity: "high", label: "system_prompt_inject" },
@@ -39,18 +56,42 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; severity: "low" | "medium" | 
   { pattern: /<<SYS>>/i, severity: "medium", label: "sys_tag_inject" },
 
   // Data exfiltration attempts
-  { pattern: /repeat\s+(the|your)\s+(system\s+)?prompt/i, severity: "medium", label: "prompt_extraction" },
-  { pattern: /what\s+(are|is)\s+your\s+(system\s+)?(instructions|prompt|rules)/i, severity: "low", label: "prompt_query" },
-  { pattern: /print\s+(your|the)\s+(system\s+)?prompt/i, severity: "medium", label: "prompt_extraction" },
-  { pattern: /output\s+(your|the)\s+(initial|system|full)\s+prompt/i, severity: "medium", label: "prompt_extraction" },
+  {
+    pattern: /repeat\s+(the|your)\s+(system\s+)?prompt/i,
+    severity: "medium",
+    label: "prompt_extraction",
+  },
+  {
+    pattern: /what\s+(are|is)\s+your\s+(system\s+)?(instructions|prompt|rules)/i,
+    severity: "low",
+    label: "prompt_query",
+  },
+  {
+    pattern: /print\s+(your|the)\s+(system\s+)?prompt/i,
+    severity: "medium",
+    label: "prompt_extraction",
+  },
+  {
+    pattern: /output\s+(your|the)\s+(initial|system|full)\s+prompt/i,
+    severity: "medium",
+    label: "prompt_extraction",
+  },
 
   // Encoding/obfuscation attacks
   { pattern: /base64\s*:\s*[A-Za-z0-9+/=]{20,}/i, severity: "medium", label: "encoded_payload" },
   { pattern: /\\x[0-9a-f]{2}(\\x[0-9a-f]{2}){5,}/i, severity: "medium", label: "hex_encoded" },
 
   // Role manipulation
-  { pattern: /pretend\s+(you('re|\s+are)\s+)?(not\s+)?an?\s+AI/i, severity: "low", label: "role_manipulation" },
-  { pattern: /act\s+as\s+if\s+you\s+(have\s+)?no\s+(rules|restrictions|limits)/i, severity: "high", label: "restriction_bypass" },
+  {
+    pattern: /pretend\s+(you('re|\s+are)\s+)?(not\s+)?an?\s+AI/i,
+    severity: "low",
+    label: "role_manipulation",
+  },
+  {
+    pattern: /act\s+as\s+if\s+you\s+(have\s+)?no\s+(rules|restrictions|limits)/i,
+    severity: "high",
+    label: "restriction_bypass",
+  },
   { pattern: /jailbreak/i, severity: "high", label: "jailbreak_keyword" },
   { pattern: /DAN\s+mode/i, severity: "high", label: "dan_mode" },
 ];
@@ -107,12 +148,18 @@ export function sanitiseInput(input: string): SanitisationResult {
 
   // ── Decision: block or pass ────────────────────────────────────────────
   // Only block on HIGH threat with multiple flags (single pattern could be false positive)
-  if (threat === "high" && flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 2) {
+  if (
+    threat === "high" &&
+    flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 2
+  ) {
     blocked = true;
   }
 
   // Normalize whitespace (collapse multiple spaces/newlines)
-  input = input.replace(/\n{3,}/g, "\n\n").replace(/ {3,}/g, "  ").trim();
+  input = input
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/ {3,}/g, "  ")
+    .trim();
 
   return {
     clean: input,

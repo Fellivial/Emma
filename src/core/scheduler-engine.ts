@@ -7,7 +7,13 @@ import { uid } from "@/lib/utils";
 // ─── Day Mapping ─────────────────────────────────────────────────────────────
 
 const DAY_MAP: Record<number, DayOfWeek> = {
-  0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
+  0: "sun",
+  1: "mon",
+  2: "tue",
+  3: "wed",
+  4: "thu",
+  5: "fri",
+  6: "sat",
 };
 
 function getCurrentDay(): DayOfWeek {
@@ -121,15 +127,11 @@ export function useScheduler(
   }, []);
 
   const toggleSchedule = useCallback((id: string) => {
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s))
-    );
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
   }, []);
 
   const updateSchedule = useCallback((id: string, updates: Partial<ScheduleEntry>) => {
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    );
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   }, []);
 
   return { schedules, addSchedule, removeSchedule, toggleSchedule, updateSchedule };

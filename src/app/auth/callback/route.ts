@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
 
     if (!error) {
       // Check if user needs onboarding
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")

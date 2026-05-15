@@ -22,9 +22,7 @@ export function ActionLog({ entries }: ActionLogProps) {
           key={entry.id}
           className="flex gap-2 text-[11px] font-light px-2 py-1.5 rounded-md border border-surface-border bg-surface animate-fade-in"
         >
-          <span className="text-emma-200/20 font-mono text-[10px] shrink-0">
-            {entry.time}
-          </span>
+          <span className="text-emma-200/20 font-mono text-[10px] shrink-0">{entry.time}</span>
           <span className="text-emma-200/50">{entry.text}</span>
         </div>
       ))}

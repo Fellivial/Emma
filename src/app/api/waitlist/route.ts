@@ -26,17 +26,22 @@ export async function GET() {
   try {
     // Get max from global_config
     const { data: maxRow } = await supabase
-      .from("global_config").select("value").eq("key", "max_active_users").single();
+      .from("global_config")
+      .select("value")
+      .eq("key", "max_active_users")
+      .single();
     const maxSpots = parseInt(maxRow?.value || "10", 10);
 
     // Count converted users (active early access)
     const { count: activeCount } = await supabase
-      .from("waitlist_v2").select("id", { count: "exact", head: true })
+      .from("waitlist_v2")
+      .select("id", { count: "exact", head: true })
       .eq("status", "converted");
 
     // Count waiting users
     const { count: waitingCount } = await supabase
-      .from("waitlist_v2").select("id", { count: "exact", head: true })
+      .from("waitlist_v2")
+      .select("id", { count: "exact", head: true })
       .eq("status", "waiting");
 
     const spotsRemaining = Math.max(0, maxSpots - (activeCount || 0));
@@ -61,7 +66,10 @@ export async function POST(req: NextRequest) {
       const { name, email, industry, message, referralSource } = body;
 
       if (!name || !email || !industry) {
-        return NextResponse.json({ error: "Name, email, and industry are required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Name, email, and industry are required" },
+          { status: 400 }
+        );
       }
 
       if (!email.includes("@")) {
@@ -75,12 +83,17 @@ export async function POST(req: NextRequest) {
 
       // Check if already registered
       const { data: existing } = await supabase
-        .from("waitlist_v2").select("id, status, position")
-        .eq("email", email.toLowerCase()).single();
+        .from("waitlist_v2")
+        .select("id, status, position")
+        .eq("email", email.toLowerCase())
+        .single();
 
       if (existing) {
         if (existing.status === "converted") {
-          return NextResponse.json({ result: "already_active", message: "You already have access." });
+          return NextResponse.json({
+            result: "already_active",
+            message: "You already have access.",
+          });
         }
         return NextResponse.json({
           result: "already_waitlisted",
@@ -91,26 +104,34 @@ export async function POST(req: NextRequest) {
 
       // Check spots
       const { data: maxRow } = await supabase
-        .from("global_config").select("value").eq("key", "max_active_users").single();
+        .from("global_config")
+        .select("value")
+        .eq("key", "max_active_users")
+        .single();
       const maxSpots = parseInt(maxRow?.value || "10", 10);
 
       const { count: activeCount } = await supabase
-        .from("waitlist_v2").select("id", { count: "exact", head: true })
+        .from("waitlist_v2")
+        .select("id", { count: "exact", head: true })
         .eq("status", "converted");
 
       const spotsAvailable = maxSpots - (activeCount || 0);
 
       if (spotsAvailable > 0) {
         // ── Spot available — immediate access ────────────────────────────
-        const { data: entry, error } = await supabase.from("waitlist_v2").insert({
-          name: name.trim(),
-          email: email.toLowerCase().trim(),
-          industry,
-          message: message?.trim() || null,
-          referral_source: referralSource?.trim() || null,
-          status: "converted",
-          converted_at: new Date().toISOString(),
-        }).select("position").single();
+        const { data: entry, error } = await supabase
+          .from("waitlist_v2")
+          .insert({
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            industry,
+            message: message?.trim() || null,
+            referral_source: referralSource?.trim() || null,
+            status: "converted",
+            converted_at: new Date().toISOString(),
+          })
+          .select("position")
+          .single();
 
         if (error) {
           if (error.code === "23505") {
@@ -130,14 +151,18 @@ export async function POST(req: NextRequest) {
         });
       } else {
         // ── No spots — add to waitlist ───────────────────────────────────
-        const { data: entry, error } = await supabase.from("waitlist_v2").insert({
-          name: name.trim(),
-          email: email.toLowerCase().trim(),
-          industry,
-          message: message?.trim() || null,
-          referral_source: referralSource?.trim() || null,
-          status: "waiting",
-        }).select("position").single();
+        const { data: entry, error } = await supabase
+          .from("waitlist_v2")
+          .insert({
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            industry,
+            message: message?.trim() || null,
+            referral_source: referralSource?.trim() || null,
+            status: "waiting",
+          })
+          .select("position")
+          .single();
 
         if (error) {
           if (error.code === "23505") {
@@ -162,10 +187,12 @@ export async function POST(req: NextRequest) {
       const supabase = getSupabase();
       if (supabase) {
         try {
-          await supabase.from("waitlist").upsert(
-            { email: body.email.toLowerCase().trim(), signed_up_at: new Date().toISOString() },
-            { onConflict: "email" }
-          );
+          await supabase
+            .from("waitlist")
+            .upsert(
+              { email: body.email.toLowerCase().trim(), signed_up_at: new Date().toISOString() },
+              { onConflict: "email" }
+            );
         } catch {}
       }
       return NextResponse.json({ success: true });

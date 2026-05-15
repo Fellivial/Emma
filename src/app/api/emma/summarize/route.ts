@@ -52,18 +52,13 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const errText = await res.text();
       console.error("[EMMA Summarize] API error:", res.status, errText);
-      return NextResponse.json(
-        { error: `API ${res.status}` },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
     }
 
     const data = await res.json();
     const summary =
       data.content
-        ?.map((b: { type: string; text?: string }) =>
-          b.type === "text" ? b.text : ""
-        )
+        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
         .join("") || "";
 
     return NextResponse.json({ summary: summary.trim() });

@@ -55,7 +55,11 @@ function getSupabase() {
 export async function getIntegrationTokens(
   clientId: string,
   service: IntegrationService
-): Promise<{ accessToken: string; metadata: Record<string, unknown> | null; accountIdentifier: string | null }> {
+): Promise<{
+  accessToken: string;
+  metadata: Record<string, unknown> | null;
+  accountIdentifier: string | null;
+}> {
   const supabase = getSupabase();
   if (!supabase) throw new IntegrationNotConfiguredError(service);
 
@@ -92,31 +96,53 @@ export async function getIntegrationTokens(
 
 // ─── Status Helpers ──────────────────────────────────────────────────────────
 
-export async function markIntegrationUsed(clientId: string, service: IntegrationService): Promise<void> {
+export async function markIntegrationUsed(
+  clientId: string,
+  service: IntegrationService
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  await supabase.from("client_integrations").update({
-    last_used_at: new Date().toISOString(),
-    status: "connected",
-    last_error: null,
-  }).eq("client_id", clientId).eq("service", service);
+  await supabase
+    .from("client_integrations")
+    .update({
+      last_used_at: new Date().toISOString(),
+      status: "connected",
+      last_error: null,
+    })
+    .eq("client_id", clientId)
+    .eq("service", service);
 }
 
-export async function markIntegrationError(clientId: string, service: IntegrationService, error: Error): Promise<void> {
+export async function markIntegrationError(
+  clientId: string,
+  service: IntegrationService,
+  error: Error
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  await supabase.from("client_integrations").update({
-    status: "error",
-    last_error: error.message,
-    updated_at: new Date().toISOString(),
-  }).eq("client_id", clientId).eq("service", service);
+  await supabase
+    .from("client_integrations")
+    .update({
+      status: "error",
+      last_error: error.message,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("client_id", clientId)
+    .eq("service", service);
 }
 
-export async function markIntegrationExpired(clientId: string, service: IntegrationService): Promise<void> {
+export async function markIntegrationExpired(
+  clientId: string,
+  service: IntegrationService
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  await supabase.from("client_integrations").update({
-    status: "auth_expired",
-    updated_at: new Date().toISOString(),
-  }).eq("client_id", clientId).eq("service", service);
+  await supabase
+    .from("client_integrations")
+    .update({
+      status: "auth_expired",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("client_id", clientId)
+    .eq("service", service);
 }

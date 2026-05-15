@@ -21,9 +21,7 @@ export default function Nav() {
         top: 0,
         zIndex: 50,
         background: "var(--l-bg)",
-        borderBottom: scrolled
-          ? "1px solid var(--l-border2)"
-          : "1px solid var(--l-border)",
+        borderBottom: scrolled ? "1px solid var(--l-border2)" : "1px solid var(--l-border)",
         transition: "border-color 300ms",
       }}
     >
@@ -127,8 +125,8 @@ export default function Nav() {
                   ? i === 0
                     ? "translateY(7px) rotate(45deg)"
                     : i === 2
-                    ? "translateY(-7px) rotate(-45deg)"
-                    : "scaleX(0)"
+                      ? "translateY(-7px) rotate(-45deg)"
+                      : "scaleX(0)"
                   : "none",
                 opacity: open && i === 1 ? 0 : 1,
               }}
@@ -147,7 +145,9 @@ export default function Nav() {
           borderTop: open ? "1px solid var(--l-border)" : "none",
         }}
       >
-        <div style={{ padding: "16px 40px", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div
+          style={{ padding: "16px 40px", display: "flex", flexDirection: "column", gap: "20px" }}
+        >
           {NAV_LINKS.map((link) => (
             <a
               key={link.label}

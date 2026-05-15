@@ -26,7 +26,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." }, { status: 501 });
+    return NextResponse.json(
+      { error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." },
+      { status: 501 }
+    );
   }
 
   try {
@@ -55,7 +58,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       service,
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.headers.get("origin") || "http://localhost:3000";
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL || req.headers.get("origin") || "http://localhost:3000";
     const redirectUri = `${appUrl}/api/integrations/${service}/oauth/callback`;
 
     const oauthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

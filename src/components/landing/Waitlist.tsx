@@ -45,10 +45,7 @@ export default function Waitlist() {
   };
 
   return (
-    <section
-      id="waitlist"
-      style={{ background: "var(--l-bg)" }}
-    >
+    <section id="waitlist" style={{ background: "var(--l-bg)" }}>
       <ScanLines direction="rtl" />
 
       <div

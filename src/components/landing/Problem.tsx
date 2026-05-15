@@ -36,14 +36,49 @@ function SurveillanceEye() {
       style={{ display: "block" }}
     >
       {/* Corner viewfinder L-brackets */}
-      <polyline points="28,52 28,28 52,28" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="168,28 192,28 192,52" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="52,192 28,192 28,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="168,192 192,192 192,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
+      <polyline
+        points="28,52 28,28 52,28"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="168,28 192,28 192,52"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="52,192 28,192 28,168"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="168,192 192,192 192,168"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
 
       {/* Outer rotating dashed ring */}
-      <circle cx="110" cy="110" r="96" fill="none" stroke="rgba(232,84,122,0.09)" strokeWidth="1" strokeDasharray="4 7">
-        <animateTransform attributeName="transform" type="rotate" from="0 110 110" to="360 110 110" dur="22s" repeatCount="indefinite" />
+      <circle
+        cx="110"
+        cy="110"
+        r="96"
+        fill="none"
+        stroke="rgba(232,84,122,0.09)"
+        strokeWidth="1"
+        strokeDasharray="4 7"
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 110 110"
+          to="360 110 110"
+          dur="22s"
+          repeatCount="indefinite"
+        />
       </circle>
 
       {/* 5 concentric rings */}
@@ -64,8 +99,24 @@ function SurveillanceEye() {
       <line x1="32" y1="110" x2="188" y2="110" stroke="rgba(232,84,122,0.09)" strokeWidth="1" />
 
       {/* Diagonal scan lines */}
-      <line x1="58" y1="58" x2="162" y2="162" stroke="rgba(232,84,122,0.05)" strokeWidth="1" strokeDasharray="3 6" />
-      <line x1="162" y1="58" x2="58" y2="162" stroke="rgba(232,84,122,0.05)" strokeWidth="1" strokeDasharray="3 6" />
+      <line
+        x1="58"
+        y1="58"
+        x2="162"
+        y2="162"
+        stroke="rgba(232,84,122,0.05)"
+        strokeWidth="1"
+        strokeDasharray="3 6"
+      />
+      <line
+        x1="162"
+        y1="58"
+        x2="58"
+        y2="162"
+        stroke="rgba(232,84,122,0.05)"
+        strokeWidth="1"
+        strokeDasharray="3 6"
+      />
 
       {/* Radar sweep */}
       <g style={{ transformOrigin: "110px 110px" }}>
@@ -88,11 +139,30 @@ function SurveillanceEye() {
       {/* Mouse-tracking pupil */}
       <g transform={`translate(${pupil.x}, ${pupil.y})`}>
         {/* Iris */}
-        <circle cx="110" cy="110" r="22" fill="rgba(232,84,122,0.1)" stroke="rgba(232,84,122,0.5)" strokeWidth="1.5" />
-        <circle cx="110" cy="110" r="14" fill="none" stroke="rgba(232,84,122,0.22)" strokeWidth="1" />
+        <circle
+          cx="110"
+          cy="110"
+          r="22"
+          fill="rgba(232,84,122,0.1)"
+          stroke="rgba(232,84,122,0.5)"
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="110"
+          cy="110"
+          r="14"
+          fill="none"
+          stroke="rgba(232,84,122,0.22)"
+          strokeWidth="1"
+        />
         {/* Pupil */}
         <circle cx="110" cy="110" r="7" fill="#e8547a" opacity="0.92">
-          <animate attributeName="opacity" values="0.92;0.5;0.92" dur="2.6s" repeatCount="indefinite" />
+          <animate
+            attributeName="opacity"
+            values="0.92;0.5;0.92"
+            dur="2.6s"
+            repeatCount="indefinite"
+          />
           <animate attributeName="r" values="7;8.5;7" dur="2.6s" repeatCount="indefinite" />
         </circle>
         {/* Catchlight */}
@@ -204,7 +274,9 @@ export default function Problem() {
                 padding: "32px",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}
+              >
                 <span
                   style={{
                     fontFamily: "var(--font-l-mono)",

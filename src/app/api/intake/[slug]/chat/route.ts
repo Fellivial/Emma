@@ -69,7 +69,10 @@ function getServiceSupabase() {
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
   const { slug } = await params;
 
   // ── A1: Load and validate client config ──────────────────────────────────

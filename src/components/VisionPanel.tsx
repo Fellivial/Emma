@@ -14,8 +14,13 @@ interface VisionPanelProps {
 }
 
 export function VisionPanel({
-  active, supported, analyzing, lastAnalysis,
-  previewRef, onToggle, onAnalyze,
+  active,
+  supported,
+  analyzing,
+  lastAnalysis,
+  previewRef,
+  onToggle,
+  onAnalyze,
 }: VisionPanelProps) {
   if (!supported) {
     return (
@@ -98,7 +103,10 @@ export function VisionPanel({
           {lastAnalysis.objects.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5">
               {lastAnalysis.objects.map((obj, i) => (
-                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-emma-300/8 border border-emma-300/10 text-emma-200/40">
+                <span
+                  key={i}
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-emma-300/8 border border-emma-300/10 text-emma-200/40"
+                >
                   {obj}
                 </span>
               ))}
@@ -108,7 +116,10 @@ export function VisionPanel({
           {lastAnalysis.activities.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5">
               {lastAnalysis.activities.map((act, i) => (
-                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/8 border border-emerald-400/10 text-emerald-300/40">
+                <span
+                  key={i}
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/8 border border-emerald-400/10 text-emerald-300/40"
+                >
                   {act}
                 </span>
               ))}
@@ -118,7 +129,10 @@ export function VisionPanel({
           {lastAnalysis.anomalies.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {lastAnalysis.anomalies.map((a, i) => (
-                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/8 border border-amber-400/10 text-amber-300/40">
+                <span
+                  key={i}
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/8 border border-amber-400/10 text-amber-300/40"
+                >
                   ⚠ {a}
                 </span>
               ))}

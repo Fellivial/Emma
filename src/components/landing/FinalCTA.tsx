@@ -19,10 +19,8 @@ export default function FinalCTA() {
           inset: 0,
           backgroundImage:
             "repeating-linear-gradient(0deg, rgba(232,84,122,0.08) 0px, rgba(232,84,122,0.08) 1px, transparent 1px, transparent 52px), repeating-linear-gradient(90deg, rgba(232,84,122,0.08) 0px, rgba(232,84,122,0.08) 1px, transparent 1px, transparent 52px)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 80% 80% at center, black, transparent)",
-          maskImage:
-            "radial-gradient(ellipse 80% 80% at center, black, transparent)",
+          WebkitMaskImage: "radial-gradient(ellipse 80% 80% at center, black, transparent)",
+          maskImage: "radial-gradient(ellipse 80% 80% at center, black, transparent)",
           pointerEvents: "none",
         }}
       />

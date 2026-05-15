@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
         text: text.slice(0, 1000),
         model_id: "eleven_turbo_v2_5",
         voice_settings: {
-          stability: 1.0,           // sp100 — very consistent
-          similarity_boost: 0.5,    // s50
-          style: 0.75,              // sb75 — strong expression
-          use_speaker_boost: true,  // b
+          stability: 1.0, // sp100 — very consistent
+          similarity_boost: 0.5, // s50
+          style: 0.75, // sb75 — strong expression
+          use_speaker_boost: true, // b
         },
       }),
     });

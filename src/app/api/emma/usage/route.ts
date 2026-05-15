@@ -50,7 +50,10 @@ export async function GET() {
       .gt("tokens_remaining", 0)
       .order("created_at", { ascending: true });
 
-    const totalExtra = (packs || []).reduce((s: number, p: any) => s + (p.tokens_remaining || 0), 0);
+    const totalExtra = (packs || []).reduce(
+      (s: number, p: any) => s + (p.tokens_remaining || 0),
+      0
+    );
 
     return NextResponse.json({
       windows: {
@@ -71,7 +74,10 @@ export async function GET() {
       limits: {
         daily: { tokens: plan?.tokenBudgetDaily || 0, messages: plan?.messageLimitDaily || 0 },
         weekly: { tokens: plan?.tokenBudgetWeekly || 0, messages: plan?.messageLimitWeekly || 0 },
-        monthly: { tokens: plan?.tokenBudgetMonthly || 0, messages: (plan?.messageLimitDaily || 0) * 30 },
+        monthly: {
+          tokens: plan?.tokenBudgetMonthly || 0,
+          messages: (plan?.messageLimitDaily || 0) * 30,
+        },
       },
     });
   } catch (err) {

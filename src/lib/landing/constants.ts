@@ -54,25 +54,29 @@ export const APPROACH_STEPS: ApproachStep[] = [
     number: "01",
     title: "Remember Everything",
     body: "Emma builds a persistent model of who you are — your preferences, goals, relationships, and history. It compounds over time.",
-    detail: "Semantic memory extraction on every interaction. Vector-indexed recall. Relationship graph with named entities.",
+    detail:
+      "Semantic memory extraction on every interaction. Vector-indexed recall. Relationship graph with named entities.",
   },
   {
     number: "02",
     title: "Read the Room",
     body: "Emotion detection from voice tone, facial expression, and text sentiment. Emma adapts her register in real time.",
-    detail: "ElevenLabs voice analysis + camera expression detection + NLP sentiment. Updates every 4 seconds during voice sessions.",
+    detail:
+      "ElevenLabs voice analysis + camera expression detection + NLP sentiment. Updates every 4 seconds during voice sessions.",
   },
   {
     number: "03",
     title: "Be Present",
     body: "A Live2D avatar with reactive expressions, breathing animations, and idle states. Not a chatbot — a companion.",
-    detail: "Live2D Cubism runtime with 14 expression states. ElevenLabs lip-sync. Screen and camera context awareness.",
+    detail:
+      "Live2D Cubism runtime with 14 expression states. ElevenLabs lip-sync. Screen and camera context awareness.",
   },
   {
     number: "04",
     title: "Act Autonomously",
     body: "Scheduled check-ins, proactive messages, background tasks. Emma operates even when you're not actively chatting.",
-    detail: "Cron-based scheduler. Tool execution with approval flow. Push notifications via web and mobile.",
+    detail:
+      "Cron-based scheduler. Tool execution with approval flow. Push notifications via web and mobile.",
   },
 ];
 
@@ -81,13 +85,15 @@ export const CAPABILITIES: CapabilityCard[] = [
     id: "memory",
     icon: "◈",
     title: "Persistent Memory",
-    description: "Semantic extraction and vector recall across every session. Emma remembers what matters.",
+    description:
+      "Semantic extraction and vector recall across every session. Emma remembers what matters.",
   },
   {
     id: "voice",
     icon: "◎",
     title: "Voice & TTS",
-    description: "ElevenLabs synthesis with BYOK support. Natural conversation, not robotic responses.",
+    description:
+      "ElevenLabs synthesis with BYOK support. Natural conversation, not robotic responses.",
   },
   {
     id: "vision",
@@ -99,7 +105,8 @@ export const CAPABILITIES: CapabilityCard[] = [
     id: "emotion",
     icon: "◐",
     title: "Emotion Detection",
-    description: "Voice tone, facial expression, and text sentiment — blended into a unified emotional state.",
+    description:
+      "Voice tone, facial expression, and text sentiment — blended into a unified emotional state.",
   },
   {
     id: "avatar",
@@ -111,7 +118,8 @@ export const CAPABILITIES: CapabilityCard[] = [
     id: "autonomous",
     icon: "◒",
     title: "Autonomous Mode",
-    description: "Scheduled routines, proactive check-ins, background task execution with approval flow.",
+    description:
+      "Scheduled routines, proactive check-ins, background task execution with approval flow.",
   },
 ];
 

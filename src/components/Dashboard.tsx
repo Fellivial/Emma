@@ -1,8 +1,12 @@
 "use client";
 
 import type {
-  PillarStatus, EmotionState,
-  MemoryEntry, ScheduleEntry, TimelineEntry, UserProfile,
+  PillarStatus,
+  EmotionState,
+  MemoryEntry,
+  ScheduleEntry,
+  TimelineEntry,
+  UserProfile,
 } from "@/types/emma";
 
 interface DashboardProps {
@@ -48,7 +52,9 @@ export function Dashboard(props: DashboardProps) {
       icon: "💜",
       status: "online",
       detail: `${props.memories.length} memories • ${props.activeUser.name}${
-        props.currentEmotion ? ` • ${EMOTION_EMOJI[props.currentEmotion.primary] || "😐"} ${props.currentEmotion.primary}` : ""
+        props.currentEmotion
+          ? ` • ${EMOTION_EMOJI[props.currentEmotion.primary] || "😐"} ${props.currentEmotion.primary}`
+          : ""
       }`,
       metrics: {
         memories: props.memories.length,
@@ -77,7 +83,9 @@ export function Dashboard(props: DashboardProps) {
           <span className="text-lg">{props.activeUser.avatar}</span>
           <div>
             <div className="text-xs font-medium text-emma-200/70">{props.activeUser.name}</div>
-            <div className="text-[10px] text-emma-200/30">{props.activeUser.role} • {props.userCount} user{props.userCount !== 1 ? "s" : ""}</div>
+            <div className="text-[10px] text-emma-200/30">
+              {props.activeUser.role} • {props.userCount} user{props.userCount !== 1 ? "s" : ""}
+            </div>
           </div>
           {props.currentEmotion && (
             <div className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface border border-surface-border">
@@ -96,8 +104,8 @@ export function Dashboard(props: DashboardProps) {
             p.status === "online"
               ? "border-emerald-400/10 bg-emerald-400/3"
               : p.status === "degraded"
-              ? "border-amber-400/10 bg-amber-400/3"
-              : "border-surface-border bg-surface"
+                ? "border-amber-400/10 bg-amber-400/3"
+                : "border-surface-border bg-surface"
           }`}
         >
           <div className="flex items-center justify-between mb-1">
@@ -110,8 +118,8 @@ export function Dashboard(props: DashboardProps) {
                 p.status === "online"
                   ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
                   : p.status === "degraded"
-                  ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.4)]"
-                  : "bg-red-400/50"
+                    ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.4)]"
+                    : "bg-red-400/50"
               }`}
             />
           </div>
@@ -123,6 +131,14 @@ export function Dashboard(props: DashboardProps) {
 }
 
 const EMOTION_EMOJI: Record<string, string> = {
-  neutral: "😐", happy: "😊", sad: "😢", angry: "😠", anxious: "😰",
-  tired: "😴", excited: "🤩", frustrated: "😤", calm: "😌", stressed: "😬",
+  neutral: "😐",
+  happy: "😊",
+  sad: "😢",
+  angry: "😠",
+  anxious: "😰",
+  tired: "😴",
+  excited: "🤩",
+  frustrated: "😤",
+  calm: "😌",
+  stressed: "😬",
 };

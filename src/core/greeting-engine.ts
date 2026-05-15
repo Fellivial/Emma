@@ -5,8 +5,8 @@ import type { PersonaId, MemoryEntry } from "@/types/emma";
 const STORAGE_KEY = "emma_last_session";
 
 interface SessionContext {
-  lastVisit: number | null;    // Timestamp of last session
-  hoursSince: number | null;   // Hours since last visit
+  lastVisit: number | null; // Timestamp of last session
+  hoursSince: number | null; // Hours since last visit
   timeOfDay: "morning" | "afternoon" | "evening" | "night" | "late_night";
   isFirstVisit: boolean;
   dayOfWeek: string;
@@ -32,10 +32,15 @@ function getSessionContext(): SessionContext {
   }
 
   const timeOfDay =
-    hour >= 5 && hour < 12 ? "morning" :
-    hour >= 12 && hour < 17 ? "afternoon" :
-    hour >= 17 && hour < 21 ? "evening" :
-    hour >= 21 && hour < 24 ? "night" : "late_night";
+    hour >= 5 && hour < 12
+      ? "morning"
+      : hour >= 12 && hour < 17
+        ? "afternoon"
+        : hour >= 17 && hour < 21
+          ? "evening"
+          : hour >= 21 && hour < 24
+            ? "night"
+            : "late_night";
 
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const dayOfWeek = days[new Date().getDay()];
@@ -77,10 +82,7 @@ const MOMMY_GREETINGS = {
   ],
 
   // Return after absence
-  quick_return: [
-    "Back already? Mmm. Couldn't stay away.",
-    "That was fast. Miss me?",
-  ],
+  quick_return: ["Back already? Mmm. Couldn't stay away.", "That was fast. Miss me?"],
   normal_return: [
     "There you are. I was wondering when you'd come back.",
     "Mmm. Welcome back, baby.",
@@ -103,10 +105,7 @@ function pickRandom<T>(arr: T[]): T {
 
 // ─── Generate Greeting ───────────────────────────────────────────────────────
 
-export function generateGreeting(
-  personaId: PersonaId,
-  memories: MemoryEntry[] = []
-): string {
+export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] = []): string {
   if (personaId !== "mommy") {
     return "Hey, I'm Emma. What can I do for you?";
   }

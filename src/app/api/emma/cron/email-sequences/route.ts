@@ -33,16 +33,10 @@ export async function GET(req: NextRequest) {
   if (!isLocalhost) {
     if (!cronSecret) {
       console.error("[CRON] CRON_SECRET is not set — rejecting request");
-      return NextResponse.json(
-        { error: "Cron not configured" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
     }
     if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
   // ─────────────────────────────────────────────────────────────────
@@ -65,14 +59,20 @@ export async function GET(req: NextRequest) {
     if (pending && pending.length > 0) {
       console.warn("[Cron:Email] RESEND_API_KEY not configured — marking pending rows as failed");
       for (const row of pending) {
-        await supabase.from("email_sequences").update({
-          status: "failed",
-          error_detail: "RESEND_API_KEY not configured",
-        }).eq("id", row.id);
+        await supabase
+          .from("email_sequences")
+          .update({
+            status: "failed",
+            error_detail: "RESEND_API_KEY not configured",
+          })
+          .eq("id", row.id);
       }
     }
 
-    return NextResponse.json({ error: "RESEND_API_KEY not configured", failed: pending?.length || 0 });
+    return NextResponse.json({
+      error: "RESEND_API_KEY not configured",
+      failed: pending?.length || 0,
+    });
   }
 
   const resend = new Resend(resendKey);
@@ -125,10 +125,13 @@ export async function GET(req: NextRequest) {
           .single();
 
         if (dupe) {
-          await supabase.from("email_sequences").update({
-            status: "skipped",
-            error_detail: "Duplicate — already sent",
-          }).eq("id", row.id);
+          await supabase
+            .from("email_sequences")
+            .update({
+              status: "skipped",
+              error_detail: "Duplicate — already sent",
+            })
+            .eq("id", row.id);
           skipped++;
           continue;
         }
@@ -160,19 +163,25 @@ export async function GET(req: NextRequest) {
         });
 
         // ── 6. Mark sent ──────────────────────────────────────────────
-        await supabase.from("email_sequences").update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-        }).eq("id", row.id);
+        await supabase
+          .from("email_sequences")
+          .update({
+            status: "sent",
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", row.id);
 
         sent++;
       } catch (err: any) {
         // ── 7. Mark failed ────────────────────────────────────────────
         console.error(`[Cron:Email] Failed ${row.id}:`, err);
-        await supabase.from("email_sequences").update({
-          status: "failed",
-          error_detail: err?.message || String(err),
-        }).eq("id", row.id);
+        await supabase
+          .from("email_sequences")
+          .update({
+            status: "failed",
+            error_detail: err?.message || String(err),
+          })
+          .eq("id", row.id);
         failed++;
       }
     }
