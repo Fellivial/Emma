@@ -47,11 +47,7 @@ function IntakeUnavailable() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function IntakePage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function IntakePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const config = await loadClientConfigOrNull(slug);
 

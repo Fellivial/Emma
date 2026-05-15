@@ -11,7 +11,9 @@ export default function BillingPage() {
   useEffect(() => {
     fetch("/api/emma/usage")
       .then((r) => r.json())
-      .then((d) => { if (d.planId) setCurrentPlan(d.planId); })
+      .then((d) => {
+        if (d.planId) setCurrentPlan(d.planId);
+      })
       .catch(() => {});
   }, []);
 
