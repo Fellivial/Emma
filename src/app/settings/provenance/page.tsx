@@ -38,11 +38,11 @@ function ProvenancePage() {
       .order("started_at", { ascending: false })
       .limit(20);
 
-    const rows = data ?? [];
+    const rows: ChainRow[] = (data as ChainRow[]) ?? [];
     setChains(rows);
 
     if (preselectedTaskId) {
-      const match = rows.find((r) => r.task_id === preselectedTaskId);
+      const match = rows.find((r: ChainRow) => r.task_id === preselectedTaskId);
       if (match) setSelectedId(match.id);
     } else if (rows.length > 0) {
       setSelectedId((prev) => prev ?? rows[0].id);

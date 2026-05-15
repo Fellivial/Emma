@@ -64,6 +64,7 @@ describe("parseEmmaResponse", () => {
 describe("formatCommandLog", () => {
   it("formats a command for display", () => {
     const log = formatCommandLog({
+      action: "set",
       room: "bedroom",
       device: "lights",
       property: "brightness",

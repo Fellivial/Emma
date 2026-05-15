@@ -46,7 +46,7 @@ describe("tool-registry", () => {
     const tool = getTool("send_notification")!;
     const result = await tool.handler(
       { title: "Test", message: "Hello" },
-      { clientId: "test", taskId: "test-1" }
+      { userId: "dev-user", clientId: "test", taskId: "test-1" }
     );
     expect(result.success).toBe(true);
   });

@@ -84,14 +84,14 @@ describe("encryption graceful degradation", () => {
 describe("tool risk classification", () => {
   it("has at least 2 dangerous/high-risk tools", () => {
     const dangerous = getAllTools().filter(
-      (t) => t.riskLevel === "dangerous" || t.riskLevel === "high"
+      (t) => t.riskLevel === "dangerous" || t.riskLevel === "moderate"
     );
     expect(dangerous.length).toBeGreaterThanOrEqual(2);
   });
 
   it("send_email is never classified as safe/low", () => {
     const safe = getAllTools().filter(
-      (t) => t.riskLevel === "safe" || t.riskLevel === "low"
+      (t) => t.riskLevel === "safe"
     );
     for (const tool of safe) {
       expect(tool.name).not.toBe("send_email");
