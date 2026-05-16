@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadClientConfigOrNull } from "@/core/client-config";
 import { Resend } from "resend";
 import { syncLeadToHubSpot } from "@/lib/hubspot";
+import { appendLeadToSheet } from "@/lib/sheets";
 
 // ─── Rate limiting (in-memory, per-IP, per-slug) ───────────────────────────────
 
@@ -134,6 +135,10 @@ export async function POST(
 
   // HubSpot sync (non-fatal)
   syncLeadToHubSpot(supabase, config.id, { name, contact, notes }).catch(() => {});
+  // Google Sheets append (non-fatal)
+  if (config.sheetsId) {
+    appendLeadToSheet(config.sheetsId, { name, contact, notes }).catch(() => {});
+  }
 
   // Email notification (non-fatal)
   const resendKey = process.env.RESEND_API_KEY;
@@ -143,7 +148,7 @@ export async function POST(
       const resend = new Resend(resendKey);
       await resend.emails.send({
         from: fromEmail,
-        to: fromEmail,
+        to: config.ownerEmail ?? fromEmail,
         subject: `New lead — ${config.name}`,
         text: [
           `New intake lead for ${config.name}`,

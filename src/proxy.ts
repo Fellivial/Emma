@@ -2,6 +2,21 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // ── Subdomain routing: {slug}.{NEXT_PUBLIC_SMB_DOMAIN} → /intake/{slug} ───
+  const smbDomain = process.env.NEXT_PUBLIC_SMB_DOMAIN;
+  if (smbDomain) {
+    const host = request.headers.get("host") ?? "";
+    const smbSuffix = `.${smbDomain}`;
+    if (host.endsWith(smbSuffix)) {
+      const slug = host.slice(0, host.length - smbSuffix.length);
+      if (slug && !slug.includes(".")) {
+        const rewriteUrl = request.nextUrl.clone();
+        rewriteUrl.pathname = `/intake/${slug}${request.nextUrl.pathname === "/" ? "" : request.nextUrl.pathname}`;
+        return NextResponse.rewrite(rewriteUrl);
+      }
+    }
+  }
+
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

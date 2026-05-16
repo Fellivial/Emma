@@ -42,6 +42,8 @@ export interface ClientConfig {
   proactiveVision: boolean;
   verticalId: string | null;
   formSteps: FormStep[] | null;
+  ownerEmail: string | null;
+  sheetsId: string | null;
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -61,6 +63,8 @@ const DEFAULT_CONFIG: ClientConfig = {
   proactiveVision: false,
   verticalId: null,
   formSteps: null,
+  ownerEmail: null,
+  sheetsId: null,
 };
 
 function getSupabase() {
@@ -102,6 +106,8 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       proactiveVision: data.proactive_vision ?? false,
       verticalId: data.vertical_id ?? null,
       formSteps: (data.form_steps as FormStep[] | null) ?? null,
+      ownerEmail: data.owner_email ?? null,
+      sheetsId: data.sheets_id ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -139,6 +145,8 @@ export async function loadClientConfigOrNull(slug: string): Promise<ClientConfig
       proactiveVision: data.proactive_vision ?? false,
       verticalId: data.vertical_id ?? null,
       formSteps: (data.form_steps as FormStep[] | null) ?? null,
+      ownerEmail: data.owner_email ?? null,
+      sheetsId: data.sheets_id ?? null,
     };
   } catch {
     return null;
@@ -179,6 +187,8 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       proactive_vision: boolean | null;
       vertical_id: string | null;
       form_steps: FormStep[] | null;
+      owner_email: string | null;
+      sheets_id: string | null;
     };
     return {
       id: c.id,
@@ -197,6 +207,8 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       proactiveVision: c.proactive_vision ?? false,
       verticalId: c.vertical_id ?? null,
       formSteps: (c.form_steps as FormStep[] | null) ?? null,
+      ownerEmail: c.owner_email ?? null,
+      sheetsId: c.sheets_id ?? null,
     };
   } catch {
     return DEFAULT_CONFIG;

@@ -30,31 +30,17 @@ Consent gate added to `/intake/[slug]` — checkbox must be checked before chat 
 
 ## P2 — After First SMB Client
 
-### Google Sheets Writer
-**What:** Write captured intake leads to a Google Sheet the client already uses, in real time.
-**Why:** Design doc specifically mentioned this as the "wow factor" — lead appears in Sheets during demo. Some clients will prefer Sheets to email.
-**How to apply:** `googleapis` package + Google service account per client + `sheets_id` in ClientConfig. Build as a tool in the tool-registry.
-**Effort:** M (human ~1 day / CC ~4-5 hrs)
-**Depends on:** First client explicitly requesting it
+### ~~Google Sheets Writer~~ ✅ Done (2026-05-16)
+`src/lib/sheets.ts` — zero-dependency WebCrypto service account JWT auth + Google Sheets API v4 `values.append`. Wired into both `/api/intake/[slug]/chat` and `/api/intake/[slug]/form` on lead save (non-fatal). Config: `sheets_id` in `clients` table + `GOOGLE_SHEETS_SA_KEY` env var (JSON blob). Row format: `[ISO timestamp, name, contact, notes]` appended to `Sheet1!A:D`.
 
 ### ~~Slug Enumeration Protection~~ ✅ Done (2026-05-16)
 `/intake/[slug]/page.tsx` is now a server component. Unknown slugs render the same static "This intake page is unavailable" page as inactive slugs — HTTP 200 in both cases so status codes reveal nothing. Chat UI extracted to `_components/IntakeChat.tsx`.
 
-### Subdomain Routing (Vercel Wildcard)
-**What:** Route `theirclinic.emma.yourdomain.com` → parse Host header for slug → load client config.
-**Why:** Design doc mentioned custom subdomain. More impressive in demo. Client feels it's their own branded thing.
-**How to apply:** Vercel wildcard domain `*.emma.yourdomain.com` + middleware reads `Host` header to extract slug.
-**Effort:** S (human ~1 hr / CC ~30 min)
-**Depends on:** First client confirmed (so we know the subdomain to configure)
+### ~~Subdomain Routing (Vercel Wildcard)~~ ✅ Done (2026-05-16)
+`src/proxy.ts` — reads `Host` header at middleware entry; if it ends with `.<NEXT_PUBLIC_SMB_DOMAIN>`, extracts the slug and rewrites to `/intake/{slug}`. Configure a Vercel wildcard domain (`*.intake.yourdomain.com`) and set `NEXT_PUBLIC_SMB_DOMAIN=intake.yourdomain.com` to activate.
 
-### Lead Notification — Email or WhatsApp Business
-**What:** Notify the business owner when a lead is captured via intake. Two options: (A) email via Resend (already wired in the app), or (B) WhatsApp Business API message.
-**Why:** Immediate notification is the demo "wow factor" — owner sees the lead arrive in real time. Resend is zero-infra since it's already integrated. WhatsApp Business is more personal and harder to miss than email for SMBs in markets where WhatsApp is primary.
-**How to apply:**
-- Email: `resend.emails.send()` call in `/api/intake/[slug]/chat` route when `complete === true` + `owner_email` in ClientConfig. ~30 min.
-- WhatsApp: Meta Cloud API (`https://graph.facebook.com/v18.0/{phone_number_id}/messages`) + `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` env vars + `owner_whatsapp` in ClientConfig. ~2 hrs.
-**Effort:** S — Email (CC ~30 min) / WhatsApp (CC ~2 hrs)
-**Depends on:** First SMB client confirmed and requesting notifications
+### ~~Lead Notification — Email~~ ✅ Done (2026-05-16)
+Email notification via Resend wired in both `/api/intake/[slug]/chat` and `/api/intake/[slug]/form`. Sends to `owner_email` from `clients` table (falls back to `EMAIL_FROM`). WhatsApp option deferred until a client specifically requests it.
 
 ---
 

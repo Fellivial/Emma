@@ -100,6 +100,9 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | LemonSqueezy variant ID for the Starter plan ($29/mo) |
 | `NEXT_PUBLIC_LEMON_VARIANT_PRO` | LemonSqueezy variant ID for the Pro plan ($79/mo) |
 | `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | LemonSqueezy variant ID for the $9 Extra Response Pack |
+| `NEXT_PUBLIC_SMB_DOMAIN` | Subdomain routing — e.g. `intake.yourdomain.com` → `{slug}.intake.yourdomain.com` maps to `/intake/{slug}` |
+| `GOOGLE_SHEETS_SA_KEY` | JSON blob of a GCP service account for Google Sheets lead appending (`client_email` + `private_key`) |
+| `HUBSPOT_API_KEY` | HubSpot private app token for deal/contact sync (Portal Settings → Integrations → Private Apps) |
 
 ## Database Setup
 

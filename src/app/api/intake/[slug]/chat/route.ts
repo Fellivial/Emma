@@ -6,6 +6,7 @@ import { checkUsage, recordUsage } from "@/core/usage-enforcer";
 import { loadClientConfigOrNull } from "@/core/client-config";
 import { Resend } from "resend";
 import { syncLeadToHubSpot } from "@/lib/hubspot";
+import { appendLeadToSheet } from "@/lib/sheets";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,10 @@ export async function POST(
         leadSaved = true;
         // ── HubSpot deal sync (non-fatal) ────────────────────────────────
         syncLeadToHubSpot(supabase, config.id, { name, contact, notes }).catch(() => {});
+        // ── Google Sheets append (non-fatal) ─────────────────────────────
+        if (config.sheetsId) {
+          appendLeadToSheet(config.sheetsId, { name, contact, notes }).catch(() => {});
+        }
         // ── Resend notification to business owner ────────────────────────
         const resendKey = process.env.RESEND_API_KEY;
         const fromEmail = process.env.EMAIL_FROM ?? "noreply@example.com";
@@ -214,7 +219,7 @@ export async function POST(
             const resend = new Resend(resendKey);
             await resend.emails.send({
               from: fromEmail,
-              to: fromEmail, // owner_email column to be added in admin-lead-view TODO
+              to: config.ownerEmail ?? fromEmail,
               subject: `New lead — ${config.name}`,
               text: [
                 `New intake lead for ${config.name}`,
