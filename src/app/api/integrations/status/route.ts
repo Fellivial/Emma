@@ -9,7 +9,7 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-const ALL_SERVICES = ["elevenlabs", "gmail", "google_calendar", "hubspot", "slack", "notion"];
+const ALL_SERVICES = ["elevenlabs", "gmail", "google_calendar", "google_drive", "hubspot", "slack", "notion"];
 
 export async function GET() {
   try {

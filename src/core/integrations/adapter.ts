@@ -13,7 +13,7 @@ import { encrypt, decrypt } from "@/core/security/encryption";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type IntegrationService = "gmail" | "google_calendar" | "slack" | "notion" | "hubspot";
+export type IntegrationService = "gmail" | "google_calendar" | "google_drive" | "slack" | "notion" | "hubspot";
 
 export interface IntegrationAdapter {
   service: IntegrationService;
