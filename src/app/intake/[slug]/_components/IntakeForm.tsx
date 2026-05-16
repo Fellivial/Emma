@@ -337,9 +337,7 @@ export default function IntakeForm({ slug, steps }: { slug: string; steps: FormS
                       flex: 1,
                       borderRadius: 4,
                       background:
-                        i <= currentStep
-                          ? "var(--l-accent, #e8547a)"
-                          : "rgba(255,255,255,0.12)",
+                        i <= currentStep ? "var(--l-accent, #e8547a)" : "rgba(255,255,255,0.12)",
                       transition: "background 0.2s",
                     }}
                   />
