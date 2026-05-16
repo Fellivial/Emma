@@ -179,7 +179,10 @@ export default function WaitlistPage() {
                   the spots?"
                 </p>
                 <h1 className="text-xl font-light text-emma-200/80 mb-1">
-                  {spots.totalSpots} spots. No exceptions.
+                  {spots.spotsRemaining === 1
+                    ? "1 spot left."
+                    : `${spots.spotsRemaining} spots left.`}{" "}
+                  No exceptions.
                 </h1>
                 <p className="text-xs font-light text-emma-200/25 leading-relaxed">
                   Emma is an AI agent that sees, speaks, remembers, and acts — built for one
@@ -272,21 +275,11 @@ export default function WaitlistPage() {
 
               {/* ── Pricing note ────────────────────────────────────── */}
               <div className="flex items-center justify-center gap-4 mt-5 pt-4 border-t border-surface-border">
-                <span className="text-[10px] text-emma-200/15">Starter $30/mo</span>
+                <span className="text-[10px] text-emma-200/15">Starter $29/mo</span>
                 <span className="text-[10px] text-emma-200/20">·</span>
                 <span className="text-[10px] text-emma-200/15">Pro $79/mo</span>
                 <span className="text-[10px] text-emma-200/20">·</span>
                 <span className="text-[10px] text-emma-200/15">Spots are plan-agnostic</span>
-              </div>
-            </div>
-
-            {/* ── Demo video placeholder ────────────────────────────── */}
-            <div className="mt-6 rounded-2xl border border-surface-border bg-black/30 aspect-video flex items-center justify-center overflow-hidden">
-              <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-emma-300/10 border border-emma-300/20 flex items-center justify-center mx-auto mb-2">
-                  <div className="w-0 h-0 border-t-6 border-b-6 border-l-10 border-transparent border-l-emma-300 ml-0.5" />
-                </div>
-                <p className="text-[10px] text-emma-200/15">2-minute demo</p>
               </div>
             </div>
           </>

@@ -82,6 +82,8 @@ export default function AdminPage() {
   const [capInput, setCapInput] = useState("");
   const [inviting, setInviting] = useState<string | null>(null);
   const [wlLoading, setWlLoading] = useState(false);
+  const [capSaving, setCapSaving] = useState(false);
+  const [capSaved, setCapSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin")
@@ -144,12 +146,16 @@ export default function AdminPage() {
   async function saveCap() {
     const n = parseInt(capInput, 10);
     if (!n || n < 1) return;
+    setCapSaving(true);
     await fetch("/api/emma/waitlist-manage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "set_cap", maxUsers: n }),
     });
     await fetchWaitlist();
+    setCapSaving(false);
+    setCapSaved(true);
+    setTimeout(() => setCapSaved(false), 1500);
   }
 
   if (error) {
@@ -206,13 +212,32 @@ export default function AdminPage() {
       ) : activeTab === "waitlist" ? (
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* ── Waitlist Stats ────────────────────────────────────────────── */}
-          <div className="grid grid-cols-5 gap-3 mb-6">
-            <MetricCard icon={<Users size={14} />} label="Waiting" value={String(wlStats?.waiting ?? "—")} />
-            <MetricCard icon={<Zap size={14} />} label="Invited" value={String(wlStats?.invited ?? "—")} />
-            <MetricCard icon={<Users size={14} />} label="Active Users" value={String(wlStats?.activeUsers ?? "—")} highlight />
-            <MetricCard icon={<TrendingUp size={14} />} label="Spots Left" value={String(wlStats?.spotsRemaining ?? "—")} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
+            <MetricCard
+              icon={<Users size={14} />}
+              label="Waiting"
+              value={String(wlStats?.waiting ?? "—")}
+            />
+            <MetricCard
+              icon={<Zap size={14} />}
+              label="Invited"
+              value={String(wlStats?.invited ?? "—")}
+            />
+            <MetricCard
+              icon={<Users size={14} />}
+              label="Active Users"
+              value={String(wlStats?.activeUsers ?? "—")}
+              highlight
+            />
+            <MetricCard
+              icon={<TrendingUp size={14} />}
+              label="Spots Left"
+              value={String(wlStats?.spotsRemaining ?? "—")}
+            />
             <div className="rounded-xl border border-surface-border bg-surface p-4">
-              <div className="text-emma-200/20 mb-1.5"><Database size={14} /></div>
+              <div className="text-emma-200/20 mb-1.5">
+                <Database size={14} />
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="number"
@@ -223,9 +248,10 @@ export default function AdminPage() {
                 />
                 <button
                   onClick={saveCap}
-                  className="text-[10px] px-2 py-1 rounded bg-emma-300/10 text-emma-300/60 hover:bg-emma-300/20 transition-colors"
+                  disabled={capSaving}
+                  className="text-[10px] px-2 py-1 rounded bg-emma-300/10 text-emma-300/60 hover:bg-emma-300/20 transition-colors disabled:opacity-40"
                 >
-                  Set
+                  {capSaving ? "Saving…" : capSaved ? "Saved ✓" : "Set"}
                 </button>
               </div>
               <div className="text-[10px] text-emma-200/20 mt-0.5">Seat cap</div>
@@ -250,7 +276,10 @@ export default function AdminPage() {
                 <tbody>
                   {waitlist.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-[11px] text-emma-200/20">
+                      <td
+                        colSpan={5}
+                        className="px-4 py-8 text-center text-[11px] text-emma-200/20"
+                      >
                         No waitlist entries yet
                       </td>
                     </tr>
@@ -261,8 +290,12 @@ export default function AdminPage() {
                         className="border-b border-surface-border/50 hover:bg-surface/50 transition-colors"
                       >
                         <td className="px-4 py-3 text-emma-200/60">{entry.name || "—"}</td>
-                        <td className="px-4 py-3 text-emma-200/40 font-mono text-[11px]">{entry.email}</td>
-                        <td className="px-4 py-3"><WaitlistBadge status={entry.status} /></td>
+                        <td className="px-4 py-3 text-emma-200/40 font-mono text-[11px]">
+                          {entry.email}
+                        </td>
+                        <td className="px-4 py-3">
+                          <WaitlistBadge status={entry.status} />
+                        </td>
                         <td className="px-4 py-3 text-right text-emma-200/25">
                           {new Date(entry.created_at).toLocaleDateString()}
                         </td>
@@ -288,7 +321,7 @@ export default function AdminPage() {
       ) : (
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* ── Row 1: Core Metrics ──────────────────────────────────────── */}
-          <div className="grid grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
             <MetricCard
               icon={<DollarSign size={14} />}
               label="MRR"
@@ -512,35 +545,6 @@ function MetricCard({
   );
 }
 
-function FunnelRow({
-  label,
-  value,
-  pct,
-  color,
-}: {
-  label: string;
-  value: number;
-  pct: number;
-  color?: string;
-}) {
-  return (
-    <div>
-      <div className="flex justify-between text-[11px] mb-1">
-        <span className="text-emma-200/40">{label}</span>
-        <span className="text-emma-200/30">
-          {value} ({pct}%)
-        </span>
-      </div>
-      <div className="h-2 rounded-full bg-emma-200/5 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${color === "emerald" ? "bg-emerald-400/50" : "bg-emma-300/30"}`}
-          style={{ width: `${Math.max(2, pct)}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
     <div>
@@ -586,7 +590,9 @@ function WaitlistBadge({ status }: { status: string }) {
     converted: "bg-emerald-400/10 text-emerald-300/70 border-emerald-400/20",
   };
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.waiting}`}>
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.waiting}`}
+    >
       {status}
     </span>
   );

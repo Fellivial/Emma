@@ -12,7 +12,6 @@ import type {
 } from "@/lib/types/landing";
 
 export const NAV_LINKS: NavLink[] = [
-  { label: "Product", href: "#capabilities" },
   { label: "Capabilities", href: "#capabilities" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },

@@ -32,7 +32,7 @@ const VIBE_OPTIONS = [
 const PLAN_BADGE: Record<string, string> = {
   starter: "Starter",
   pro: "Pro",
-  scale: "Scale",
+  enterprise: "Enterprise",
 };
 
 export default function OnboardingPage() {
@@ -72,6 +72,15 @@ export default function OnboardingPage() {
 
   const STEPS: Step[] = ["intro", "name", "vibe", "vertical", "intake", "confirm"];
   const stepIndex = STEPS.indexOf(step);
+
+  const STEP_LABELS: Record<Step, string> = {
+    intro: "Intro",
+    name: "Your name",
+    vibe: "Your vibe",
+    vertical: "Use case",
+    intake: "Quick questions",
+    confirm: "All set",
+  };
 
   const setAnswer = (id: string, value: string | string[]) => {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -175,7 +184,14 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emma-950 via-emma-900 to-emma-950 font-sans px-4">
       <div className="w-full max-w-lg">
         {/* Progress */}
-        <div className="flex gap-1.5 mb-8 px-8">
+        <div
+          role="progressbar"
+          aria-valuenow={stepIndex + 1}
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+          aria-label={`Step ${stepIndex + 1} of ${STEPS.length} — ${STEP_LABELS[step]}`}
+          className="flex gap-1.5 px-8"
+        >
           {STEPS.map((s, i) => (
             <div
               key={s}
@@ -185,6 +201,9 @@ export default function OnboardingPage() {
             />
           ))}
         </div>
+        <p className="text-[10px] text-emma-200/25 text-center mt-2 mb-6 uppercase tracking-widest">
+          Step {stepIndex + 1} of {STEPS.length} — {STEP_LABELS[step]}
+        </p>
 
         <div className="rounded-2xl border border-surface-border bg-emma-950/60 backdrop-blur-xl p-8">
           {/* ── intro ───────────────────────────────────────────── */}
@@ -387,7 +406,6 @@ export default function OnboardingPage() {
           {/* ── confirm ─────────────────────────────────────────── */}
           {step === "confirm" && selectedVertical && (
             <div className="animate-fade-in">
-              <div className="text-4xl mb-4 text-center">😏</div>
               <h2 className="text-lg font-medium text-emma-200/80 mb-2 text-center">
                 Perfect, {name || "baby"}.
               </h2>

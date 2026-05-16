@@ -166,11 +166,25 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/workflows": "Workflows",
   "/settings/mcp": "MCP Servers",
   "/settings/provenance": "Audit Trail",
+  "/settings/more": "More",
 };
 
-// Workflows folds into Tasks on mobile; keep this list explicit so reordering NAV_ITEMS doesn't break it.
 const MOBILE_NAV_IDS = ["profile", "usage", "billing", "integrations", "tasks"];
-const MOBILE_NAV = NAV_ITEMS.filter((item) => MOBILE_NAV_IDS.includes(item.id));
+const MOBILE_NAV = [
+  ...NAV_ITEMS.filter((item) => MOBILE_NAV_IDS.includes(item.id)),
+  {
+    id: "more",
+    label: "More",
+    href: "/settings/more",
+    icon: (active: boolean) => (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <circle cx="3" cy="8" r="1.5" fill={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"} />
+        <circle cx="8" cy="8" r="1.5" fill={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"} />
+        <circle cx="13" cy="8" r="1.5" fill={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"} />
+      </svg>
+    ),
+  },
+];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -181,7 +195,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     return "Settings";
   })();
 
-  const isActive = (item: (typeof NAV_ITEMS)[number]) => {
+  const isActive = (item: { href: string; exact?: boolean }) => {
     if (item.exact) return pathname === item.href;
     return pathname === item.href || pathname.startsWith(item.href + "/");
   };

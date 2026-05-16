@@ -3,11 +3,15 @@
 import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+// Intentional unified entry point — no "sign up" vs "sign in" distinction.
+// Invited waitlist users and returning users both land here.
+// Auth callback converts invited waitlist users on first sign-in (see /auth/callback/route.ts).
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
 
   // Lazy init — won't crash during SSR/build
   const supabase = useMemo(() => createClient(), []);
@@ -16,13 +20,17 @@ export default function LoginPage() {
     typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : "";
 
   const signInWithOAuth = async (provider: "google" | "github") => {
-    if (!supabase) return;
+    if (!supabase || oauthLoading) return;
     setError(null);
+    setOauthLoading(provider);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: redirectUrl },
     });
-    if (error) setError(error.message);
+    if (error) {
+      setError(error.message);
+      setOauthLoading(null);
+    }
   };
 
   const signInWithEmail = async () => {
@@ -72,15 +80,27 @@ export default function LoginPage() {
               <div className="flex flex-col gap-2 mb-4">
                 <button
                   onClick={() => signInWithOAuth("google")}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer"
+                  disabled={!!oauthLoading}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <GoogleIcon /> Continue with Google
+                  {oauthLoading === "google" ? (
+                    <span className="w-4 h-4 rounded-full border-2 border-emma-300/30 border-t-emma-300 animate-spin" />
+                  ) : (
+                    <GoogleIcon />
+                  )}
+                  {oauthLoading === "google" ? "Connecting…" : "Continue with Google"}
                 </button>
                 <button
                   onClick={() => signInWithOAuth("github")}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer"
+                  disabled={!!oauthLoading}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <GithubIcon /> Continue with GitHub
+                  {oauthLoading === "github" ? (
+                    <span className="w-4 h-4 rounded-full border-2 border-emma-300/30 border-t-emma-300 animate-spin" />
+                  ) : (
+                    <GithubIcon />
+                  )}
+                  {oauthLoading === "github" ? "Connecting…" : "Continue with GitHub"}
                 </button>
               </div>
               <div className="flex items-center gap-3 my-4">
@@ -89,14 +109,23 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-surface-border" />
               </div>
               <div className="flex flex-col gap-2">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && signInWithEmail()}
-                  placeholder="your@email.com"
-                  className="bg-surface border border-surface-border rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
-                />
+                <div>
+                  <label
+                    htmlFor="login-email"
+                    className="text-[10px] text-emma-200/25 uppercase tracking-widest block mb-1"
+                  >
+                    Email
+                  </label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && signInWithEmail()}
+                    placeholder="your@email.com"
+                    className="w-full bg-surface border border-surface-border rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
+                  />
+                </div>
                 <button
                   onClick={signInWithEmail}
                   disabled={!email.trim() || loading}

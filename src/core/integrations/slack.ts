@@ -74,7 +74,12 @@ export class SlackAdapter implements IntegrationAdapter {
   }
 
   async uploadFile(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
-    const { channel, filename, content, mime_type = "text/plain" } = params as {
+    const {
+      channel,
+      filename,
+      content,
+      mime_type = "text/plain",
+    } = params as {
       channel: string;
       filename: string;
       content: string;

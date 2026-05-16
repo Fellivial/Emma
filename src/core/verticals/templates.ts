@@ -48,7 +48,7 @@ export interface VerticalConfig {
   memoryFocusAreas: string[]; // What Emma should pay attention to
 
   // Pricing suggestion
-  suggestedPlan: "starter" | "pro" | "scale";
+  suggestedPlan: "starter" | "pro" | "enterprise";
 }
 
 // ─── Base Template (shared across all verticals) ─────────────────────────────
@@ -350,7 +350,7 @@ registerVertical({
   name: "Legal / Law Firm",
   description: "Client intake, document management, appointment scheduling, case tracking",
   icon: "⚖️",
-  suggestedPlan: "scale",
+  suggestedPlan: "enterprise",
 
   personaName: "Emma",
   personaPrompt: `${BASE_PERSONA_PROMPT}

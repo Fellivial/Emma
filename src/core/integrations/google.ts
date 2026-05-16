@@ -219,7 +219,12 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
   }
 
   async uploadFile(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
-    const { filename, content, mime_type = "text/plain", folder_id } = params as {
+    const {
+      filename,
+      content,
+      mime_type = "text/plain",
+      folder_id,
+    } = params as {
       filename: string;
       content: string;
       mime_type?: string;
@@ -275,7 +280,11 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
   }
 
   async listFiles(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
-    const { query, page_size = 20, folder_id } = params as {
+    const {
+      query,
+      page_size = 20,
+      folder_id,
+    } = params as {
       query?: string;
       page_size?: number;
       folder_id?: string;
