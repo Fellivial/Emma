@@ -550,6 +550,211 @@ registerTool({
   },
 });
 
+// Tool: drive_upload_file — Upload a file to Google Drive (moderate)
+registerTool({
+  name: "drive_upload_file",
+  description: "Upload a text file to Google Drive. Requires Google Drive integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: { type: "string", description: "Name for the file (including extension)" },
+      content: { type: "string", description: "File text content" },
+      mime_type: {
+        type: "string",
+        description: "MIME type (default: text/plain, e.g. text/markdown, application/json)",
+      },
+      folder_id: {
+        type: "string",
+        description: "Google Drive folder ID to upload into (optional, defaults to root)",
+      },
+    },
+    required: ["filename", "content"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { GoogleDriveAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleDriveAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Google Drive not connected. Go to Settings → Integrations to connect Google Drive.",
+        };
+      }
+      return adapter.uploadFile(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Drive auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Drive upload failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: drive_list_files — List files in Google Drive (safe)
+registerTool({
+  name: "drive_list_files",
+  description:
+    "List files in Google Drive. Optionally filter by name or folder. Requires Google Drive integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Search by filename (optional)" },
+      folder_id: { type: "string", description: "List files in a specific folder ID (optional)" },
+      page_size: { type: "number", description: "Max results to return (default 20)" },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { GoogleDriveAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleDriveAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Google Drive not connected. Go to Settings → Integrations to connect Google Drive.",
+        };
+      }
+      return adapter.listFiles(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Drive auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Drive list failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: drive_read_file — Read file content from Google Drive (safe)
+registerTool({
+  name: "drive_read_file",
+  description:
+    "Read the text content of a file from Google Drive by file ID. Requires Google Drive integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      file_id: {
+        type: "string",
+        description: "Google Drive file ID (from drive_list_files results)",
+      },
+    },
+    required: ["file_id"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { GoogleDriveAdapter } = await import("@/core/integrations/google");
+      const adapter = new GoogleDriveAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Google Drive not connected. Go to Settings → Integrations to connect Google Drive.",
+        };
+      }
+      return adapter.readFile(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Google Drive auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Drive read failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: slack_list_channels — List Slack channels (safe)
+registerTool({
+  name: "slack_list_channels",
+  description: "List public Slack channels in the connected workspace. Requires Slack integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Max channels to return (default 100, max 200)" },
+    },
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { SlackAdapter } = await import("@/core/integrations/slack");
+      const adapter = new SlackAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
+        };
+      }
+      return adapter.listChannels(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Slack auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Slack list channels failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: slack_upload_file — Upload a file to a Slack channel (moderate)
+registerTool({
+  name: "slack_upload_file",
+  description: "Upload a text file to a Slack channel. Requires Slack integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel: { type: "string", description: "Slack channel ID or name (e.g. #general)" },
+      filename: { type: "string", description: "Filename to display in Slack" },
+      content: { type: "string", description: "File text content" },
+      mime_type: {
+        type: "string",
+        description: "MIME type (default: text/plain)",
+      },
+    },
+    required: ["channel", "filename", "content"],
+  },
+  riskLevel: "moderate",
+  handler: async (input, context) => {
+    try {
+      const { SlackAdapter } = await import("@/core/integrations/slack");
+      const adapter = new SlackAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Slack integration not connected. Go to Settings → Integrations to connect Slack.",
+        };
+      }
+      return adapter.uploadFile(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Slack auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Slack upload failed: ${err.message}` };
+    }
+  },
+});
+
 // Tool: notion_create_page — Create a Notion page (moderate)
 registerTool({
   name: "notion_create_page",
@@ -584,6 +789,44 @@ registerTool({
         };
       }
       return { success: false, output: `Notion create page failed: ${err.message}` };
+    }
+  },
+});
+
+// Tool: notion_search_pages — Search Notion pages (safe)
+registerTool({
+  name: "notion_search_pages",
+  description: "Search for pages in Notion by keyword. Requires Notion integration.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Search query to find matching Notion pages" },
+      page_size: { type: "number", description: "Number of results to return (default 10)" },
+    },
+    required: ["query"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    try {
+      const { NotionAdapter } = await import("@/core/integrations/notion");
+      const adapter = new NotionAdapter();
+      const isConfigured = await adapter.validate(context.clientId || "");
+      if (!isConfigured) {
+        return {
+          success: false,
+          output:
+            "Notion integration not connected. Go to Settings → Integrations to connect Notion.",
+        };
+      }
+      return adapter.searchPages(context.clientId || "", input);
+    } catch (err: any) {
+      if (err.name === "IntegrationAuthExpiredError") {
+        return {
+          success: false,
+          output: "Notion auth expired. Go to Settings → Integrations to reconnect.",
+        };
+      }
+      return { success: false, output: `Notion search failed: ${err.message}` };
     }
   },
 });

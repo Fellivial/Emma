@@ -84,6 +84,66 @@ export class NotionAdapter implements IntegrationAdapter {
     }
   }
 
+  async searchPages(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { query, page_size = 10 } = params as { query: string; page_size?: number };
+
+    try {
+      const { accessToken } = await getIntegrationTokens(clientId, "notion");
+
+      const res = await fetch("https://api.notion.com/v1/search", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28",
+        },
+        body: JSON.stringify({
+          query,
+          filter: { value: "page", property: "object" },
+          page_size,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "notion", new Error(errText));
+        return { success: false, output: `Notion API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const pages: any[] = data.results || [];
+
+      if (pages.length === 0) {
+        return {
+          success: true,
+          output: `No Notion pages found for "${query}".`,
+          data: { pages: [] },
+        };
+      }
+
+      const formatted = pages
+        .map((p) => {
+          const titleProp = Object.values(p.properties || {}).find(
+            (prop: any) => prop.type === "title"
+          ) as any;
+          const title =
+            titleProp?.title?.[0]?.plain_text || p.url?.split("/").pop() || "(untitled)";
+          return `${title} — ${p.url}`;
+        })
+        .join("\n");
+
+      await markIntegrationUsed(clientId, "notion");
+      return {
+        success: true,
+        output: `Found ${pages.length} pages:\n${formatted}`,
+        data: { count: pages.length, pages: pages.map((p) => ({ id: p.id, url: p.url })) },
+      };
+    } catch (err: any) {
+      await markIntegrationError(clientId, "notion", err);
+      return { success: false, output: `Notion search failed: ${err.message}` };
+    }
+  }
+
   async updatePage(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
     const { page_id, title, content } = params as {
       page_id: string;

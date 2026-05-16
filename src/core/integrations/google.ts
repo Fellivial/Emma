@@ -11,7 +11,6 @@ import {
   type IntegrationAdapter,
   type IntegrationService,
   type AdapterResult,
-  IntegrationNotConfiguredError,
   IntegrationAuthExpiredError,
   getIntegrationTokens,
   markIntegrationUsed,
@@ -194,6 +193,162 @@ export class GmailAdapter implements IntegrationAdapter {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "gmail", err);
       return { success: false, output: `Email failed: ${err.message}` };
+    }
+  }
+}
+
+// ─── Google Drive Adapter ────────────────────────────────────────────────────
+
+export class GoogleDriveAdapter implements IntegrationAdapter {
+  service: IntegrationService = "google_drive";
+
+  async validate(clientId: string): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+    const { data } = await supabase
+      .from("client_integrations")
+      .select("status")
+      .eq("client_id", clientId)
+      .eq("service", "google_drive")
+      .single();
+    return data?.status === "connected";
+  }
+
+  async send(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    return this.uploadFile(clientId, params);
+  }
+
+  async uploadFile(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { filename, content, mime_type = "text/plain", folder_id } = params as {
+      filename: string;
+      content: string;
+      mime_type?: string;
+      folder_id?: string;
+    };
+
+    try {
+      const metadata: Record<string, unknown> = { name: filename };
+      if (folder_id) metadata.parents = [folder_id];
+
+      const boundary = "emma_drive_upload";
+      const body = [
+        `--${boundary}`,
+        "Content-Type: application/json; charset=UTF-8",
+        "",
+        JSON.stringify(metadata),
+        `--${boundary}`,
+        `Content-Type: ${mime_type}`,
+        "",
+        content,
+        `--${boundary}--`,
+      ].join("\r\n");
+
+      const res = await googleFetch(
+        clientId,
+        "google_drive",
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        {
+          method: "POST",
+          headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+          body,
+        }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "google_drive", new Error(errText));
+        return { success: false, output: `Drive API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      await markIntegrationUsed(clientId, "google_drive");
+      return {
+        success: true,
+        output: `File "${filename}" uploaded to Google Drive`,
+        data: { fileId: data.id, name: data.name, mimeType: data.mimeType },
+      };
+    } catch (err: any) {
+      if (err instanceof IntegrationAuthExpiredError) throw err;
+      await markIntegrationError(clientId, "google_drive", err);
+      return { success: false, output: `Drive upload failed: ${err.message}` };
+    }
+  }
+
+  async listFiles(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { query, page_size = 20, folder_id } = params as {
+      query?: string;
+      page_size?: number;
+      folder_id?: string;
+    };
+
+    try {
+      const url = new URL("https://www.googleapis.com/drive/v3/files");
+      url.searchParams.set("pageSize", String(page_size));
+      url.searchParams.set("fields", "files(id,name,mimeType,modifiedTime,size)");
+
+      const parts: string[] = ["trashed = false"];
+      if (query) parts.push(`name contains '${query.replace(/'/g, "\\'")}'`);
+      if (folder_id) parts.push(`'${folder_id}' in parents`);
+      url.searchParams.set("q", parts.join(" and "));
+
+      const res = await googleFetch(clientId, "google_drive", url.toString(), { method: "GET" });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "google_drive", new Error(errText));
+        return { success: false, output: `Drive API error: ${res.status}` };
+      }
+
+      const data = await res.json();
+      const files: any[] = data.files || [];
+
+      if (files.length === 0) {
+        return { success: true, output: "No files found.", data: { files: [] } };
+      }
+
+      const formatted = files.map((f) => `${f.name} (${f.mimeType}) — ID: ${f.id}`).join("\n");
+
+      await markIntegrationUsed(clientId, "google_drive");
+      return {
+        success: true,
+        output: `Found ${files.length} files:\n${formatted}`,
+        data: { count: files.length, files },
+      };
+    } catch (err: any) {
+      if (err instanceof IntegrationAuthExpiredError) throw err;
+      await markIntegrationError(clientId, "google_drive", err);
+      return { success: false, output: `Drive list failed: ${err.message}` };
+    }
+  }
+
+  async readFile(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { file_id } = params as { file_id: string };
+
+    try {
+      const res = await googleFetch(
+        clientId,
+        "google_drive",
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file_id)}?alt=media`,
+        { method: "GET" }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "google_drive", new Error(errText));
+        return { success: false, output: `Drive API error: ${res.status}` };
+      }
+
+      const content = await res.text();
+      await markIntegrationUsed(clientId, "google_drive");
+      return {
+        success: true,
+        output: content.slice(0, 10_000),
+        data: { fileId: file_id, truncated: content.length > 10_000 },
+      };
+    } catch (err: any) {
+      if (err instanceof IntegrationAuthExpiredError) throw err;
+      await markIntegrationError(clientId, "google_drive", err);
+      return { success: false, output: `Drive read failed: ${err.message}` };
     }
   }
 }

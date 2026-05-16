@@ -60,6 +60,27 @@ Email notification via Resend wired in both `/api/intake/[slug]/chat` and `/api/
 
 ---
 
+## Integration Implementation Gaps
+
+Found via audit on 2026-05-16. The connectors directory UI declares these tools but the backend doesn't implement them yet.
+
+### ~~Google Drive — Adapter + Tools Missing~~ ✅ Done (2026-05-16)
+`GoogleDriveAdapter` added to `src/core/integrations/google.ts` with `uploadFile`, `listFiles`, `readFile`. Tools `drive_upload_file`, `drive_list_files`, `drive_read_file` registered in `tool-registry.ts`.
+
+### ~~Notion — `search_pages` Missing~~ ✅ Done (2026-05-16)
+`searchPages()` added to `NotionAdapter`. Tool `notion_search_pages` registered in `tool-registry.ts`.
+
+### ~~Slack — `upload_file` and `list_channels` Missing~~ ✅ Done (2026-05-16)
+`uploadFile()` and `listChannels()` added to `SlackAdapter`. Tools `slack_upload_file` and `slack_list_channels` registered in `tool-registry.ts`.
+
+### ElevenLabs — `speak_text` Not a Registered Tool
+**What:** ElevenLabs is BYOK for TTS voice only. `speak_text` is not registered in `tool-registry.ts` as an agentic tool Emma can call autonomously.
+**Impact:** Emma can use ElevenLabs for her own voice but can't call it as a tool in response to user requests.
+**Files:** `src/core/tool-registry.ts`, possibly a new `src/core/integrations/elevenlabs.ts`
+**Note:** Low priority — the voice use-case is the primary one; agentic TTS is speculative.
+
+---
+
 ## Known TODOs in Code
 
 - `src/app/api/emma/referral/route.ts` — ~~Extend referrer subscription by 1 month~~ → **20% discount code via LemonSqueezy + Resend notification** ✅ Done (2026-05-16)
