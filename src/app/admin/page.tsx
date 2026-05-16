@@ -46,6 +46,23 @@ interface Channel {
   signups: number;
 }
 
+interface WaitlistEntry {
+  id: string;
+  email: string;
+  name: string;
+  status: "waiting" | "invited" | "converted";
+  created_at: string;
+  invited_at?: string;
+}
+
+interface WaitlistStats {
+  maxSpots: number;
+  activeUsers: number;
+  spotsRemaining: number;
+  waiting: number;
+  invited: number;
+}
+
 export default function AdminPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -59,6 +76,12 @@ export default function AdminPage() {
   const [planDist, setPlanDist] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"clients" | "waitlist">("clients");
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
+  const [wlStats, setWlStats] = useState<WaitlistStats | null>(null);
+  const [capInput, setCapInput] = useState("");
+  const [inviting, setInviting] = useState<string | null>(null);
+  const [wlLoading, setWlLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin")
@@ -78,6 +101,56 @@ export default function AdminPage() {
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
+
+  async function fetchWaitlist() {
+    setWlLoading(true);
+    try {
+      const [listRes, statsRes] = await Promise.all([
+        fetch("/api/emma/waitlist-manage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list" }),
+        }),
+        fetch("/api/emma/waitlist-manage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "stats" }),
+        }),
+      ]);
+      const { entries } = await listRes.json();
+      const stats = await statsRes.json();
+      setWaitlist(entries || []);
+      setWlStats(stats);
+      setCapInput((prev) => prev || String(stats.maxSpots ?? ""));
+    } finally {
+      setWlLoading(false);
+    }
+  }
+
+  async function inviteUser(id: string) {
+    setInviting(id);
+    try {
+      await fetch("/api/emma/waitlist-manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invite", waitlistId: id }),
+      });
+      await fetchWaitlist();
+    } finally {
+      setInviting(null);
+    }
+  }
+
+  async function saveCap() {
+    const n = parseInt(capInput, 10);
+    if (!n || n < 1) return;
+    await fetch("/api/emma/waitlist-manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_cap", maxUsers: n }),
+    });
+    await fetchWaitlist();
+  }
 
   if (error) {
     return (
@@ -107,8 +180,111 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {loading ? (
+      <div className="border-b border-surface-border bg-emma-950/60">
+        <div className="max-w-7xl mx-auto px-6 flex">
+          {(["clients", "waitlist"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                if (tab === "waitlist") fetchWaitlist();
+              }}
+              className={`px-4 py-2.5 text-xs capitalize transition-colors border-b-2 -mb-px ${
+                activeTab === tab
+                  ? "border-emma-300/50 text-emma-300/80"
+                  : "border-transparent text-emma-200/30 hover:text-emma-200/60"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "clients" && loading ? (
         <div className="text-center text-sm text-emma-200/20 py-20">Loading dashboard…</div>
+      ) : activeTab === "waitlist" ? (
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* ── Waitlist Stats ────────────────────────────────────────────── */}
+          <div className="grid grid-cols-5 gap-3 mb-6">
+            <MetricCard icon={<Users size={14} />} label="Waiting" value={String(wlStats?.waiting ?? "—")} />
+            <MetricCard icon={<Zap size={14} />} label="Invited" value={String(wlStats?.invited ?? "—")} />
+            <MetricCard icon={<Users size={14} />} label="Active Users" value={String(wlStats?.activeUsers ?? "—")} highlight />
+            <MetricCard icon={<TrendingUp size={14} />} label="Spots Left" value={String(wlStats?.spotsRemaining ?? "—")} />
+            <div className="rounded-xl border border-surface-border bg-surface p-4">
+              <div className="text-emma-200/20 mb-1.5"><Database size={14} /></div>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="number"
+                  min={1}
+                  value={capInput}
+                  onChange={(e) => setCapInput(e.target.value)}
+                  className="w-16 bg-emma-950 border border-surface-border rounded px-2 py-1 text-xs text-emma-200/60 focus:outline-none focus:border-emma-300/30"
+                />
+                <button
+                  onClick={saveCap}
+                  className="text-[10px] px-2 py-1 rounded bg-emma-300/10 text-emma-300/60 hover:bg-emma-300/20 transition-colors"
+                >
+                  Set
+                </button>
+              </div>
+              <div className="text-[10px] text-emma-200/20 mt-0.5">Seat cap</div>
+            </div>
+          </div>
+
+          {/* ── Waitlist Table ────────────────────────────────────────────── */}
+          {wlLoading ? (
+            <div className="text-center text-sm text-emma-200/20 py-12">Loading waitlist…</div>
+          ) : (
+            <div className="rounded-xl border border-surface-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-surface-border bg-surface">
+                    <th className="text-left px-4 py-3 font-medium text-emma-200/30">Name</th>
+                    <th className="text-left px-4 py-3 font-medium text-emma-200/30">Email</th>
+                    <th className="text-left px-4 py-3 font-medium text-emma-200/30">Status</th>
+                    <th className="text-right px-4 py-3 font-medium text-emma-200/30">Joined</th>
+                    <th className="text-right px-4 py-3 font-medium text-emma-200/30">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waitlist.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-[11px] text-emma-200/20">
+                        No waitlist entries yet
+                      </td>
+                    </tr>
+                  ) : (
+                    waitlist.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className="border-b border-surface-border/50 hover:bg-surface/50 transition-colors"
+                      >
+                        <td className="px-4 py-3 text-emma-200/60">{entry.name || "—"}</td>
+                        <td className="px-4 py-3 text-emma-200/40 font-mono text-[11px]">{entry.email}</td>
+                        <td className="px-4 py-3"><WaitlistBadge status={entry.status} /></td>
+                        <td className="px-4 py-3 text-right text-emma-200/25">
+                          {new Date(entry.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {entry.status === "waiting" && (
+                            <button
+                              onClick={() => inviteUser(entry.id)}
+                              disabled={inviting === entry.id}
+                              className="text-[10px] px-3 py-1 rounded-full bg-emma-300/10 text-emma-300/60 hover:bg-emma-300/20 disabled:opacity-40 transition-colors"
+                            >
+                              {inviting === entry.id ? "Inviting…" : "Invite"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* ── Row 1: Core Metrics ──────────────────────────────────────── */}
@@ -400,6 +576,19 @@ function BudgetBar({ used }: { used: number }) {
       </div>
       <span className="text-[10px] text-emma-200/25 w-8 text-right">{used}%</span>
     </div>
+  );
+}
+
+function WaitlistBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    waiting: "bg-amber-400/10 text-amber-300/70 border-amber-400/20",
+    invited: "bg-blue-400/10 text-blue-300/70 border-blue-400/20",
+    converted: "bg-emerald-400/10 text-emerald-300/70 border-emerald-400/20",
+  };
+  return (
+    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.waiting}`}>
+      {status}
+    </span>
   );
 }
 

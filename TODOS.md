@@ -88,23 +88,14 @@ Audit performed before launch. Two critical bugs fixed in this session; remainin
 ### ~~Auth callback doesn't convert invited waitlist users~~ ✅ Fixed (2026-05-16)
 `src/app/auth/callback/route.ts` now converts `waitlist_v2.status: "invited" → "converted"` on first sign-in, checked against `invite_expires_at`. Uses service-role client to bypass RLS.
 
-### Admin UI for Waitlist Management
-**What:** No UI to invite waitlisted users or manage the seat cap. Admin must call `POST /api/emma/waitlist-manage` directly (with `{ action: "invite", waitlistId }` or `{ action: "set_cap", maxUsers }`).
-**Impact:** Operationally painful — requires curl/Postman to invite users from waitlist.
-**Fix:** Add a minimal `/admin` page (already gated by `EMMA_ADMIN_EMAILS`) showing: waitlist table with Invite button, seat cap field, and stats row.
-**Files:** `src/app/admin/page.tsx` (create), calls existing `/api/emma/waitlist-manage`
+### ~~Admin UI for Waitlist Management~~ ✅ Done (2026-05-16)
+Waitlist tab added to `/admin`. Stats row (waiting/invited/active/cap), waitlist table with per-row Invite button, seat cap field. Calls `POST /api/emma/waitlist-manage` with actions `list`, `stats`, `invite`, `set_cap`.
 
-### Invite Email Uses Login URL Instead of Magic Link
-**What:** `waitlist-manage` invite action emails users a plain `/login` URL (line 90). User must then manually request a magic link from the login page. Works, but UX is confusing — email says "Claim it" but lands on a blank login form.
-**Impact:** Invited users may not know they need to request a magic link and drop off.
-**Fix:** Use `supabase.auth.admin.generateLink({ type: "magiclink", email })` in the invite handler to send a direct one-click link.
-**Files:** `src/app/api/emma/waitlist-manage/route.ts` lines 79–99
+### ~~Invite Email Uses Login URL Instead of Magic Link~~ ✅ Done (2026-05-16)
+`waitlist-manage` invite action now calls `supabase.auth.admin.generateLink({ type: "magiclink", email })` and sends the one-click sign-in URL instead of `/login`.
 
-### SMB Client Config Has No Settings UI
-**What:** `ownerEmail` and `sheetsId` on the `clients` table (read by `loadClientConfigOrNull`) can only be set via direct SQL. There is no settings screen for SMB owners to configure their intake notifications or Google Sheets destination.
-**Impact:** Every new SMB client requires a manual DB update to activate email notifications and Sheets export.
-**Fix:** Add a "Intake Settings" section to `/settings` (or `/business/[slug]/settings`) with: owner notification email field, Google Sheets ID field. `PATCH /api/business/[slug]/settings` endpoint to update the `clients` row.
-**Files:** New route + new settings section in `/business/[slug]` layout
+### ~~SMB Client Config Has No Settings UI~~ ✅ Done (2026-05-16)
+`/business/[slug]/settings` — client component with owner notification email + Google Sheets ID fields. `GET /api/business/[slug]/settings` reads current config; `PATCH` updates `clients.owner_email` and `clients.sheets_id`. Settings nav link added to the business layout.
 
 ---
 

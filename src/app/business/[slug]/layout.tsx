@@ -38,6 +38,12 @@ export default async function BusinessLayout({
             >
               Leads
             </Link>
+            <Link
+              href={`/business/${slug}/settings`}
+              className="px-3 py-2 text-xs text-emma-200/50 hover:text-emma-200/80 hover:bg-surface rounded-md transition-colors"
+            >
+              Settings
+            </Link>
             <a
               href={`/intake/${slug}`}
               target="_blank"

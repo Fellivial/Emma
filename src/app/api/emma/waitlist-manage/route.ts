@@ -78,6 +78,16 @@ export async function POST(req: NextRequest) {
         try {
           const resend = new Resend(process.env.RESEND_API_KEY);
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://emma.ai";
+
+          let claimUrl = `${appUrl}/login`;
+          const { data: linkData } = await supabase.auth.admin.generateLink({
+            type: "magiclink",
+            email: entry.email,
+          });
+          if (linkData?.properties?.action_link) {
+            claimUrl = linkData.properties.action_link;
+          }
+
           await resend.emails.send({
             from: process.env.EMAIL_FROM ?? "noreply@example.com",
             to: entry.email,
@@ -87,9 +97,9 @@ export async function POST(req: NextRequest) {
               "",
               "Your spot on Emma is ready. Claim it before it expires in 48 hours:",
               "",
-              `${appUrl}/login`,
+              claimUrl,
               "",
-              "After you sign in, your access will be activated automatically.",
+              "Click the link above to sign in — no password needed. It's single-use and expires automatically.",
               "",
               "— Emma",
             ].join("\n"),
