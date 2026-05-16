@@ -18,11 +18,9 @@ function getSupabase() {
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
-  const isLocalhost =
-    req.headers.get("host")?.includes("localhost") ||
-    req.headers.get("host")?.includes("127.0.0.1");
 
-  if (!isLocalhost) {
+  // Skip auth only in local development — never use Host header (client-controlled, spoofable)
+  if (process.env.NODE_ENV !== "development") {
     if (!cronSecret) {
       console.error("[leads-cleanup] CRON_SECRET not set");
       return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
