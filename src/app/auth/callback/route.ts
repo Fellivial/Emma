@@ -1,6 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
@@ -28,11 +36,23 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check if user needs onboarding
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (user) {
+        // Convert invited waitlist entries to active on first sign-in
+        const admin = getAdminClient();
+        if (admin && user.email) {
+          await admin
+            .from("waitlist_v2")
+            .update({ status: "converted" })
+            .eq("email", user.email)
+            .eq("status", "invited")
+            .gt("invite_expires_at", new Date().toISOString());
+        }
+
+        // Route new users through onboarding
         const { data: profile } = await supabase
           .from("profiles")
           .select("onboarded")
