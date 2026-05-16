@@ -6,12 +6,13 @@ Work considered and explicitly deferred. Pick these up once the SMB demo sprint 
 
 ## P1 — Before Consumer Launch
 
-### Consumer/SMB Split Architecture
-**What:** Design `/app` (consumer) and `/business` (SMB) route trees as intentionally separate surfaces sharing a core library.
-**Why:** The design doc (Premise 3) calls this out explicitly. First SMB client will request audit logs, admin controls, or multi-user access that consumer should never have. Plan the split before a client forces it under time pressure.
-**How to apply:** After 2 SMB clients reveal their actual feature requests, design the split. Do not do it speculatively.
-**Effort:** M (human ~1 week / CC ~2 days)
-**Depends on:** 2 SMB deployments revealing pattern
+### ~~Consumer/SMB Split Architecture~~ ✅ Done (2026-05-16)
+**What:** `/app` (consumer) and `/business/[slug]` (SMB) are now intentionally separate route trees sharing `src/core/`.
+- `/business/[slug]/` — overview dashboard (lead counts, recent leads, intake URL)
+- `/business/[slug]/leads/` — full leads table
+- `_lib/auth.ts` — shared membership gate (user auth + `client_members` check)
+- `/admin/[slug]` redirects to `/business/[slug]/leads` for backwards compat
+- `/admin/` internal ops dashboard (MRR, churn) — unchanged, separate surface
 
 ### ~~Regulatory Disclosure in Onboarding~~ ✅ Done (2026-05-16)
 Intro step now shows a bordered disclosure card with a required checkbox. "Let's go" is disabled until acknowledged.
