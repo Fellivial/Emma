@@ -8,11 +8,7 @@ interface Lead {
   created_at: string;
 }
 
-export default async function BusinessLeadsPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function BusinessLeadsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { client, supabase } = await requireClientAccess(slug);
 

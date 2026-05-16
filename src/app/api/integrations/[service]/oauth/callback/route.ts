@@ -66,7 +66,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
         }),
       });
       if (!tokenRes.ok) {
-        console.error(`[OAuth] Google token exchange failed for ${service}:`, await tokenRes.text());
+        console.error(
+          `[OAuth] Google token exchange failed for ${service}:`,
+          await tokenRes.text()
+        );
         return NextResponse.redirect(`${appUrl}/settings/integrations?error=token_exchange`);
       }
       const tokens = await tokenRes.json();
@@ -84,7 +87,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
           accountEmail = info.email || "";
         }
       } catch {}
-
     } else if (oauthState.service === "notion") {
       // ── Notion token exchange ─────────────────────────────────────────────
       const clientId = process.env.NOTION_CLIENT_ID || "";
@@ -110,7 +112,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
         tokens.owner?.user?.name ||
         tokens.workspace_name ||
         "";
-
     } else if (oauthState.service === "slack") {
       // ── Slack token exchange ──────────────────────────────────────────────
       const clientId = process.env.SLACK_CLIENT_ID || "";
@@ -135,7 +136,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       }
       accessToken = tokens.access_token || "";
       accountEmail = tokens.team?.name || "";
-
     } else {
       return NextResponse.redirect(`${appUrl}/settings/integrations?error=unsupported_service`);
     }

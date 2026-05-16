@@ -16,11 +16,7 @@ const GOOGLE_SCOPES: Record<string, string> = {
   google_drive: "https://www.googleapis.com/auth/drive.file",
 };
 
-const SUPPORTED_SERVICES = new Set([
-  ...Object.keys(GOOGLE_SCOPES),
-  "notion",
-  "slack",
-]);
+const SUPPORTED_SERVICES = new Set([...Object.keys(GOOGLE_SCOPES), "notion", "slack"]);
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ service: string }> }) {
   const { service } = await params;

@@ -56,9 +56,7 @@ export default async function BusinessOverviewPage({
       {/* Recent leads */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest">
-            Recent
-          </h2>
+          <h2 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest">Recent</h2>
           <Link
             href={`/business/${slug}/leads`}
             className="text-[11px] text-emma-200/25 hover:text-emma-200/50 transition-colors"

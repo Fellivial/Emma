@@ -274,9 +274,7 @@ export default function IntegrationsPage() {
                 connector={connector}
                 status={getStatus(connector.id)}
                 isSelected={selectedId === connector.id}
-                onClick={() =>
-                  setSelectedId(selectedId === connector.id ? null : connector.id)
-                }
+                onClick={() => setSelectedId(selectedId === connector.id ? null : connector.id)}
               />
             ))}
             {filtered.length === 0 && (
@@ -331,9 +329,7 @@ function ConnectorCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-sm font-medium text-emma-200/80">{connector.name}</span>
-            {isConnected && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-            )}
+            {isConnected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
           </div>
           <p className="text-[11px] text-emma-200/30 leading-relaxed line-clamp-2">
             {connector.tagline}
@@ -810,9 +806,7 @@ function VoiceSelector({
   };
 
   const userVoices = voices.filter((v) => v.category === "cloned" || v.category === "generated");
-  const premadeVoices = voices.filter(
-    (v) => v.category !== "cloned" && v.category !== "generated"
-  );
+  const premadeVoices = voices.filter((v) => v.category !== "cloned" && v.category !== "generated");
 
   if (loadingVoices) {
     return <p className="text-[11px] text-emma-200/25 py-2">Loading your voices…</p>;
