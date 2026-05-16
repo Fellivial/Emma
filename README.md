@@ -40,10 +40,15 @@ src/
 │   │   │   └── agent/route.ts      # Agentic loop execution
 │   │   ├── intake/[slug]/
 │   │   │   └── chat/route.ts       # SMB intake chat (public, per-client metering)
+│   │   ├── business/[slug]/
+│   │   │   └── settings/route.ts   # Owner config CRUD (auth-gated)
 │   │   ├── lemon/webhook/route.ts  # LemonSqueezy subscription webhooks
 │   │   └── integrations/           # OAuth start + callback per service
 │   ├── app/page.tsx                # Main chat shell (client component)
 │   ├── intake/[slug]/page.tsx      # SMB intake UI (public)
+│   ├── business/[slug]/            # SMB business dashboard (auth-gated)
+│   │   └── settings/page.tsx       # Owner config — email + Google Sheets ID
+│   ├── admin/                      # Internal ops dashboard (EMMA_ADMIN_EMAILS gated)
 │   ├── landing/                    # Marketing landing page
 │   ├── onboarding/                 # New user onboarding flow
 │   └── settings/                   # Profile, usage, billing, integrations, tasks
@@ -60,6 +65,7 @@ src/
 │   ├── emotion-engine.ts           # User emotional state detection
 │   ├── autonomy-engine.ts          # Autonomy tiers (1=notify, 2=suggest, 3=execute)
 │   ├── routines-engine.ts          # Built-in + user-defined workflows
+│   ├── tool-registry.ts            # Every autonomous tool Emma can call; risk levels (safe/moderate/dangerous)
 │   ├── integrations/adapter.ts     # OAuth token store + service adapters
 │   ├── security/sanitise.ts        # Prompt injection detection + input cleaning
 │   ├── security/encryption.ts      # AES-256-GCM field encryption
@@ -118,7 +124,14 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 | `LEMONSQUEEZY_API_KEY` | — | Billing checkout + subscription management |
 | `LEMONSQUEEZY_STORE_ID` | — | Billing checkout session creation |
 | `LEMONSQUEEZY_WEBHOOK_SECRET` | — | Webhook signature verification |
-| `LEMONSQUEEZY_VARIANT_EXTRA_PACK` | — | Variant ID for $9 Extra Response Pack |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | — | LemonSqueezy variant ID for the Starter plan ($29/mo) |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | — | LemonSqueezy variant ID for the Pro plan ($79/mo) |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | — | Variant ID for the $9 Extra Response Pack |
+| `NEXT_PUBLIC_SMB_DOMAIN` | — | Subdomain routing — e.g. `intake.yourdomain.com` |
+| `GOOGLE_SHEETS_SA_KEY` | — | GCP service account JSON for Google Sheets lead appending |
+| `HUBSPOT_API_KEY` | — | HubSpot private app token for deal/contact sync |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | — | Notion OAuth app credentials |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | — | Slack OAuth v2 app credentials |
 
 ## Database
 

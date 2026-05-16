@@ -194,8 +194,21 @@ vercel logs emma.yourdomain.com --follow
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Client-side auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side DB operations |
 | `EMMA_ENCRYPTION_KEY` | Yes (prod) | AES-256 field encryption |
+| `RESEND_API_KEY` | For email | Intake lead notifications + invite emails |
+| `EMAIL_FROM` | For email | Sender address for Resend |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | For integrations | Gmail + Google Calendar OAuth |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | For integrations | Notion OAuth |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | For integrations | Slack OAuth v2 |
+| `GOOGLE_SHEETS_SA_KEY` | For SMB | GCP service account JSON for Sheets lead appending |
+| `HUBSPOT_API_KEY` | For SMB | HubSpot private app token |
 | `LEMONSQUEEZY_API_KEY` | For billing | Checkout, subscription management |
 | `LEMONSQUEEZY_STORE_ID` | For billing | Checkout session creation |
 | `LEMONSQUEEZY_WEBHOOK_SECRET` | For billing | Webhook signature verification |
-| `ELEVENLABS_API_KEY` | Optional | Premium TTS |
-| `EMMA_FF_*` | Optional | Feature flag overrides |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | For billing | Starter plan variant ID |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | For billing | Pro plan variant ID |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | For billing | Extra Response Pack variant ID |
+| `NEXT_PUBLIC_SMB_DOMAIN` | For SMB | Subdomain routing base domain |
+| `EMMA_ADMIN_EMAILS` | For admin | Comma-separated emails allowed into `/admin` |
+| `CRON_SECRET` | For cron | Authenticates Vercel cron calls |
+| `ELEVENLABS_API_KEY` | Optional | Premium TTS (BYOK — users set their own key) |
+| `EMMA_FF_*` | Optional | Feature flag overrides (see `src/core/feature-flags.ts`) |
