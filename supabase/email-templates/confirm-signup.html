@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- Subject: Confirm your email to activate Emma -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#0d0a0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 24px;">
+
+    <!-- Logo -->
+    <div style="text-align:center;margin-bottom:40px;">
+      <div style="display:inline-block;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#e8a0bf,#d4819e);text-align:center;line-height:48px;">
+        <span style="color:#0d0a0e;font-size:24px;font-style:italic;font-weight:700;">E</span>
+      </div>
+    </div>
+
+    <!-- Heading -->
+    <h1 style="color:#e8dfe6;font-size:24px;font-weight:600;text-align:center;margin:0 0 16px;">
+      One more step.
+    </h1>
+
+    <!-- Body -->
+    <p style="color:#9e8fa2;font-size:15px;line-height:1.6;text-align:center;margin:0 0 32px;">
+      Click the button below to confirm your email address and activate your Emma account.
+      This link expires in 24 hours.
+    </p>
+
+    <!-- CTA -->
+    <div style="text-align:center;margin:0 0 40px;">
+      <a href="{{ .ConfirmationURL }}"
+         style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#e8a0bf,#d4819e);color:#0d0a0e;font-size:14px;font-weight:600;text-decoration:none;border-radius:12px;letter-spacing:0.01em;">
+        Confirm Email
+      </a>
+    </div>
+
+    <!-- Fallback URL -->
+    <p style="color:#4a3f4e;font-size:12px;text-align:center;line-height:1.5;margin:0 0 8px;">
+      If the button doesn't work, copy and paste this link into your browser:
+    </p>
+    <p style="color:#4a3f4e;font-size:12px;text-align:center;word-break:break-all;margin:0 0 40px;">
+      <a href="{{ .ConfirmationURL }}" style="color:#9e8fa2;text-decoration:underline;">
+        {{ .ConfirmationURL }}
+      </a>
+    </p>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid #1f1a22;margin:0 0 24px;"></div>
+
+    <!-- Footer -->
+    <p style="color:#4a3f4e;font-size:11px;text-align:center;margin:0;">
+      You're receiving this because someone signed up for Emma using
+      <strong style="color:#4a3f4e;">{{ .Email }}</strong>. If that wasn't you, you can safely ignore this.
+    </p>
+
+  </div>
+</body>
+</html>
