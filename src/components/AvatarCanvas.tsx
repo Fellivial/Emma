@@ -23,6 +23,7 @@ interface AvatarCanvasProps {
   onInit: () => void;
   onToggleVisible: () => void;
   onSetLayout: (layout: AvatarLayout) => void;
+  onPreviewVoice?: () => void;
 }
 
 export function AvatarCanvas({
@@ -31,6 +32,7 @@ export function AvatarCanvas({
   onInit,
   onToggleVisible,
   onSetLayout,
+  onPreviewVoice,
 }: AvatarCanvasProps) {
   // Auto-init on mount
   useEffect(() => {
@@ -98,7 +100,10 @@ export function AvatarCanvas({
           <div className="mt-4 text-sm font-display italic text-emma-300/80 tracking-wide">
             Emma
           </div>
-          <div className="text-[10px] font-light text-emma-200/25 mt-1 cursor-pointer hover:text-emma-200/40 transition-colors">
+          <div
+            onClick={onPreviewVoice}
+            className="text-[10px] font-light text-emma-200/25 mt-1 cursor-pointer hover:text-emma-200/40 transition-colors"
+          >
             Click to preview voice
           </div>
 

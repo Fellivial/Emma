@@ -692,6 +692,7 @@ export default function EmmaPage() {
             onInit={avatar.init}
             onToggleVisible={avatar.toggleVisible}
             onSetLayout={avatar.setLayout}
+            onPreviewVoice={() => voice.speakFallback("Mmm. There you are. I've been waiting.", "warm")}
           />
         </div>
 
@@ -745,6 +746,7 @@ export default function EmmaPage() {
                 onInit={avatar.init}
                 onToggleVisible={avatar.toggleVisible}
                 onSetLayout={avatar.setLayout}
+                onPreviewVoice={() => voice.speakFallback("Mmm. There you are. I've been waiting.", "warm")}
               />
             </div>
           )}
