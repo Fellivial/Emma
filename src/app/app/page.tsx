@@ -390,6 +390,7 @@ export default function EmmaPage() {
       // Text emotion analysis
       const textEmotion = emotion.analyzeText(text);
       const combinedEmotion = emotion.getCombined() || textEmotion;
+      voice.setCurrentEmotion(combinedEmotion.primary);
 
       let visionContext: string | undefined;
       if (vision.active && vision.lastAnalysis) {
@@ -525,7 +526,7 @@ export default function EmmaPage() {
                   avatar.startTalkingWithAudio(audioBlob);
                 } else {
                   avatar.startTalking(event.text);
-                  voice.speakFallback(event.text);
+                  voice.speakFallback(event.text, event.expression ?? undefined);
                 }
               } else if (event.text) {
                 avatar.startTalking(event.text);

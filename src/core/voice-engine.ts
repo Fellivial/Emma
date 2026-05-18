@@ -15,11 +15,12 @@ interface UseVoiceReturn {
   speaking: boolean;
   supported: boolean;
   listen: () => Promise<string | null>;
-  speak: (text: string, clientId?: string) => void;
+  speak: (text: string, clientId?: string, emotion?: string) => void;
   fetchAudioBlob: (text: string, clientId?: string) => Promise<Blob | null>;
-  speakFallback: (text: string) => void;
+  speakFallback: (text: string, emotion?: string) => void;
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
+  setCurrentEmotion: (emotion: string) => void;
 }
 
 /**
@@ -158,8 +159,24 @@ export function useVoice(): UseVoiceReturn {
   //   - Karen/Moira have more character and warmth
   //   - On Windows, Hazel (British) > Zira (American) for this persona
 
+  // Chrome populates voices asynchronously — cache after voiceschanged fires.
+  const cachedVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const load = () => {
+      cachedVoicesRef.current = window.speechSynthesis.getVoices();
+    };
+    load(); // populate synchronously when already available (Firefox/Safari)
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
+
   const getBestVoice = useCallback((): SpeechSynthesisVoice | null => {
-    const voices = window.speechSynthesis.getVoices();
+    const voices =
+      cachedVoicesRef.current.length > 0
+        ? cachedVoicesRef.current
+        : window.speechSynthesis.getVoices();
 
     // Priority: warmth + depth + character over brightness
     const preferred = [
@@ -316,18 +333,22 @@ export function useVoice(): UseVoiceReturn {
   );
 
   const speak = useCallback(
-    (text: string, clientId?: string) => {
+    (text: string, clientId?: string, emotion?: string) => {
       // Always try ElevenLabs if clientId provided — server 501s if no key configured
       if (clientId) {
         speakElevenLabs(text, clientId).then((ok) => {
-          if (!ok) speakFallback(text);
+          if (!ok) speakFallback(text, emotion);
         });
         return;
       }
-      speakFallback(text);
+      speakFallback(text, emotion);
     },
     [speakElevenLabs, speakFallback]
   );
+
+  const setCurrentEmotion = useCallback((emotion: string) => {
+    currentEmotionRef.current = emotion;
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
@@ -359,5 +380,6 @@ export function useVoice(): UseVoiceReturn {
     speakFallback,
     stopSpeaking,
     setMode,
+    setCurrentEmotion,
   };
 }
