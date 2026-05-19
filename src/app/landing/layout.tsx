@@ -33,7 +33,7 @@ export default function LandingLayout({ children }: { children: ReactNode }) {
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@700,900&family=Barlow:wght@400,500,600&family=JetBrains+Mono:wght@400,500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400,500&display=swap"
       />
       <div
         style={
@@ -41,8 +41,8 @@ export default function LandingLayout({ children }: { children: ReactNode }) {
             background: "var(--l-bg)",
             color: "var(--l-text)",
             "--font-l-display": "'Bebas Neue', sans-serif",
-            "--font-l-cond": "'Barlow Condensed', sans-serif",
-            "--font-l-body": "'Barlow', sans-serif",
+            "--font-l-cond": "'Outfit', sans-serif",
+            "--font-l-body": "'Outfit', sans-serif",
             "--font-l-mono": "'JetBrains Mono', monospace",
           } as React.CSSProperties
         }
