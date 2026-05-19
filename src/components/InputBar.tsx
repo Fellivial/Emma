@@ -89,7 +89,7 @@ export function InputBar({
           disabled={disabled}
           aria-label={listening ? "Stop listening" : "Start voice input"}
           aria-pressed={listening}
-          className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+          className={`w-11 h-11 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
             listening
               ? "bg-emma-300 border-emma-300 text-emma-950"
               : "bg-surface border-surface-active text-emma-300 hover:bg-surface-hover"
@@ -105,7 +105,7 @@ export function InputBar({
           disabled={disabled}
           aria-label={visionActive ? "Disable vision" : "Enable vision"}
           aria-pressed={!!visionActive}
-          className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer disabled:opacity-30 ${
+          className={`w-11 h-11 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer disabled:opacity-30 ${
             visionActive
               ? "bg-emerald-400/8 border-emerald-400/20 text-emerald-300/70"
               : "bg-transparent border-surface-border text-emma-200/30 hover:text-emma-200/50"
@@ -125,6 +125,7 @@ export function InputBar({
           blocked ? "Response limit reached — get extra time to continue" : "Talk to Emma…"
         }
         style={blocked ? { opacity: 0.5, pointerEvents: "none" } : undefined}
+        aria-label="Message Emma"
         className="flex-1 bg-surface border border-surface-border rounded-2xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/20 outline-none focus:border-emma-300/30 transition-colors"
       />
 
@@ -133,7 +134,7 @@ export function InputBar({
         disabled={!input.trim() || disabled || !!blocked}
         aria-label="Send message"
         aria-disabled={!input.trim() || disabled || !!blocked}
-        className="w-9 h-9 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center shrink-0 transition-opacity cursor-pointer disabled:opacity-20"
+        className="w-11 h-11 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center shrink-0 transition-opacity cursor-pointer disabled:opacity-20"
       >
         <ArrowUp size={16} className="text-emma-950" strokeWidth={2.5} />
       </button>
@@ -142,7 +143,7 @@ export function InputBar({
         onClick={onToggleTts}
         aria-label={ttsEnabled ? "Mute Emma" : "Unmute Emma"}
         aria-pressed={ttsEnabled}
-        className={`w-9 h-9 rounded-full border border-surface-active flex items-center justify-center shrink-0 transition-opacity cursor-pointer ${
+        className={`w-11 h-11 rounded-full border border-surface-active flex items-center justify-center shrink-0 transition-opacity cursor-pointer ${
           ttsEnabled ? "opacity-100 bg-surface" : "opacity-30 bg-transparent"
         }`}
       >
