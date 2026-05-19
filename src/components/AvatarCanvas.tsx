@@ -139,8 +139,9 @@ export function AvatarCanvas({
       <div className="absolute top-2 right-2 flex gap-1">
         <button
           onClick={onToggleVisible}
-          className="w-7 h-7 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/30 hover:text-white/60 cursor-pointer transition-colors"
+          className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/30 hover:text-white/60 cursor-pointer transition-colors"
           title="Hide avatar"
+          aria-label="Hide avatar"
         >
           <EyeOff size={12} />
         </button>
@@ -152,7 +153,7 @@ export function AvatarCanvas({
           <button
             key={layout}
             onClick={() => onSetLayout(layout)}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-light border cursor-pointer transition-all ${
+            className={`px-3 min-h-[44px] flex items-center rounded-full text-[10px] font-light border cursor-pointer transition-all ${
               state.layout === layout
                 ? "bg-emma-300/15 border-emma-300/25 text-emma-300/80"
                 : "bg-black/30 border-white/8 text-white/20 hover:text-white/40 hover:border-white/15"
