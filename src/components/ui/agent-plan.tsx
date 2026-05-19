@@ -115,14 +115,12 @@ function StatusBadge({ status }: { status: AgentTask["status"] }) {
 
 export function AgentPlan({ tasks }: AgentPlanProps) {
   const [expandedTasks, setExpandedTasks] = useState<string[]>(
-    tasks.filter((t) => t.status === "in-progress").map((t) => t.id),
+    tasks.filter((t) => t.status === "in-progress").map((t) => t.id)
   );
   const [expandedSubtasks, setExpandedSubtasks] = useState<Record<string, boolean>>({});
 
   const toggleTask = (id: string) =>
-    setExpandedTasks((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setExpandedTasks((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const toggleSubtask = (taskId: string, subId: string) => {
     const key = `${taskId}-${subId}`;
