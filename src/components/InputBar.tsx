@@ -166,14 +166,14 @@ export function InputBar({
         </div>
 
         {/* Action bar */}
-        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+        <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
           {/* Left tools */}
-          <div className="flex items-center gap-0.5 flex-1">
+          <div className="flex items-center gap-1 flex-1">
             <button
               onClick={() => fileInputRef.current?.click()}
               type="button"
               aria-label="Attach file"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-emma-200/25 hover:text-emma-300/70 hover:bg-emma-300/8 transition-colors cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-emma-900 border border-surface-border text-emma-200/50 hover:text-emma-300/80 hover:border-emma-300/20 transition-all cursor-pointer"
             >
               <Plus size={16} />
             </button>
@@ -187,7 +187,7 @@ export function InputBar({
                 className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer disabled:opacity-30 ${
                   listening
                     ? "bg-emma-300 text-emma-950"
-                    : "text-emma-200/25 hover:text-emma-300/70 hover:bg-emma-300/8"
+                    : "text-emma-200/40 hover:text-emma-300/70 hover:bg-emma-300/8"
                 }`}
               >
                 <Mic size={15} />
@@ -203,7 +203,7 @@ export function InputBar({
                 className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer disabled:opacity-30 ${
                   visionActive
                     ? "text-emerald-300/70 bg-emerald-400/8"
-                    : "text-emma-200/25 hover:text-emma-200/50 hover:bg-emma-300/8"
+                    : "text-emma-200/40 hover:text-emma-200/60 hover:bg-emma-300/8"
                 }`}
               >
                 <Eye size={15} />
@@ -219,8 +219,8 @@ export function InputBar({
               aria-pressed={ttsEnabled}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
                 ttsEnabled
-                  ? "text-emma-300/50 hover:text-emma-300"
-                  : "text-emma-200/15 hover:text-emma-200/35"
+                  ? "text-emma-300/60 hover:text-emma-300"
+                  : "text-emma-200/30 hover:text-emma-200/50"
               }`}
             >
               {ttsEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
