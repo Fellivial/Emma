@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Persona,
   PersonaId,
   DeviceGraph,
@@ -8,7 +8,14 @@ import type {
 } from "@/types/emma";
 import { serializeMemories } from "./memory-shared";
 import { serializeRoutines } from "./routines-engine";
-import { serializeUserContext } from "./multi-user-engine";
+function serializeUserContext(user: UserProfile): string {
+  const prefs = user.preferences;
+  return `Active user: ${user.name} (${user.role})
+Preferred temp: ${prefs.preferredTemp}°F
+Light preference: ${prefs.lightBrightness}%, ${prefs.lightColor}
+TTS: ${prefs.ttsEnabled ? "on" : "off"}
+Quiet hours: ${prefs.quietHoursStart ? `${prefs.quietHoursStart}–${prefs.quietHoursEnd}` : "none"}`;
+}
 import type { VerticalConfig } from "@/core/verticals/templates";
 
 // ─── Persona Definitions ─────────────────────────────────────────────────────
