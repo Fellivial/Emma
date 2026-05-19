@@ -17,6 +17,31 @@ import {
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 
+const MAX_HISTORY_MESSAGES = 20;
+
+const DEEP_PATTERN =
+  /\b(write|code|implement|creat|generat|explain|analyz|list|step|how to|debug|fix|refactor|compar|summariz|translat|convert|build|draft)\b/i;
+
+function truncateHistory(msgs: ApiMessage[]): ApiMessage[] {
+  if (msgs.length <= MAX_HISTORY_MESSAGES) return msgs;
+  return msgs.slice(-MAX_HISTORY_MESSAGES);
+}
+
+function detectMaxTokens(msgs: ApiMessage[]): number {
+  const last = msgs[msgs.length - 1];
+  const text =
+    typeof last?.content === "string"
+      ? last.content
+      : Array.isArray(last?.content)
+        ? (last.content as ApiMessageContent[])
+            .map((b) => (b.type === "text" ? b.text || "" : ""))
+            .join(" ")
+        : "";
+  if (DEEP_PATTERN.test(text)) return 1200;
+  if (text.length < 80) return 350;
+  return 700;
+}
+
 /**
  * Streaming brain route.
  *
@@ -155,8 +180,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build API messages
-    const apiMessages = messages.map((m: ApiMessage) => {
+    // Build API messages (truncate to last 20 to control input token cost)
+    const truncatedMessages = truncateHistory(messages);
+    const apiMessages = truncatedMessages.map((m: ApiMessage) => {
       if (typeof m.content === "string") {
         return { role: m.role, content: m.content };
       }
@@ -184,7 +210,7 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,
-          max_tokens: 1024,
+          max_tokens: detectMaxTokens(messages),
           system: systemPrompt,
           messages: apiMessages,
           stream: true,

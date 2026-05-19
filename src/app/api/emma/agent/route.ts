@@ -3,16 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { getTool } from "@/core/tool-registry";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { audit } from "@/core/security/audit";
 import { getClientIp } from "@/lib/get-client-ip";
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
 
 interface AgentRequest {
   action: "create" | "approve" | "reject" | "status" | "history";
@@ -36,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as AgentRequest;
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
 
     switch (body.action) {
       // ── Create + run a new task ──────────────────────────────────────
@@ -85,10 +78,10 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
 
-        // Get approval record
+        // Get approval record with task transcript for full-context resume
         const { data: approval } = await supabase
           .from("approvals")
-          .select("*, action_log(*), tasks(*)")
+          .select("*, action_log(*), tasks(*, step_transcript)")
           .eq("id", body.approvalId)
           .eq("user_id", userId)
           .single();
@@ -140,16 +133,30 @@ export async function POST(req: NextRequest) {
           // Resume the agent loop from where it paused
           const task = approval.tasks;
           if (task && task.status === "awaiting_approval") {
+            // Build resume messages: load persisted transcript and append the tool result
+            const priorMessages: Array<{ role: string; content: any }> = task.step_transcript || [];
+            const resumeMessages =
+              priorMessages.length > 0
+                ? [
+                    ...priorMessages,
+                    {
+                      role: "user",
+                      content: `The tool "${approval.action}" was approved and executed. Result: ${result.output}. Continue from where you left off.`,
+                    },
+                  ]
+                : undefined;
+
             // Re-run agent loop to continue from the next step
             const agentTask: AgentTask = {
               id: task.id,
               goal: task.goal,
-              context: `Previous steps completed. The tool "${approval.action}" was approved and executed with result: ${result.output}. Continue from where you left off.`,
+              context: task.context || "",
               userId,
               clientId: task.client_id ?? undefined,
               maxSteps: task.max_steps - task.steps_taken,
               triggerType: task.trigger_type,
               triggerSource: task.trigger_source,
+              resumeMessages,
             };
 
             const agentResult = await runAgentLoop(agentTask);
@@ -167,6 +174,13 @@ export async function POST(req: NextRequest) {
         if (!body.approvalId || !supabase) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
+
+        // Fetch approval first to get action_log_id and task_id for downstream updates
+        const { data: approval } = await supabase
+          .from("approvals")
+          .select("action_log_id, task_id")
+          .eq("id", body.approvalId)
+          .single();
 
         await supabase
           .from("approvals")
@@ -186,20 +200,15 @@ export async function POST(req: NextRequest) {
           ip: getClientIp(req),
         }).catch(() => {});
 
-        await supabase
-          .from("action_log")
-          .update({
-            status: "rejected",
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", body.approvalId);
-
-        // Mark task as cancelled
-        const { data: approval } = await supabase
-          .from("approvals")
-          .select("task_id")
-          .eq("id", body.approvalId)
-          .single();
+        if (approval?.action_log_id) {
+          await supabase
+            .from("action_log")
+            .update({
+              status: "rejected",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", approval.action_log_id);
+        }
 
         if (approval) {
           await supabase

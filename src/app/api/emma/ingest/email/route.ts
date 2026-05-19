@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { parseInboundEmail } from "@/core/integrations/emailparser";
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: NextRequest) {
   // Respond immediately — webhooks require fast 200
   try {
     const payload = await req.json();
     const parsed = parseInboundEmail(payload);
+    // Clients configure their webhook URL as /api/emma/ingest/email?client_id=<uuid>
+    const clientId = new URL(req.url).searchParams.get("client_id") || null;
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       await supabase.from("ingested_emails").insert({
         from_address: parsed.from,
@@ -25,6 +20,7 @@ export async function POST(req: NextRequest) {
         attachment_count: parsed.attachmentCount,
         received_at: parsed.receivedAt,
         processed: false,
+        ...(clientId ? { client_id: clientId } : {}),
       });
     }
 

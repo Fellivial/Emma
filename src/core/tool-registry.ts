@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { MODEL_UTILITY } from "@/core/models";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,19 +60,54 @@ export function getAllTools(): ToolDefinition[] {
   return Array.from(registry.values());
 }
 
+// Maps tool names to the integration service they require.
+// Tools not in this map run unconditionally (no integration needed).
+const TOOL_INTEGRATION_MAP: Record<string, string> = {
+  send_email: "gmail",
+  book_appointment: "google_calendar",
+  calendar_get_upcoming: "google_calendar",
+  calendar_get_today: "google_calendar",
+  drive_upload_file: "google_drive",
+  drive_list_files: "google_drive",
+  drive_read_file: "google_drive",
+  slack_send_message: "slack",
+  slack_list_channels: "slack",
+  slack_upload_file: "slack",
+  notion_create_page: "notion",
+  notion_search_pages: "notion",
+  notion_update_page: "notion",
+  hubspot_create_contact: "hubspot",
+  hubspot_log_activity: "hubspot",
+  hubspot_create_deal: "hubspot",
+  hubspot_update_deal_stage: "hubspot",
+  hubspot_get_contacts: "hubspot",
+  hubspot_get_deals: "hubspot",
+  hubspot_get_contact: "hubspot",
+  send_whatsapp: "whatsapp",
+  speak_text: "elevenlabs",
+};
+
 /**
  * Get tool definitions formatted for Claude's tool_use API.
+ * Pass connectedIntegrations to exclude tools whose integration isn't active.
  */
-export function getToolsForClaude(): Array<{
+export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
 }> {
-  return getAllTools().map((t) => ({
-    name: t.name,
-    description: `${t.description} [Risk: ${t.riskLevel}]`,
-    input_schema: t.inputSchema,
-  }));
+  return getAllTools()
+    .filter((t) => {
+      const required = TOOL_INTEGRATION_MAP[t.name];
+      if (!required) return true;
+      if (!connectedIntegrations) return true;
+      return connectedIntegrations.has(required);
+    })
+    .map((t) => ({
+      name: t.name,
+      description: `${t.description} [Risk: ${t.riskLevel}]`,
+      input_schema: t.inputSchema,
+    }));
 }
 
 // ─── Built-in Tools ──────────────────────────────────────────────────────────
@@ -95,11 +131,44 @@ registerTool({
   },
   riskLevel: "safe",
   handler: async (input) => {
-    return {
-      success: true,
-      output: `Summary generated for topic: ${input.topic}`,
-      data: { topic: input.topic, style: input.style || "brief" },
-    };
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return { success: false, output: "API key not configured." };
+
+    const styleGuide =
+      input.style === "bullet_points"
+        ? "Respond with a bullet-point list."
+        : input.style === "detailed"
+          ? "Respond with a detailed paragraph summary."
+          : "Respond with a brief 2-3 sentence summary.";
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL_UTILITY,
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: `Summarize the following topic: ${input.topic}\n\n${styleGuide}`,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) return { success: false, output: `Summary API error: ${res.status}` };
+
+    const data = await res.json();
+    const text =
+      data.content
+        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
+        .join("") || "";
+
+    return { success: true, output: text, data: { topic: input.topic } };
   },
 });
 
@@ -179,9 +248,8 @@ registerTool({
   riskLevel: "moderate",
   handler: async (input) => {
     return {
-      success: true,
-      output: `Workflow ${input.routine_id} executed`,
-      data: { routineId: input.routine_id },
+      success: false,
+      output: `Workflow execution is not available in autonomous mode. Routine "${input.routine_id}" must be triggered from the main chat interface.`,
     };
   },
 });
@@ -1187,13 +1255,15 @@ registerTool({
 
     const limit = Math.min(Number(input.limit) || 5, 20);
 
-    // Webhook-ingested emails have no user_id (no session at ingest time),
-    // so we read the shared inbox rather than filtering by user.
     let query = supabase
       .from("ingested_emails")
       .select("*")
       .order("received_at", { ascending: false })
       .limit(limit);
+
+    if (context.clientId) {
+      query = query.eq("client_id", context.clientId);
+    }
 
     if (input.unprocessed_only) {
       query = query.eq("processed", false);
@@ -1248,12 +1318,15 @@ registerTool({
 
     const limit = Math.min(Number(input.limit) || 5, 50);
 
-    // Webhook-ingested messages have no user_id, so we read the shared inbox.
     let query = supabase
       .from("ingested_whatsapp")
       .select("*")
       .order("received_at", { ascending: false })
       .limit(limit);
+
+    if (context.clientId) {
+      query = query.eq("client_id", context.clientId);
+    }
 
     if (input.from_number) {
       query = query.eq("from_number", input.from_number as string);

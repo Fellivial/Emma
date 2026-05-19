@@ -67,6 +67,14 @@ Just announce what you're doing in persona and emit the routine tag.`;
 
 // ─── Avatar Expression Instructions ──────────────────────────────────────────
 
+const RESPONSE_LENGTH_PROMPT = `
+## Response Length
+Scale length to complexity:
+- Simple questions / greetings → 1-2 sentences (FAST)
+- General conversation → 2-4 sentences (NORMAL)
+- Coding / analysis / lists → as many lines as needed (DEEP)
+Never pad with filler. Stop once the answer is complete.`;
+
 const AVATAR_PROMPT = `
 ## Visual Avatar
 You have a Live2D avatar that displays your expressions in real time. At the END of every response, append an emotion tag:
@@ -110,6 +118,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const routineList = serializeRoutines();
 
   let prompt = `${persona.systemPrompt}
+${RESPONSE_LENGTH_PROMPT}
 ${ROUTINE_PROMPT}
 ${AVATAR_PROMPT}
 
@@ -139,7 +148,8 @@ Pay special attention to: ${ctx.vertical.memoryFocusAreas.join(", ")}`;
 
   // ── Inject persistent memories ─────────────────────────────────────────────
   if (ctx.memories && ctx.memories.length > 0) {
-    const serialized = serializeMemories(ctx.memories);
+    const cappedMemories = ctx.memories.slice(0, 10);
+    const serialized = serializeMemories(cappedMemories);
     prompt += `
 
 ## Long-Term Memory (things you know about this user across sessions)

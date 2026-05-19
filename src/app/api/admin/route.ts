@@ -58,43 +58,56 @@ export async function GET() {
       .select("*, client_members(user_id)")
       .order("created_at", { ascending: false });
 
-    const enrichedClients = await Promise.all(
-      (clients || []).map(async (client) => {
-        const memberIds = (client.client_members || []).map((m: any) => m.user_id);
-        let monthlyTokens = 0,
-          monthlyMessages = 0;
+    // Build a map from user_id → client_id to avoid N+1 queries
+    const userToClient = new Map<string, string>();
+    for (const client of clients || []) {
+      for (const m of client.client_members || []) {
+        userToClient.set(m.user_id, client.id);
+      }
+    }
 
-        if (memberIds.length > 0) {
-          const { data: usageData } = await supabase
-            .from("usage")
-            .select("token_count, message_count")
-            .in("user_id", memberIds)
-            .gte("date", monthStartStr);
-          for (const row of usageData || []) {
-            monthlyTokens += row.token_count || 0;
-            monthlyMessages += row.message_count || 0;
-          }
-        }
+    // Single query for all usage this month across all members
+    const allMemberIds = Array.from(userToClient.keys());
+    const usageByClient = new Map<string, { tokens: number; messages: number }>();
+    if (allMemberIds.length > 0) {
+      const { data: usageRows } = await supabase
+        .from("usage")
+        .select("user_id, token_count, message_count")
+        .in("user_id", allMemberIds)
+        .gte("date", monthStartStr);
+      for (const row of usageRows || []) {
+        const clientId = userToClient.get(row.user_id);
+        if (!clientId) continue;
+        const acc = usageByClient.get(clientId) || { tokens: 0, messages: 0 };
+        acc.tokens += row.token_count || 0;
+        acc.messages += row.message_count || 0;
+        usageByClient.set(clientId, acc);
+      }
+    }
 
-        const plan = inferPlanFromBudget(client.token_budget_monthly || 0);
-        return {
-          id: client.id,
-          slug: client.slug,
-          name: client.name,
-          plan,
-          memberCount: memberIds.length,
-          tokenBudget: client.token_budget_monthly,
-          monthlyTokens,
-          monthlyMessages,
-          budgetUsed:
-            client.token_budget_monthly > 0
-              ? Math.round((monthlyTokens / client.token_budget_monthly) * 100)
-              : 0,
-          estimatedCost: Math.round((monthlyTokens / 1_000_000) * 6 * 100) / 100,
-          createdAt: client.created_at,
-        };
-      })
-    );
+    const enrichedClients = (clients || []).map((client) => {
+      const memberIds = (client.client_members || []).map((m: any) => m.user_id);
+      const usage = usageByClient.get(client.id) || { tokens: 0, messages: 0 };
+      const monthlyTokens = usage.tokens;
+      const monthlyMessages = usage.messages;
+      const plan = inferPlanFromBudget(client.token_budget_monthly || 0);
+      return {
+        id: client.id,
+        slug: client.slug,
+        name: client.name,
+        plan,
+        memberCount: memberIds.length,
+        tokenBudget: client.token_budget_monthly,
+        monthlyTokens,
+        monthlyMessages,
+        budgetUsed:
+          client.token_budget_monthly > 0
+            ? Math.round((monthlyTokens / client.token_budget_monthly) * 100)
+            : 0,
+        estimatedCost: Math.round((monthlyTokens / 1_000_000) * 6 * 100) / 100,
+        createdAt: client.created_at,
+      };
+    });
 
     // ── MRR ───────────────────────────────────────────────────────────────
     const currentMRR = enrichedClients.reduce((s, c) => s + getMRR(c.plan), 0);

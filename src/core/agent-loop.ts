@@ -14,7 +14,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { MODEL_BRAIN } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
 import { getMcpServersForClient } from "@/core/integrations/mcp";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
@@ -45,6 +45,7 @@ export interface AgentTask {
   maxSteps: number;
   triggerType: "cron" | "webhook" | "manual" | "event";
   triggerSource: string;
+  resumeMessages?: Array<{ role: string; content: any }>;
 }
 
 export interface AgentStepResult {
@@ -68,13 +69,6 @@ export interface AgentResult {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
 
 const AGENT_SYSTEM = `You are EMMA's autonomous agent. You execute tasks independently.
 
@@ -113,8 +107,22 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     };
   }
 
-  const supabase = getSupabase();
-  const tools = getToolsForClaude();
+  const supabase = getSupabaseAdmin();
+
+  // Load connected integrations to filter the tool list Claude sees
+  let connectedIntegrations: Set<string> | undefined;
+  if (task.clientId && supabase) {
+    const { data: integrationRows } = await supabase
+      .from("client_integrations")
+      .select("service")
+      .eq("client_id", task.clientId)
+      .eq("status", "connected");
+    if (integrationRows) {
+      connectedIntegrations = new Set(integrationRows.map((r: { service: string }) => r.service));
+    }
+  }
+
+  const tools = getToolsForClaude(connectedIntegrations);
   const mcpServers = await getMcpServersForClient(task.clientId);
   let provChain: ProvenanceChain = startChain(task.id, task.goal);
   const steps: AgentStepResult[] = [];
@@ -136,13 +144,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       .eq("id", task.id);
   }
 
-  // Build conversation for the agent
-  const messages: Array<{ role: string; content: any }> = [
-    {
-      role: "user",
-      content: `GOAL: ${task.goal}\n\nCONTEXT:\n${task.context || "No additional context."}`,
-    },
-  ];
+  // Build conversation — seed from persisted transcript if resuming after approval
+  const messages: Array<{ role: string; content: any }> = task.resumeMessages
+    ? [...task.resumeMessages]
+    : [
+        {
+          role: "user",
+          content: `GOAL: ${task.goal}\n\nCONTEXT:\n${task.context || "No additional context."}`,
+        },
+      ];
 
   for (let step = 1; step <= task.maxSteps; step++) {
     if (taskCompleted) break;
@@ -283,7 +293,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             steps.push(stepResult);
             await logAction(supabase, task.id, stepResult);
 
-            // Update task to awaiting_approval
+            // Update task to awaiting_approval and persist transcript so resume has full context
             if (supabase) {
               await supabase
                 .from("tasks")
@@ -291,6 +301,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                   status: "awaiting_approval",
                   steps_taken: step,
                   token_cost: totalTokens,
+                  step_transcript: messages,
                 })
                 .eq("id", task.id);
             }

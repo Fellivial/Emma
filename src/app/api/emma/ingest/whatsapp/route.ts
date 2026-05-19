@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { WhatsAppAdapter } from "@/core/integrations/whatsapp";
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const adapter = new WhatsAppAdapter();
 
@@ -29,9 +22,11 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
     const message = adapter.parseInboundWebhook(payload);
+    // Clients configure their webhook URL as /api/emma/ingest/whatsapp?client_id=<uuid>
+    const clientId = new URL(req.url).searchParams.get("client_id") || null;
 
     if (message) {
-      const supabase = getSupabase();
+      const supabase = getSupabaseAdmin();
       if (supabase) {
         await supabase.from("ingested_whatsapp").upsert(
           {
@@ -39,6 +34,7 @@ export async function POST(req: NextRequest) {
             message_id: message.messageId,
             body: message.text,
             received_at: message.timestamp,
+            ...(clientId ? { client_id: clientId } : {}),
           },
           { onConflict: "message_id" }
         );
