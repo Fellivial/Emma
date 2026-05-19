@@ -315,15 +315,16 @@ export function useAvatar(): UseAvatarReturn {
         const model = (await Live2DModel.from(
           "/live2d/emma/Design_genius_White/Design_genius(1).model3.json",
           {
-            autoInteract: true,
+            autoHitTest: true,
+            autoFocus: true,
             autoUpdate: true,
           }
         )) as any;
 
         model.anchor.set(0.5, 0.5);
-        model.scale.set(0.25);
+        model.scale.set(0.17);
         model.x = app.screen.width / 2;
-        model.y = app.screen.height * 0.55;
+        model.y = app.screen.height * 0.65;
 
         app.stage.addChild(model as any);
         modelRef.current = model;
