@@ -81,7 +81,7 @@ export default function LoginPage() {
                 <button
                   onClick={() => signInWithOAuth("google")}
                   disabled={!!oauthLoading}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {oauthLoading === "google" ? (
                     <span className="w-4 h-4 rounded-full border-2 border-emma-300/30 border-t-emma-300 animate-spin" />
@@ -93,7 +93,7 @@ export default function LoginPage() {
                 <button
                   onClick={() => signInWithOAuth("github")}
                   disabled={!!oauthLoading}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-surface-border bg-surface hover:bg-surface-hover text-sm font-light text-emma-200/60 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {oauthLoading === "github" ? (
                     <span className="w-4 h-4 rounded-full border-2 border-emma-300/30 border-t-emma-300 animate-spin" />
@@ -123,13 +123,13 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && signInWithEmail()}
                     placeholder="your@email.com"
-                    className="w-full bg-surface border border-surface-border rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
+                    className="w-full bg-surface border border-surface-border rounded-xl px-4 py-3 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
                   />
                 </div>
                 <button
                   onClick={signInWithEmail}
                   disabled={!email.trim() || loading}
-                  className="py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 transition-opacity cursor-pointer disabled:opacity-30"
+                  className="py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 transition-opacity cursor-pointer disabled:opacity-30"
                 >
                   {loading ? "Sending…" : "Send Magic Link"}
                 </button>
