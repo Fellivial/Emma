@@ -9,6 +9,8 @@ import { ChatMessage, TypingIndicator } from "./ChatMessage";
 import { InputBar } from "./InputBar";
 import { ContextIndicator } from "./ContextIndicator";
 import { ApprovalBubble } from "./ApprovalBubble";
+import { AgentPlan } from "@/components/ui/agent-plan";
+import type { AgentTask } from "@/components/ui/agent-plan";
 
 interface UsageWarning {
   message: string;
@@ -39,6 +41,7 @@ interface ChatPanelProps {
   onCancelApproval?: (approvalId: string) => Promise<void>;
   visionActive?: boolean;
   onVisionToggle?: () => void;
+  agentPlan?: AgentTask[];
 }
 
 export function ChatPanel({
@@ -61,6 +64,7 @@ export function ChatPanel({
   onCancelApproval,
   visionActive,
   onVisionToggle,
+  agentPlan,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -96,7 +100,17 @@ export function ChatPanel({
               onCancel={onCancelApproval ?? (() => Promise.resolve())}
             />
           ))}
-        {loading && <TypingIndicator />}
+        {loading && agentPlan && agentPlan.length > 0 && (
+          <div className="flex items-end gap-2">
+            <div className="w-7 h-7 rounded-full shrink-0 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+              <span className="font-display text-sm italic text-emma-950">E</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <AgentPlan tasks={agentPlan} />
+            </div>
+          </div>
+        )}
+        {loading && (!agentPlan || agentPlan.length === 0) && <TypingIndicator />}
 
         {/* Usage warning — amber left-border annotation below last bubble */}
         {usageWarning && !usageBlocked && (
