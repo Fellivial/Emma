@@ -67,7 +67,8 @@ export function SchedulePanel({ schedules, onToggle, onRemove }: SchedulePanelPr
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => onToggle(sched.id)}
-                  className="text-emma-200/30 hover:text-emma-300 cursor-pointer transition-colors"
+                  aria-label={sched.enabled ? "Disable schedule" : "Enable schedule"}
+                  className="w-11 h-11 flex items-center justify-center text-emma-200/30 hover:text-emma-300 cursor-pointer transition-colors"
                 >
                   {sched.enabled ? (
                     <ToggleRight size={20} className="text-emma-300" />
