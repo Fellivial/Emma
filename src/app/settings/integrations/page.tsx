@@ -242,6 +242,7 @@ export default function IntegrationsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search integrations…"
+            aria-label="Search integrations"
             className="w-full pl-8 pr-3 py-2 bg-emma-200/3 border border-emma-200/8 rounded-lg text-xs text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-200/15"
           />
         </div>

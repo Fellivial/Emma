@@ -176,7 +176,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gradient-to-br from-emma-950 via-emma-900 to-emma-950 font-sans text-emma-100">
       <div className="border-b border-surface-border bg-emma-950/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link href="/" className="text-emma-200/30 hover:text-emma-300 transition-colors">
+          <Link href="/" aria-label="Back to home" className="w-11 h-11 flex items-center justify-center text-emma-200/30 hover:text-emma-300 transition-colors -ml-2">
             <ArrowLeft size={18} />
           </Link>
           <div>
@@ -195,7 +195,7 @@ export default function AdminPage() {
                 setActiveTab(tab);
                 if (tab === "waitlist") fetchWaitlist();
               }}
-              className={`px-4 py-2.5 text-xs capitalize transition-colors border-b-2 -mb-px ${
+              className={`px-4 py-3 min-h-[44px] text-xs capitalize transition-colors border-b-2 -mb-px ${
                 activeTab === tab
                   ? "border-emma-300/50 text-emma-300/80"
                   : "border-transparent text-emma-200/30 hover:text-emma-200/60"
