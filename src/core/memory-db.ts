@@ -1,8 +1,8 @@
-/**
- * Memory DB — Supabase PostgreSQL storage.
+﻿/**
+ * Memory DB â€” Supabase PostgreSQL storage.
  * Server-side only (API routes).
  *
- * Falls back gracefully if Supabase is not configured — returns empty arrays.
+ * Falls back gracefully if Supabase is not configured â€” returns empty arrays.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -18,7 +18,12 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// ─── Read ────────────────────────────────────────────────────────────────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
+// â”€â”€â”€ Read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getMemoriesForUser(
   userId: string,
@@ -26,6 +31,7 @@ export async function getMemoriesForUser(
 ): Promise<MemoryEntry[]> {
   const supabase = getSupabase();
   if (!supabase) return [];
+  if (!isUuid(userId)) return [];
 
   let query = supabase
     .from("memories")
@@ -46,7 +52,7 @@ export async function getMemoriesForUser(
   return (data || []).map(rowToMemoryEntry);
 }
 
-// ─── Write ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Write â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function addMemoryForUser(
   userId: string,
@@ -104,7 +110,7 @@ export async function addMemoriesForUser(
   return results;
 }
 
-// ─── Delete ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Delete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function deleteMemoryForUser(userId: string, memoryId: string): Promise<boolean> {
   const supabase = getSupabase();
@@ -131,7 +137,7 @@ export async function deleteMemoryForUser(userId: string, memoryId: string): Pro
   return true;
 }
 
-// ─── Usage Tracking ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Usage Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function incrementUsage(
   userId: string,
@@ -143,7 +149,7 @@ export async function incrementUsage(
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Upsert — increment on conflict
+  // Upsert â€” increment on conflict
   const { error } = await supabase.rpc("increment_usage", {
     p_user_id: userId,
     p_date: today,
@@ -166,7 +172,7 @@ export async function incrementUsage(
   }
 }
 
-// ─── Conversation Persistence ────────────────────────────────────────────────
+// â”€â”€â”€ Conversation Persistence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getOrCreateConversation(userId: string): Promise<string | null> {
   const supabase = getSupabase();
@@ -232,7 +238,7 @@ export async function saveMessage(
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function rowToMemoryEntry(row: any): MemoryEntry {
   return {
@@ -247,3 +253,4 @@ function rowToMemoryEntry(row: any): MemoryEntry {
     userId: row.user_id,
   };
 }
+
