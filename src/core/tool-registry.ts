@@ -1516,6 +1516,106 @@ registerTool({
   },
 });
 
+// Tool: speak_text — Read text aloud via ElevenLabs TTS (safe)
+registerTool({
+  name: "speak_text",
+  description:
+    "Read text aloud to the user using ElevenLabs TTS. Use when the user asks Emma to speak, narrate, or read something aloud. Falls back gracefully when ElevenLabs is not configured.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      text: {
+        type: "string",
+        description: "Text to speak aloud (max 1000 characters)",
+      },
+      voice_id: {
+        type: "string",
+        description:
+          "ElevenLabs voice ID (optional — uses user's configured voice or default Rachel)",
+      },
+    },
+    required: ["text"],
+  },
+  riskLevel: "safe",
+  handler: async (input, context) => {
+    const text = (input.text as string).slice(0, 1000);
+    if (!text.trim()) {
+      return { success: false, output: "No text provided to speak." };
+    }
+
+    const preview = `"${text.slice(0, 80)}${text.length > 80 ? "…" : ""}"`;
+
+    // Try ElevenLabs when clientId is available
+    if (context.clientId) {
+      try {
+        const { createClient: mkClient } = await import("@supabase/supabase-js");
+        const { decrypt } = await import("@/core/security/encryption");
+
+        const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (sbUrl && sbKey) {
+          const sb = mkClient(sbUrl, sbKey);
+          const { data: row } = await sb
+            .from("client_integrations")
+            .select("access_token, voice_id")
+            .eq("client_id", context.clientId)
+            .eq("service", "elevenlabs")
+            .eq("status", "connected")
+            .single();
+
+          if (row?.access_token) {
+            let apiKey: string | null = null;
+            try {
+              apiKey = decrypt(row.access_token);
+            } catch {}
+
+            if (apiKey) {
+              const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+              const voice = (input.voice_id as string) || row.voice_id || DEFAULT_VOICE_ID;
+
+              const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "xi-api-key": apiKey,
+                },
+                body: JSON.stringify({
+                  text,
+                  model_id: "eleven_turbo_v2_5",
+                  voice_settings: {
+                    stability: 1.0,
+                    similarity_boost: 0.5,
+                    style: 0.75,
+                    use_speaker_boost: true,
+                  },
+                }),
+              });
+
+              if (res.ok) {
+                const buf = await res.arrayBuffer();
+                const audioBase64 = Buffer.from(buf).toString("base64");
+                return {
+                  success: true,
+                  output: `Speaking: ${preview}`,
+                  data: { text, audioBase64, mimeType: "audio/mpeg" },
+                };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // No ElevenLabs — return text so client can use Web Speech fallback
+    return {
+      success: true,
+      output: `Speaking: ${preview}`,
+      data: { text, audioBase64: null },
+    };
+  },
+});
+
 // Tool: complete_task — Signal that the task is finished (safe)
 registerTool({
   name: "complete_task",

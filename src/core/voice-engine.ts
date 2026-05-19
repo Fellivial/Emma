@@ -187,7 +187,12 @@ export function useVoice(): UseVoiceReturn {
       "Tessa", // South African — warm, mature
       "Fiona", // Scottish — characterful, warm
 
-      // Windows — limited but usable
+      // Windows 11 / Edge Natural voices (much better than legacy)
+      "Microsoft Aria", // Natural female, conversational, warm — best on Win11
+      "Microsoft Jenny", // Natural female, clear, friendly
+      "Microsoft Michelle", // Natural female, confident
+
+      // Windows legacy — limited but usable
       "Microsoft Hazel", // British — warmer, more composed than Zira
       "Microsoft Zira", // American — acceptable fallback
 
@@ -197,12 +202,19 @@ export function useVoice(): UseVoiceReturn {
     ];
 
     for (const name of preferred) {
-      const v = voices.find((v) => v.name === name);
+      // substring match so "Microsoft Aria Online (Natural)" also hits "Microsoft Aria"
+      const v = voices.find((v) => v.name.startsWith(name));
       if (v) return v;
     }
 
-    // Fallback: any English female voice
-    return voices.find((v) => v.lang.startsWith("en") && /female|woman|girl/i.test(v.name)) || null;
+    // Fallback 1: any English female voice
+    const femaleEn = voices.find(
+      (v) => v.lang.startsWith("en") && /female|woman|girl/i.test(v.name)
+    );
+    if (femaleEn) return femaleEn;
+
+    // Fallback 2: any English voice (guarantees correct language on Windows)
+    return voices.find((v) => v.lang.startsWith("en")) || null;
   }, []);
 
   // ── Emotion-to-voice-params (tuned for Emma's persona) ────────────────────
