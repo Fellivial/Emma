@@ -72,23 +72,19 @@ const VOICE_PARAMS: Record<string, { rate: number; pitch: number; volume: number
 function processForEmma(text: string): string {
   return (
     text
-      // Emma's signature sounds — add pauses
-      .replace(/\bMmm\.?\s*/gi, "Mmm...  ")
-      .replace(/\bAhh\.?\s*/gi, "Ahh...  ")
-      .replace(/\bHmm\.?\s*/gi, "Hmm...  ")
+      // Emma's signature sounds — ellipsis creates a real TTS pause
+      .replace(/\bMmm\.?\s*/gi, "Mmm... ")
+      .replace(/\bAhh\.?\s*/gi, "Ahh... ")
+      .replace(/\bHmm\.?\s*/gi, "Hmm... ")
 
-      // Pause before terms of endearment (makes them land)
-      .replace(/\bbaby\b/gi, "...baby")
-      .replace(/\bsweetheart\b/gi, "...sweetheart")
+      // Comma before terms of endearment — WebSpeech pauses on commas, not spaces
+      .replace(/\bbaby\b/gi, ", baby")
+      .replace(/\bsweetheart\b/gi, ", sweetheart")
 
-      // Punctuation-based pauses
-      .replace(/\.\s/g, ".   ") // Period → longer pause (she's unhurried)
-      .replace(/—/g, "  —  ") // Em dash → dramatic pause
-      .replace(/\.\.\./g, ".....  ") // Ellipsis → real pause (she does this a lot)
-      .replace(/\?\s/g, "?   ") // Question → slight pause (she waits)
+      // Em dash → comma pause (WebSpeech doesn't pause on em dash)
+      .replace(/—/g, ", ")
 
-      // Clean up excessive whitespace
-      .replace(/\s{5,}/g, "    ")
+      // Trim trailing whitespace only — sentence splits handle inter-sentence pacing
       .trim()
   );
 }
@@ -104,16 +100,18 @@ export function useVoice(): UseVoiceReturn {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived booleans for backward compat
   const listening = mode === "listening";
   const speaking = mode === "speaking";
 
   useEffect(() => {
-    const w = typeof window !== "undefined"
-      ? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition })
-      : null;
-    const SR = w ? (w.SpeechRecognition || w.webkitSpeechRecognition) : null;
+    const w =
+      typeof window !== "undefined"
+        ? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition })
+        : null;
+    const SR = w ? w.SpeechRecognition || w.webkitSpeechRecognition : null;
     if (SR) {
       const r = new SR();
       r.continuous = false;
@@ -287,26 +285,51 @@ export function useVoice(): UseVoiceReturn {
     (text: string, emotion?: string) => {
       if (typeof window === "undefined" || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
 
-      // Process text for Emma's speech patterns
       const processedText = processForEmma(text);
-      const utterance = new SpeechSynthesisUtterance(processedText);
 
-      // Apply emotion-aware voice params
+      // Split into sentences — single-utterance delivery sounds robotic.
+      // Each sentence gets its own utterance with a 250ms breath between them.
+      const sentences = processedText.match(/[^.!?]+[.!?…]+\s*/g) || [processedText];
+
       const emo = emotion || currentEmotionRef.current || "neutral";
       const params = VOICE_PARAMS[emo] || VOICE_PARAMS.neutral;
-      utterance.rate = params.rate;
-      utterance.pitch = params.pitch;
-      utterance.volume = params.volume;
-
-      // Select best available voice for Emma's persona
       const voice = getBestVoice();
-      if (voice) utterance.voice = voice;
 
-      utterance.onstart = () => setMode("speaking");
-      utterance.onend = () => setMode("idle");
-      utterance.onerror = () => setMode("idle");
-      window.speechSynthesis.speak(utterance);
+      let idx = 0;
+
+      const speakNext = () => {
+        if (idx >= sentences.length) {
+          setMode("idle");
+          return;
+        }
+        const trimmed = sentences[idx].trim();
+        idx++;
+        if (!trimmed) {
+          speakNext();
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(trimmed);
+        utterance.rate = params.rate;
+        utterance.pitch = params.pitch;
+        utterance.volume = params.volume;
+        if (voice) utterance.voice = voice;
+
+        utterance.onstart = () => setMode("speaking");
+        utterance.onend = () => {
+          pauseTimerRef.current = setTimeout(speakNext, 250);
+        };
+        utterance.onerror = () => setMode("idle");
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      speakNext();
     },
     [getBestVoice]
   );
@@ -368,6 +391,10 @@ export function useVoice(): UseVoiceReturn {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
     setMode("idle");
   }, []);
 
@@ -375,6 +402,7 @@ export function useVoice(): UseVoiceReturn {
   useEffect(() => {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
     };
   }, []);
 
