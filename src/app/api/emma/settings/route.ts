@@ -16,7 +16,7 @@ function getServiceSupabase() {
 export async function GET() {
   try {
     const user = await getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Unauthorized", hint: "Sign in at /login" }, { status: 401 });
 
     const config = await loadClientConfigForUser(user.id);
 
@@ -63,7 +63,8 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("[/api/emma/settings GET]", err);
+    return NextResponse.json({ error: "Failed to load settings", detail: String(err) }, { status: 500 });
   }
 }
 
@@ -99,10 +100,10 @@ function parseSettingsBody(raw: unknown): {
 export async function POST(req: NextRequest) {
   try {
     const user = await getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Unauthorized", hint: "Sign in at /login" }, { status: 401 });
 
     const supabase = getServiceSupabase();
-    if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 500 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured", hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local" }, { status: 500 });
 
     const body = parseSettingsBody(await req.json());
 
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
     }).catch((e) => console.error("[audit]", e));
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("[/api/emma/settings POST]", err);
+    return NextResponse.json({ error: "Failed to save settings", detail: String(err) }, { status: 500 });
   }
 }

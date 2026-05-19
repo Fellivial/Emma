@@ -25,11 +25,11 @@ function isAdmin(email: string | undefined): boolean {
 export async function GET() {
   try {
     const user = await getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!isAdmin(user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!user) return NextResponse.json({ error: "Unauthorized", hint: "Sign in at /login" }, { status: 401 });
+    if (!isAdmin(user.email)) return NextResponse.json({ error: "Forbidden", hint: "Add your email to EMMA_ADMIN_EMAILS in .env.local" }, { status: 403 });
 
     const supabase = getSupabase();
-    if (!supabase) return NextResponse.json({ error: "DB not configured" }, { status: 501 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured", hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local" }, { status: 501 });
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -158,6 +158,7 @@ export async function GET() {
       planDistribution: planDist,
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("[/api/admin]", err);
+    return NextResponse.json({ error: "Failed to load admin dashboard", detail: String(err) }, { status: 500 });
   }
 }

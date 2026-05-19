@@ -118,6 +118,6 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[EMMA Memory API] Error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Memory operation failed", detail: String(err) }, { status: 500 });
   }
 }

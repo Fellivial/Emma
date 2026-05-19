@@ -6,8 +6,19 @@ Vertically-integrated AI companion with animated avatar, voice, vision, memory, 
 
 ```bash
 npm install
-cp .env.local.example .env.local   # fill in required vars
-npm run dev                         # localhost:3000
+cp .env.local.example .env.local
+
+# Generate the encryption key and append it directly to .env.local
+echo "EMMA_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.local
+
+# Fill in ANTHROPIC_API_KEY and the three SUPABASE_* vars in .env.local
+# (see Environment Variables below for the full list)
+
+# Run the database schema — paste supabase/schema.sql into the Supabase SQL Editor
+# Dashboard → SQL Editor → New query → paste → Run
+# (Only required the first time. All statements are idempotent — safe to re-run.)
+
+npm run dev  # localhost:3000
 ```
 
 ## Commands
@@ -70,7 +81,7 @@ src/
 │   ├── security/sanitise.ts        # Prompt injection detection + input cleaning
 │   ├── security/encryption.ts      # AES-256-GCM field encryption
 │   └── pricing.ts                  # Plan definitions and limits
-└── middleware.ts                   # Supabase SSR auth gate
+└── proxy.ts                        # Supabase SSR auth gate + subdomain routing
 ```
 
 ## Request Flow
@@ -97,7 +108,7 @@ Public widget deployed at `/intake/[slug]` for any `clients` record in the datab
 
 ## Auth & Middleware
 
-`src/middleware.ts` gates all routes via Supabase SSR. Public paths:
+`src/proxy.ts` gates all routes via Supabase SSR and handles subdomain routing. Public paths:
 
 - `/login`, `/auth/callback`
 - `/landing`, `/waitlist`
@@ -132,18 +143,30 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 | `HUBSPOT_API_KEY` | — | HubSpot private app token for deal/contact sync |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | — | Notion OAuth app credentials |
 | `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | — | Slack OAuth v2 app credentials |
+| `SENTRY_ORG` | — | Sentry org slug for source map uploads at build time |
+| `SENTRY_PROJECT` | — | Sentry project slug |
+| `SENTRY_AUTH_TOKEN` | — | Sentry auth token for source map uploads (build only) |
 
 ## Database
 
-Run `supabase/schema.sql` in the Supabase SQL Editor before first use (auth, memory, usage, integrations).
+### First-time setup
 
-Apply migrations in order:
+Paste `supabase/schema.sql` into the Supabase SQL Editor and run it. It creates all tables, RLS policies, and triggers. All statements use `IF NOT EXISTS` — safe to run again on an existing database.
+
+### Ongoing migrations
+
+After the initial schema, apply migration files in `supabase/migrations/` (in filename order) for any changes added since your last deploy:
 
 ```bash
+# Via Supabase CLI (recommended)
 supabase db push
+
+# Or manually: paste each new file in supabase/migrations/ into the SQL Editor in order
 ```
 
-Key tables: `users`, `memories`, `usage_events`, `integration_tokens`, `clients`, `leads`.
+**schema.sql vs migrations:** `schema.sql` is the canonical baseline — it produces a complete, correct database from scratch. The `migrations/` files are additive patches applied on top of an existing deployment. New deploys: run `schema.sql` only. Existing deploys upgrading from an earlier version: run the new migration files in order.
+
+Key tables: `profiles`, `memories`, `usage_events`, `client_integrations`, `clients`, `leads`.
 
 ## Plans & Usage Limits
 
