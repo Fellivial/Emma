@@ -12,7 +12,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs";
-import { MODEL_BRAIN } from "@/core/models";
+import { MODEL_BRAIN, MODEL_UTILITY } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
@@ -79,6 +79,16 @@ Rules:
 - Dangerous actions (emails, bookings, deletions) will be paused for human approval automatically — you don't need to ask, just call the tool.
 - If you can't complete the goal, call complete_task explaining why.
 - Never loop endlessly — if stuck after 2 attempts, complete with an error summary.`;
+
+function buildStateSummary(completedSteps: AgentStepResult[]): string {
+  if (completedSteps.length === 0) return "No steps completed yet.";
+  return completedSteps
+    .map(
+      (s) =>
+        `- step ${s.step} [${s.toolName}]: ${s.output.slice(0, 120)}${s.output.length > 120 ? "…" : ""}`
+    )
+    .join("\n");
+}
 
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 
@@ -171,8 +181,8 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: MODEL_BRAIN,
-            max_tokens: 1024,
+            model: step < task.maxSteps ? MODEL_UTILITY : MODEL_BRAIN,
+            max_tokens: step < task.maxSteps ? 512 : 1024,
             system: AGENT_SYSTEM,
             messages,
             tools,
@@ -403,6 +413,21 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               },
             ],
           });
+
+          // Compress history: replace everything except the last exchange with a
+          // state summary so input tokens stay bounded across steps.
+          if (messages.length >= 5) {
+            const lastTwo = messages.slice(-2);
+            messages.splice(
+              0,
+              messages.length,
+              {
+                role: "user",
+                content: `GOAL: ${task.goal}\n\nState:\n${buildStateSummary(steps)}`,
+              },
+              ...lastTwo
+            );
+          }
         }
       }
 

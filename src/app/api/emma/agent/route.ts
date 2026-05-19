@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
               trigger_source: body.triggerSource || "user_request",
               goal: body.goal,
               status: "pending",
-              max_steps: 10,
+              max_steps: 5,
             })
             .select("id")
             .single();
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           goal: body.goal,
           context: body.context || "",
           userId,
-          maxSteps: 10,
+          maxSteps: 5,
           triggerType: "manual",
           triggerSource: body.triggerSource || "user_request",
         };
