@@ -283,7 +283,9 @@ export function useAvatar(): UseAvatarReturn {
       // Skip Live2D init entirely if model files aren't present — avoids the
       // "Cannot find Cubism 2 runtime" console error from pixi-live2d-display.
       try {
-        const probe = await fetch("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", { method: "HEAD" });
+        const probe = await fetch("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", {
+          method: "HEAD",
+        });
         if (!probe.ok) {
           setState((s) => ({ ...s, loaded: false }));
           resetIdleTimer();
@@ -296,7 +298,7 @@ export function useAvatar(): UseAvatarReturn {
       }
 
       const PIXI = await import("pixi.js");
-      const { Live2DModel } = await import("pixi-live2d-display");
+      const { Live2DModel } = await import("pixi-live2d-display/cubism4");
       (window as any).PIXI = PIXI;
 
       const app = new PIXI.Application({
@@ -309,10 +311,13 @@ export function useAvatar(): UseAvatarReturn {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const model = (await Live2DModel.from("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", {
-          autoInteract: true,
-          autoUpdate: true,
-        })) as any;
+        const model = (await Live2DModel.from(
+          "/live2d/emma/Design_genius_White/Design_genius(1).model3.json",
+          {
+            autoInteract: true,
+            autoUpdate: true,
+          }
+        )) as any;
 
         model.anchor.set(0.5, 0.5);
         model.scale.set(0.25);
