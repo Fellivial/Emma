@@ -283,7 +283,7 @@ export function useAvatar(): UseAvatarReturn {
       // Skip Live2D init entirely if model files aren't present — avoids the
       // "Cannot find Cubism 2 runtime" console error from pixi-live2d-display.
       try {
-        const probe = await fetch("/live2d/emma/emma.model3.json", { method: "HEAD" });
+        const probe = await fetch("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", { method: "HEAD" });
         if (!probe.ok) {
           setState((s) => ({ ...s, loaded: false }));
           resetIdleTimer();
@@ -309,7 +309,7 @@ export function useAvatar(): UseAvatarReturn {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const model = (await Live2DModel.from("/live2d/emma/emma.model3.json", {
+        const model = (await Live2DModel.from("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", {
           autoInteract: true,
           autoUpdate: true,
         })) as any;
