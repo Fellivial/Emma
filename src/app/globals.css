@@ -10,11 +10,19 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   background: #0d0a0e;
   color: #e8dfe6;
   font-family: "Outfit", system-ui, sans-serif;
   overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────────────────────── */
