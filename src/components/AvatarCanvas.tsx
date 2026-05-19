@@ -24,6 +24,7 @@ interface AvatarCanvasProps {
   onToggleVisible: () => void;
   onSetLayout: (layout: AvatarLayout) => void;
   onPreviewVoice?: () => void;
+  hideControls?: boolean;
 }
 
 export function AvatarCanvas({
@@ -33,6 +34,7 @@ export function AvatarCanvas({
   onToggleVisible,
   onSetLayout,
   onPreviewVoice,
+  hideControls = false,
 }: AvatarCanvasProps) {
   // Auto-init on mount
   useEffect(() => {
@@ -117,52 +119,58 @@ export function AvatarCanvas({
       )}
 
       {/* Expression indicator overlay */}
-      <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm rounded-full px-2.5 py-1">
-        <span className="text-xs">{expr.emoji}</span>
-        <span className="text-[10px] text-white/50">{expr.label}</span>
-        {state.talking && (
-          <span className="flex gap-0.5 ml-1">
-            <span className="w-1 h-1 rounded-full bg-emma-300 animate-pulse" />
-            <span
-              className="w-1 h-1 rounded-full bg-emma-300 animate-pulse"
-              style={{ animationDelay: "0.15s" }}
-            />
-            <span
-              className="w-1 h-1 rounded-full bg-emma-300 animate-pulse"
-              style={{ animationDelay: "0.3s" }}
-            />
-          </span>
-        )}
-      </div>
+      {!hideControls && (
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm rounded-full px-2.5 py-1">
+          <span className="text-xs">{expr.emoji}</span>
+          <span className="text-[10px] text-white/50">{expr.label}</span>
+          {state.talking && (
+            <span className="flex gap-0.5 ml-1">
+              <span className="w-1 h-1 rounded-full bg-emma-300 animate-pulse" />
+              <span
+                className="w-1 h-1 rounded-full bg-emma-300 animate-pulse"
+                style={{ animationDelay: "0.15s" }}
+              />
+              <span
+                className="w-1 h-1 rounded-full bg-emma-300 animate-pulse"
+                style={{ animationDelay: "0.3s" }}
+              />
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Controls overlay */}
-      <div className="absolute top-2 right-2 flex gap-1">
-        <button
-          onClick={onToggleVisible}
-          className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/30 hover:text-white/60 cursor-pointer transition-colors"
-          title="Hide avatar"
-          aria-label="Hide avatar"
-        >
-          <EyeOff size={12} />
-        </button>
-      </div>
+      {!hideControls && (
+        <div className="absolute top-2 right-2 flex gap-1">
+          <button
+            onClick={onToggleVisible}
+            className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/30 hover:text-white/60 cursor-pointer transition-colors"
+            title="Hide avatar"
+            aria-label="Hide avatar"
+          >
+            <EyeOff size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Layout selector — text pill tabs */}
-      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-        {(["side", "overlay", "pip"] as AvatarLayout[]).map((layout) => (
-          <button
-            key={layout}
-            onClick={() => onSetLayout(layout)}
-            className={`px-3 min-h-[44px] flex items-center rounded-full text-[10px] font-light border cursor-pointer transition-all ${
-              state.layout === layout
-                ? "bg-emma-300/15 border-emma-300/25 text-emma-300/80"
-                : "bg-black/30 border-white/8 text-white/20 hover:text-white/40 hover:border-white/15"
-            }`}
-          >
-            {layout}
-          </button>
-        ))}
-      </div>
+      {!hideControls && (
+        <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+          {(["side", "overlay", "pip"] as AvatarLayout[]).map((layout) => (
+            <button
+              key={layout}
+              onClick={() => onSetLayout(layout)}
+              className={`px-3 min-h-[44px] flex items-center rounded-full text-[10px] font-light border cursor-pointer transition-all ${
+                state.layout === layout
+                  ? "bg-emma-300/15 border-emma-300/25 text-emma-300/80"
+                  : "bg-black/30 border-white/8 text-white/20 hover:text-white/40 hover:border-white/15"
+              }`}
+            >
+              {layout}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import type {
   ChatMessage as ChatMessageType,
   ApiMessage,
@@ -41,6 +43,7 @@ import { streamEmmaResponse, type StreamDoneEvent } from "@/lib/stream-client";
 
 import { Header } from "@/components/Header";
 import { ChatPanel } from "@/components/ChatPanel";
+import { InputBar } from "@/components/InputBar";
 import { NotificationToast } from "@/components/NotificationToast";
 import { AvatarCanvas } from "@/components/AvatarCanvas";
 import { AutonomousTasksPanel } from "@/components/AutonomousTasksPanel";
@@ -67,6 +70,7 @@ export default function EmmaPage() {
   const [usageBlocked, setUsageBlocked] = useState<{ upgradeUrl: string } | null>(null);
   const [autonomousTasks, setAutonomousTasks] = useState<AutonomousTask[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalDetails[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
 
   // ── Memory (L2) ────────────────────────────────────────────────────────────
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
@@ -640,10 +644,14 @@ export default function EmmaPage() {
     avatar.resetIdleTimer();
   }, [avatar]);
 
-  // ── PiP fallback: auto-switch to pip when avatar panel is hidden ──────────
+  // ── Responsive layout: mobile immersive / pip fallback ───────────────────
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth <= 1100 && avatar.state.layout === "side") {
+      const w = window.innerWidth;
+      setIsMobile(w < 1024);
+      if (w < 1024) {
+        if (avatar.state.layout !== "overlay") avatar.setLayout("overlay");
+      } else if (w <= 1100 && avatar.state.layout === "side") {
         avatar.setLayout("pip");
       }
     };
@@ -651,6 +659,90 @@ export default function EmmaPage() {
     handleResize();
     return () => window.removeEventListener("resize", handleResize);
   }, [avatar.state.layout, avatar.setLayout]);
+
+  // ── Mobile immersive render ────────────────────────────────────────────────
+  if (isMobile) {
+    const visibleMessages = messages.slice(-4);
+    return (
+      <div className="h-[100dvh] w-screen bg-emma-950 overflow-hidden relative font-sans">
+        <NotificationToast
+          notifications={notifications.notifications}
+          onAction={notifications.handleAction}
+          onDismiss={notifications.dismiss}
+        />
+
+        {/* Full-screen avatar background */}
+        <div className="absolute inset-0 z-0">
+          <AvatarCanvas
+            state={avatar.state}
+            canvasRef={avatar.canvasRef}
+            onInit={avatar.init}
+            onToggleVisible={avatar.toggleVisible}
+            onSetLayout={avatar.setLayout}
+            hideControls
+          />
+        </div>
+
+        {/* Gradient overlay — darkens bottom for text legibility */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(13,10,14,0.96) 0%, rgba(13,10,14,0.6) 38%, rgba(13,10,14,0.15) 65%, transparent 100%)",
+          }}
+        />
+
+        {/* Top mini bar */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+              <span className="font-display text-base italic text-emma-950">E</span>
+            </div>
+            <span className="text-[11px] font-semibold tracking-wider text-emma-300/80">EMMA</span>
+          </div>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="w-11 h-11 flex items-center justify-center text-emma-200/30 hover:text-emma-200/60 transition-colors"
+          >
+            <Settings size={16} />
+          </Link>
+        </div>
+
+        {/* Floating chat bubbles */}
+        <div
+          className="absolute left-4 right-4 z-10 flex flex-col gap-2"
+          style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          {visibleMessages.map((msg) => (
+            <MobileChatBubble key={msg.id} message={msg} />
+          ))}
+          {loading && <MobileTypingBubble />}
+        </div>
+
+        {/* Pinned input bar */}
+        <div
+          className="absolute bottom-0 left-0 right-0 z-20"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          <InputBar
+            onSend={sendMessage}
+            onVoice={handleVoice}
+            voiceSupported={voice.supported}
+            listening={voice.listening}
+            ttsEnabled={ttsEnabled}
+            onToggleTts={() => setTtsEnabled((v) => !v)}
+            disabled={loading}
+            blocked={!!usageBlocked}
+            onTypingStart={handleTypingStart}
+            onTypingStop={handleTypingStop}
+            visionActive={vision.active}
+            onVisionToggle={handleVisionToggle}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -811,6 +903,42 @@ export default function EmmaPage() {
             />
           </SideSection>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+// ── Mobile chat bubble ────────────────────────────────────────────────────────
+function MobileChatBubble({ message }: { message: ChatMessageType }) {
+  const isUser = message.role === "user";
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm font-light leading-relaxed backdrop-blur-md ${
+          isUser
+            ? "bg-emma-300/15 border border-emma-300/20 text-emma-100 rounded-br-sm"
+            : "bg-black/50 border border-white/8 text-white/80 rounded-bl-sm"
+        }`}
+      >
+        {message.display}
+      </div>
+    </div>
+  );
+}
+
+function MobileTypingBubble() {
+  return (
+    <div className="flex justify-start">
+      <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-black/50 border border-white/8 backdrop-blur-md flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-emma-300/60 animate-pulse" />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-emma-300/60 animate-pulse"
+          style={{ animationDelay: "0.15s" }}
+        />
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-emma-300/60 animate-pulse"
+          style={{ animationDelay: "0.3s" }}
+        />
       </div>
     </div>
   );
