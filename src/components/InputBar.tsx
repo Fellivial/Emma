@@ -50,8 +50,7 @@ export function InputBar({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height =
-        Math.min(textareaRef.current.scrollHeight, 200) + "px";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
     }
   }, [input]);
 
@@ -157,9 +156,7 @@ export function InputBar({
             onKeyDown={handleKeyDown}
             disabled={disabled || blocked}
             placeholder={
-              blocked
-                ? "Response limit reached — get extra time to continue"
-                : "Talk to Emma…"
+              blocked ? "Response limit reached — get extra time to continue" : "Talk to Emma…"
             }
             aria-label="Message Emma"
             rows={1}
@@ -234,7 +231,7 @@ export function InputBar({
               disabled={!hasContent || disabled || !!blocked}
               aria-label="Send message"
               aria-disabled={!hasContent || disabled || !!blocked}
-              className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${
                 hasContent && !disabled && !blocked
                   ? "bg-gradient-to-br from-emma-300 to-emma-400 text-emma-950 hover:opacity-90 shadow-md shadow-black/20"
                   : "bg-emma-300/15 text-emma-950/30 cursor-default"
@@ -269,13 +266,7 @@ export function InputBar({
   );
 }
 
-function FilePreview({
-  file,
-  onRemove,
-}: {
-  file: AttachedFile;
-  onRemove: (id: string) => void;
-}) {
+function FilePreview({ file, onRemove }: { file: AttachedFile; onRemove: (id: string) => void }) {
   return (
     <div className="relative group flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden border border-surface-border bg-emma-950/60">
       {file.preview ? (
