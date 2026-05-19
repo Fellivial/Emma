@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <head>
         <Script
-          src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"
+          src="/live2d/live2dcubismcore.min.js"
           strategy="beforeInteractive"
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
