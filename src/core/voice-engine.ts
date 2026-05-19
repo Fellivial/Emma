@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // ─── Voice State Machine ─────────────────────────────────────────────────────
 
 export type VoiceMode = "idle" | "listening" | "thinking" | "speaking";
-type TtsBackend = "elevenlabs" | "webspeech";
 
 const SILENCE_TIMEOUT = 5000; // 5s of silence → auto-stop recording
 
@@ -30,27 +29,92 @@ interface UseVoiceReturn {
  * Silence timeout: auto-stops recording after 5s of no speech.
  * Edge cases: mic permission denied → returns null, stays idle.
  */
+
+// ── Emotion-to-voice-params (tuned for Emma's persona) ───────────────────────
+//
+// Baseline philosophy:
+//   - Emma is SLOW. She doesn't rush. Rate should rarely exceed 1.0.
+//   - Emma is LOW. Not deep — just lower than "helpful assistant" pitch.
+//   - Pitch 1.0 = normal. Emma's neutral sits at 0.95 (slightly low = confident).
+//   - Rate 0.88 = unhurried. She takes her time. That's the persona.
+//
+// The gap between Web Speech and ElevenLabs is INTENTIONAL.
+// These params make Web Speech as good as possible — but the ceiling
+// is the upgrade incentive for Pro.
+const VOICE_PARAMS: Record<string, { rate: number; pitch: number; volume: number }> = {
+  // Emma's core tones
+  neutral: { rate: 0.88, pitch: 0.95, volume: 0.9 }, // Baseline — calm, unhurried, slightly low
+  warm: { rate: 0.84, pitch: 0.97, volume: 0.85 }, // Softer, slower — maternal warmth
+  smirk: { rate: 0.9, pitch: 0.98, volume: 0.95 }, // Slightly more energy — she's teasing
+  flirty: { rate: 0.85, pitch: 1.02, volume: 0.85 }, // Touch higher pitch, softer — intimate
+  amused: { rate: 0.92, pitch: 1.0, volume: 0.9 }, // Light, slightly brighter
+  concerned: { rate: 0.8, pitch: 0.9, volume: 0.8 }, // Slow, low, gentle — she cares
+  sad: { rate: 0.75, pitch: 0.85, volume: 0.75 }, // Slowest, lowest, softest
+  skeptical: { rate: 0.9, pitch: 0.92, volume: 0.95 }, // Even, flat — "I see what you're doing"
+  listening: { rate: 0.85, pitch: 0.93, volume: 0.8 }, // Quiet, attentive
+  idle_bored: { rate: 0.92, pitch: 0.96, volume: 0.9 }, // Slightly playful impatience
+
+  // Mapped emotions from detection pipeline
+  happy: { rate: 0.92, pitch: 1.0, volume: 0.9 },
+  caring: { rate: 0.82, pitch: 0.95, volume: 0.85 },
+  focused: { rate: 0.9, pitch: 0.93, volume: 0.9 },
+  excited: { rate: 0.95, pitch: 1.05, volume: 0.95 }, // Emma's version of "excited" is still controlled
+};
+
+// ── Emma-specific speech pattern processing ───────────────────────────────────
+//
+// Emma's writing style has specific patterns that need pause treatment:
+//   "Mmm." → needs a beat after it (she's processing)
+//   "Ahh." → needs a beat (she's satisfied/amused)
+//   "baby" → needs a slight pause before (it's a term of endearment, not filler)
+//   "..." → she uses ellipsis for dramatic effect, needs a real pause
+//   "—" → em dash = interruption/aside, needs space
+function processForEmma(text: string): string {
+  return (
+    text
+      // Emma's signature sounds — add pauses
+      .replace(/\bMmm\.?\s*/gi, "Mmm...  ")
+      .replace(/\bAhh\.?\s*/gi, "Ahh...  ")
+      .replace(/\bHmm\.?\s*/gi, "Hmm...  ")
+
+      // Pause before terms of endearment (makes them land)
+      .replace(/\bbaby\b/gi, "...baby")
+      .replace(/\bsweetheart\b/gi, "...sweetheart")
+
+      // Punctuation-based pauses
+      .replace(/\.\s/g, ".   ") // Period → longer pause (she's unhurried)
+      .replace(/—/g, "  —  ") // Em dash → dramatic pause
+      .replace(/\.\.\./g, ".....  ") // Ellipsis → real pause (she does this a lot)
+      .replace(/\?\s/g, "?   ") // Question → slight pause (she waits)
+
+      // Clean up excessive whitespace
+      .replace(/\s{5,}/g, "    ")
+      .trim()
+  );
+}
+
 export function useVoice(): UseVoiceReturn {
   const [mode, setMode] = useState<VoiceMode>("idle");
-  const [supported, setSupported] = useState(false);
-  const [ttsBackend, setTtsBackend] = useState<TtsBackend>("webspeech");
+  const [supported] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const w = window as Window & { webkitSpeechRecognition?: unknown };
+    return !!(window.SpeechRecognition || w.webkitSpeechRecognition);
+  });
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const backendProbed = useRef(false);
 
   // Derived booleans for backward compat
   const listening = mode === "listening";
   const speaking = mode === "speaking";
 
   useEffect(() => {
-    const SR =
-      typeof window !== "undefined"
-        ? window.SpeechRecognition || (window as any).webkitSpeechRecognition
-        : null;
+    const w = typeof window !== "undefined"
+      ? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition })
+      : null;
+    const SR = w ? (w.SpeechRecognition || w.webkitSpeechRecognition) : null;
     if (SR) {
-      setSupported(true);
       const r = new SR();
       r.continuous = false;
       r.interimResults = false;
@@ -85,7 +149,7 @@ export function useVoice(): UseVoiceReturn {
         setMode("idle");
 
         // Check for specific error types
-        const errEvent = e as any;
+        const errEvent = e as SpeechRecognitionErrorEvent;
         if (errEvent.error === "not-allowed") {
           console.warn("[EMMA Voice] Microphone permission denied");
         } else if (errEvent.error === "no-speech") {
@@ -105,8 +169,7 @@ export function useVoice(): UseVoiceReturn {
 
       try {
         r.start();
-      } catch (err) {
-        // Already started or permission issue
+      } catch {
         setMode("idle");
         resolve(null);
         return;
@@ -134,7 +197,6 @@ export function useVoice(): UseVoiceReturn {
           body: JSON.stringify({ text, clientId }),
         });
         if (res.status === 501) {
-          setTtsBackend("webspeech");
           return null;
         }
         if (!res.ok) return null;
@@ -216,71 +278,6 @@ export function useVoice(): UseVoiceReturn {
     // Fallback 2: any English voice (guarantees correct language on Windows)
     return voices.find((v) => v.lang.startsWith("en")) || null;
   }, []);
-
-  // ── Emotion-to-voice-params (tuned for Emma's persona) ────────────────────
-  //
-  // Baseline philosophy:
-  //   - Emma is SLOW. She doesn't rush. Rate should rarely exceed 1.0.
-  //   - Emma is LOW. Not deep — just lower than "helpful assistant" pitch.
-  //   - Pitch 1.0 = normal. Emma's neutral sits at 0.95 (slightly low = confident).
-  //   - Rate 0.88 = unhurried. She takes her time. That's the persona.
-  //
-  // The gap between Web Speech and ElevenLabs is INTENTIONAL.
-  // These params make Web Speech as good as possible — but the ceiling
-  // is the upgrade incentive for Pro.
-
-  const VOICE_PARAMS: Record<string, { rate: number; pitch: number; volume: number }> = {
-    // Emma's core tones
-    neutral: { rate: 0.88, pitch: 0.95, volume: 0.9 }, // Baseline — calm, unhurried, slightly low
-    warm: { rate: 0.84, pitch: 0.97, volume: 0.85 }, // Softer, slower — maternal warmth
-    smirk: { rate: 0.9, pitch: 0.98, volume: 0.95 }, // Slightly more energy — she's teasing
-    flirty: { rate: 0.85, pitch: 1.02, volume: 0.85 }, // Touch higher pitch, softer — intimate
-    amused: { rate: 0.92, pitch: 1.0, volume: 0.9 }, // Light, slightly brighter
-    concerned: { rate: 0.8, pitch: 0.9, volume: 0.8 }, // Slow, low, gentle — she cares
-    sad: { rate: 0.75, pitch: 0.85, volume: 0.75 }, // Slowest, lowest, softest
-    skeptical: { rate: 0.9, pitch: 0.92, volume: 0.95 }, // Even, flat — "I see what you're doing"
-    listening: { rate: 0.85, pitch: 0.93, volume: 0.8 }, // Quiet, attentive
-    idle_bored: { rate: 0.92, pitch: 0.96, volume: 0.9 }, // Slightly playful impatience
-
-    // Mapped emotions from detection pipeline
-    happy: { rate: 0.92, pitch: 1.0, volume: 0.9 },
-    caring: { rate: 0.82, pitch: 0.95, volume: 0.85 },
-    focused: { rate: 0.9, pitch: 0.93, volume: 0.9 },
-    excited: { rate: 0.95, pitch: 1.05, volume: 0.95 }, // Emma's version of "excited" is still controlled
-  };
-
-  // ── Emma-specific speech pattern processing ───────────────────────────────
-  //
-  // Emma's writing style has specific patterns that need pause treatment:
-  //   "Mmm." → needs a beat after it (she's processing)
-  //   "Ahh." → needs a beat (she's satisfied/amused)
-  //   "baby" → needs a slight pause before (it's a term of endearment, not filler)
-  //   "..." → she uses ellipsis for dramatic effect, needs a real pause
-  //   "—" → em dash = interruption/aside, needs space
-
-  const processForEmma = (text: string): string => {
-    return (
-      text
-        // Emma's signature sounds — add pauses
-        .replace(/\bMmm\.?\s*/gi, "Mmm...  ")
-        .replace(/\bAhh\.?\s*/gi, "Ahh...  ")
-        .replace(/\bHmm\.?\s*/gi, "Hmm...  ")
-
-        // Pause before terms of endearment (makes them land)
-        .replace(/\bbaby\b/gi, "...baby")
-        .replace(/\bsweetheart\b/gi, "...sweetheart")
-
-        // Punctuation-based pauses
-        .replace(/\.\s/g, ".   ") // Period → longer pause (she's unhurried)
-        .replace(/—/g, "  —  ") // Em dash → dramatic pause
-        .replace(/\.\.\./g, ".....  ") // Ellipsis → real pause (she does this a lot)
-        .replace(/\?\s/g, "?   ") // Question → slight pause (she waits)
-
-        // Clean up excessive whitespace
-        .replace(/\s{5,}/g, "    ")
-        .trim()
-    );
-  };
 
   // ── Web Speech TTS (Emma-tuned) ───────────────────────────────────────────
 
