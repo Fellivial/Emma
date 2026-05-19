@@ -77,7 +77,8 @@ export function SchedulePanel({ schedules, onToggle, onRemove }: SchedulePanelPr
                 </button>
                 <button
                   onClick={() => onRemove(sched.id)}
-                  className="text-emma-200/15 hover:text-red-400/60 cursor-pointer transition-colors"
+                  aria-label="Remove schedule"
+                  className="w-11 h-11 flex items-center justify-center text-emma-200/15 hover:text-red-400/60 cursor-pointer transition-colors"
                 >
                   <Trash2 size={13} />
                 </button>

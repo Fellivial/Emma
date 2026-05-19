@@ -85,7 +85,7 @@ export function Header(props: HeaderProps) {
         </Pill>
         <Link
           href="/settings"
-          className="flex items-center gap-1 text-[10px] font-light text-emma-200/25 bg-surface border border-surface-border rounded-full px-2.5 py-1 hover:text-emma-200/50 hover:border-emma-300/20 transition-all"
+          className="flex items-center gap-1 text-[10px] font-light text-emma-200/25 bg-surface border border-surface-border rounded-full px-2.5 py-2 min-h-[44px] hover:text-emma-200/50 hover:border-emma-300/20 transition-all"
         >
           <Settings size={12} /> Settings
         </Link>
