@@ -18,10 +18,21 @@ function getSupabase() {
 export async function GET() {
   try {
     const user = await getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized", hint: "Sign in at /login" }, { status: 401 });
+    if (!user)
+      return NextResponse.json(
+        { error: "Unauthorized", hint: "Sign in at /login" },
+        { status: 401 }
+      );
 
     const supabase = getSupabase();
-    if (!supabase) return NextResponse.json({ error: "Database not configured", hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local" }, { status: 501 });
+    if (!supabase)
+      return NextResponse.json(
+        {
+          error: "Database not configured",
+          hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local",
+        },
+        { status: 501 }
+      );
 
     // Get user's plan
     const { data: membership } = await supabase
@@ -82,6 +93,9 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[/api/emma/usage]", err);
-    return NextResponse.json({ error: "Failed to load usage data", detail: String(err) }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load usage data", detail: String(err) },
+      { status: 500 }
+    );
   }
 }
