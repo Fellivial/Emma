@@ -40,7 +40,7 @@ export default function TerminalShowcase() {
   return (
     <section ref={sectionRef} style={{ background: "var(--l-bg)", padding: "80px 40px" }}>
       {/* Headline — clip-path wipe */}
-      <div style={{ overflow: "hidden", textAlign: "center", marginBottom: "48px" }}>
+      <div style={{ overflow: "hidden", marginBottom: "48px" }}>
         <motion.h2
           initial={{ clipPath: "inset(0 0 100% 0)", opacity: 0, y: 16 }}
           animate={inView ? { clipPath: "inset(0 0 0% 0)", opacity: 1, y: 0 } : {}}
@@ -54,7 +54,7 @@ export default function TerminalShowcase() {
             letterSpacing: "0.02em",
           }}
         >
-          Built for the devoted.
+          The system, complete.
         </motion.h2>
       </div>
 

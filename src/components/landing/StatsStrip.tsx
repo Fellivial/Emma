@@ -56,6 +56,7 @@ function StatCell({
           transition={{ duration: 0.7, ease, delay: index * 0.1 + 0.15 }}
           style={{
             fontFamily: "var(--font-l-display)",
+            fontStyle: "italic",
             fontSize: "72px",
             lineHeight: 0.92,
             letterSpacing: "-0.02em",

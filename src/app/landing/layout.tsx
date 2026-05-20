@@ -40,8 +40,8 @@ export default function LandingLayout({ children }: { children: ReactNode }) {
           {
             background: "var(--l-bg)",
             color: "var(--l-text)",
-            "--font-l-display": "'Bebas Neue', sans-serif",
-            "--font-l-cond": "'Outfit', sans-serif",
+            "--font-l-display": "'Cormorant Garamond', Georgia, serif",
+            "--font-l-cond": "'Bebas Neue', sans-serif",
             "--font-l-body": "'Outfit', sans-serif",
             "--font-l-mono": "'JetBrains Mono', monospace",
           } as React.CSSProperties

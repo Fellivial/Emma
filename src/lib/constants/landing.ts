@@ -105,7 +105,7 @@ export const TERMINAL_LINES: TerminalLine[] = [
   { text: "> Agent loop initialized · 8 tools registered" },
   { text: "> Emotion engine online · 3-signal fusion" },
   { text: "" },
-  { text: "✓ Ready. Persona: Flirty Teasing Mommy" },
+  { text: "✓ Ready. Persona: Yours." },
   { text: "Network: ON · Telemetry: OFF · Memory: ENCRYPTED" },
 ];
 
@@ -241,7 +241,8 @@ export const APPROACH_STEPS: ApproachStep[] = [
 export const APPROACH_PANELS: Record<"coverage" | "latency" | "memory", PanelData> = {
   coverage: {
     title: "Pillar Coverage",
-    description: "Emma integrates every capability into one coherent system. Competitors solve one layer — Emma solves all six.",
+    description:
+      "Emma integrates every capability into one coherent system. Competitors solve one layer — Emma solves all six.",
     bars: [
       { label: "Emma", pct: 100, isEmma: true, display: "6 / 6 pillars" },
       { label: "Avatar platforms", pct: 17, display: "~1 / 6 pillars" },
@@ -251,7 +252,8 @@ export const APPROACH_PANELS: Record<"coverage" | "latency" | "memory", PanelDat
   },
   latency: {
     title: "Streaming Latency",
-    description: "Emma starts responding before the full reply is ready. First-token delivery via SSE, not batch payload delivery.",
+    description:
+      "Emma starts responding before the full reply is ready. First-token delivery via SSE, not batch payload delivery.",
     bars: [
       { label: "Emma (streaming SSE)", pct: 20, isEmma: true, display: "~500ms first token" },
       { label: "Standard API", pct: 60, display: "2 – 4s full response" },
@@ -261,7 +263,8 @@ export const APPROACH_PANELS: Record<"coverage" | "latency" | "memory", PanelDat
   },
   memory: {
     title: "Memory Persistence",
-    description: "Emma's memory is server-side and permanent. No session resets. No expiry windows. Context that compounds over months.",
+    description:
+      "Emma's memory is server-side and permanent. No session resets. No expiry windows. Context that compounds over months.",
     bars: [
       { label: "Emma", pct: 100, isEmma: true, display: "Persistent · encrypted" },
       { label: "Session-based AI", pct: 0, display: "Resets every session" },

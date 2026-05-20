@@ -7,7 +7,7 @@ import { NAV_LINKS, TICKER_ITEMS } from "@/lib/constants/landing";
 
 // ── Headline lines ────────────────────────────────────────────────────────────
 
-const HEADLINE_LINES = ["Your home.", "Her world.", "Your rules."];
+const HEADLINE_LINES = ["She remembers.", "She notices.", "She moves first."];
 
 function AnimatedHeadline() {
   const container = {
@@ -37,9 +37,9 @@ function AnimatedHeadline() {
       style={{
         fontFamily: "var(--font-l-display)",
         fontSize: "clamp(68px, 8vw, 118px)",
-        textTransform: "uppercase",
-        lineHeight: 0.91,
-        color: "#000",
+        fontStyle: "italic",
+        lineHeight: 1.05,
+        color: "var(--l-text)",
         marginBottom: "36px",
         maxWidth: "860px",
       }}
@@ -90,9 +90,10 @@ function WatermarkE() {
         top: "50%",
         translateY: "-52%",
         fontFamily: "var(--font-l-display)",
+        fontStyle: "italic",
         fontSize: "clamp(280px, 36vw, 560px)",
         lineHeight: 1,
-        color: "rgba(0,0,0,0.055)",
+        color: "rgba(255,255,255,0.04)",
         pointerEvents: "none",
         userSelect: "none",
         letterSpacing: "-0.04em",
@@ -115,7 +116,7 @@ function HeroTicker() {
       style={{
         overflow: "hidden",
         position: "relative",
-        borderTop: "1px solid rgba(0,0,0,0.12)",
+        borderTop: "1px solid var(--l-border)",
         flexShrink: 0,
       }}
     >
@@ -127,7 +128,7 @@ function HeroTicker() {
           top: 0,
           bottom: 0,
           width: "80px",
-          background: "linear-gradient(to right, #e8547a, transparent)",
+          background: "linear-gradient(to right, #111113, transparent)",
           zIndex: 1,
           pointerEvents: "none",
         }}
@@ -140,7 +141,7 @@ function HeroTicker() {
           top: 0,
           bottom: 0,
           width: "80px",
-          background: "linear-gradient(to left, #e8547a, transparent)",
+          background: "linear-gradient(to left, #111113, transparent)",
           zIndex: 1,
           pointerEvents: "none",
         }}
@@ -167,14 +168,14 @@ function HeroTicker() {
                     fontSize: "11px",
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
-                    color: "rgba(0,0,0,0.6)",
+                    color: "var(--l-muted)",
                     whiteSpace: "nowrap",
                     padding: "0 24px",
                   }}
                 >
                   {item}
                 </span>
-                <span aria-hidden="true" style={{ color: "rgba(0,0,0,0.3)", fontSize: "11px" }}>
+                <span aria-hidden="true" style={{ color: "var(--l-muted2)", fontSize: "11px" }}>
                   •
                 </span>
               </span>
@@ -221,7 +222,7 @@ export default function Hero() {
   return (
     <section
       style={{
-        background: "var(--l-accent)",
+        background: "var(--l-bg)",
         minHeight: "100svh",
         display: "flex",
         flexDirection: "column",
@@ -231,7 +232,7 @@ export default function Hero() {
     >
       <WatermarkE />
 
-      {/* Blueprint grid — fades in slowly */}
+      {/* Subtle grid — barely perceptible on dark */}
       <motion.div
         aria-hidden
         initial={{ opacity: 0 }}
@@ -241,7 +242,7 @@ export default function Hero() {
           position: "absolute",
           inset: 0,
           backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)",
+            "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
           backgroundSize: "60px 60px",
           pointerEvents: "none",
         }}
@@ -261,7 +262,7 @@ export default function Hero() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid rgba(0,0,0,0.11)",
+            borderBottom: "1px solid var(--l-border)",
           }}
         >
           <Link
@@ -269,13 +270,14 @@ export default function Hero() {
             className="l-interactive"
             style={{
               fontFamily: "var(--font-l-display)",
-              fontSize: "26px",
+              fontStyle: "italic",
+              fontSize: "28px",
               letterSpacing: "0.04em",
-              color: "#000",
+              color: "var(--l-text)",
               textDecoration: "none",
             }}
           >
-            EM<span style={{ opacity: 0.4 }}>M</span>A
+            Em<span style={{ opacity: 0.4 }}>m</span>a
           </Link>
 
           <div className="hidden md:flex" style={{ gap: "32px", alignItems: "center" }}>
@@ -287,16 +289,18 @@ export default function Hero() {
                 style={{
                   fontFamily: "var(--font-l-body)",
                   fontSize: "14px",
-                  color: "rgba(0,0,0,0.58)",
+                  color: "var(--l-muted)",
                   textDecoration: "none",
                   transition: "color 150ms",
                   padding: "12px 4px",
                   display: "inline-flex",
                   alignItems: "center",
                 }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "#000")}
+                onMouseEnter={(e) =>
+                  ((e.currentTarget as HTMLAnchorElement).style.color = "var(--l-text)")
+                }
                 onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLAnchorElement).style.color = "rgba(0,0,0,0.58)")
+                  ((e.currentTarget as HTMLAnchorElement).style.color = "var(--l-muted)")
                 }
               >
                 {link.label}
@@ -309,8 +313,8 @@ export default function Hero() {
                 fontFamily: "var(--font-l-body)",
                 fontWeight: 700,
                 fontSize: "12px",
-                color: "var(--l-accent)",
-                background: "#000",
+                color: "#111113",
+                background: "var(--l-accent)",
                 padding: "12px 22px",
                 textDecoration: "none",
                 letterSpacing: "0.05em",
@@ -345,7 +349,7 @@ export default function Hero() {
                   display: "block",
                   width: "22px",
                   height: "2px",
-                  background: "#000",
+                  background: "var(--l-text)",
                   transition: "transform 200ms, opacity 200ms",
                   transformOrigin: "center",
                   transform: menuOpen
@@ -368,8 +372,8 @@ export default function Hero() {
             overflow: "hidden",
             maxHeight: menuOpen ? "320px" : "0",
             transition: "max-height 280ms ease",
-            background: "var(--l-accent)",
-            borderBottom: menuOpen ? "1px solid rgba(0,0,0,0.11)" : "none",
+            background: "var(--l-bg)",
+            borderBottom: menuOpen ? "1px solid var(--l-border)" : "none",
           }}
         >
           <div
@@ -388,7 +392,7 @@ export default function Hero() {
                 style={{
                   fontFamily: "var(--font-l-body)",
                   fontSize: "16px",
-                  color: "rgba(0,0,0,0.62)",
+                  color: "var(--l-muted)",
                   textDecoration: "none",
                 }}
               >
@@ -402,8 +406,8 @@ export default function Hero() {
                 fontFamily: "var(--font-l-body)",
                 fontWeight: 700,
                 fontSize: "14px",
-                color: "var(--l-accent)",
-                background: "#000",
+                color: "#111113",
+                background: "var(--l-accent)",
                 padding: "12px 20px",
                 textDecoration: "none",
                 textAlign: "center",
@@ -437,7 +441,7 @@ export default function Hero() {
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              border: "1px solid rgba(0,0,0,0.2)",
+              border: "1px solid var(--l-border)",
               padding: "5px 14px",
               marginBottom: "36px",
               width: "fit-content",
@@ -448,7 +452,7 @@ export default function Hero() {
                 width: "5px",
                 height: "5px",
                 borderRadius: "50%",
-                background: "#000",
+                background: "var(--l-accent)",
                 animation: "blink 1.8s ease infinite",
                 flexShrink: 0,
               }}
@@ -459,7 +463,7 @@ export default function Hero() {
                 fontSize: "11px",
                 textTransform: "uppercase",
                 letterSpacing: "0.14em",
-                color: "#000",
+                color: "var(--l-muted)",
               }}
             >
               Introducing Emma
@@ -476,7 +480,7 @@ export default function Hero() {
             style={{
               fontFamily: "var(--font-l-body)",
               fontSize: "16px",
-              color: "rgba(0,0,0,0.58)",
+              color: "var(--l-muted)",
               maxWidth: "420px",
               marginBottom: "48px",
               lineHeight: 1.7,
@@ -500,8 +504,8 @@ export default function Hero() {
                   fontSize: "13px",
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
-                  color: "var(--l-accent)",
-                  background: "#000",
+                  color: "#111113",
+                  background: "var(--l-accent)",
                   padding: "14px 36px",
                   textDecoration: "none",
                   display: "inline-block",
@@ -520,9 +524,9 @@ export default function Hero() {
                   fontSize: "13px",
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
-                  color: "#000",
+                  color: "var(--l-text)",
                   background: "transparent",
-                  border: "1px solid rgba(0,0,0,0.24)",
+                  border: "1px solid var(--l-border)",
                   padding: "14px 36px",
                   textDecoration: "none",
                   display: "inline-block",
@@ -542,13 +546,13 @@ export default function Hero() {
               gap: "36px",
               marginTop: "56px",
               paddingTop: "32px",
-              borderTop: "1px solid rgba(0,0,0,0.13)",
+              borderTop: "1px solid var(--l-border)",
               flexWrap: "wrap",
             }}
           >
             {[
               { val: "6", label: "Capabilities" },
-              { val: "100%", label: "On-Device" },
+              { val: "100%", label: "Private" },
               { val: "Always", label: "Present" },
             ].map(({ val, label }, i) => (
               <motion.div
@@ -560,9 +564,10 @@ export default function Hero() {
                 <div
                   style={{
                     fontFamily: "var(--font-l-display)",
+                    fontStyle: "italic",
                     fontSize: "34px",
                     lineHeight: 1,
-                    color: "#000",
+                    color: "var(--l-text)",
                   }}
                 >
                   {val}
@@ -573,7 +578,7 @@ export default function Hero() {
                     fontSize: "9px",
                     textTransform: "uppercase",
                     letterSpacing: "0.14em",
-                    color: "rgba(0,0,0,0.42)",
+                    color: "var(--l-muted2)",
                     marginTop: "6px",
                   }}
                 >
