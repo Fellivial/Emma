@@ -5,14 +5,9 @@ import { CAPABILITIES } from "@/lib/constants/landing";
 
 const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
-const cardVariant = {
-  hidden: { opacity: 0, y: 32, scale: 0.94 },
-  show: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { duration: 0.55, ease },
-  },
+const rowVariant = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease } },
 };
 
 const wipeLine = {
@@ -67,51 +62,48 @@ export default function Capabilities() {
         </div>
       </motion.div>
 
-      {/* 3x2 grid */}
+      {/* Editorial numbered list */}
       <motion.div
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, amount: 0.08 }}
         variants={{
           hidden: {},
-          show: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
+          show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
         }}
-        style={{
-          display: "grid",
-          border: "1px solid var(--l-border)",
-          gap: "1px",
-          background: "var(--l-border)",
-        }}
-        className="lg:grid-cols-3 md:grid-cols-2 grid-cols-1"
+        style={{ borderTop: "1px solid var(--l-border)" }}
       >
         {CAPABILITIES.map((cap) => (
           <motion.div
             key={cap.num}
-            variants={cardVariant}
-            whileHover={{ backgroundColor: "var(--l-surface)", scale: 1.01 }}
-            style={{ background: "var(--l-bg)", padding: "40px 32px", transformOrigin: "center" }}
-            transition={{ duration: 0.18 }}
+            variants={rowVariant}
+            style={{
+              display: "grid",
+              borderBottom: "1px solid var(--l-border)",
+              padding: "28px 0",
+              alignItems: "flex-start",
+              gap: "16px",
+            }}
+            className="grid-cols-1 lg:grid-cols-[72px_220px_1fr]"
           >
-            <p
+            <span
               style={{
                 fontFamily: "var(--font-l-mono)",
                 fontSize: "11px",
-                color: "var(--l-accent)",
-                marginBottom: "20px",
+                color: "var(--l-muted2)",
                 letterSpacing: "0.08em",
+                paddingTop: "4px",
               }}
             >
               [ {cap.num} ]
-            </p>
+            </span>
             <h3
               style={{
-                fontFamily: "var(--font-l-cond)",
-                fontWeight: 700,
+                fontFamily: "var(--font-l-display)",
+                fontStyle: "italic",
                 fontSize: "22px",
-                textTransform: "uppercase",
                 color: "var(--l-text)",
-                lineHeight: 1.15,
-                marginBottom: "12px",
+                lineHeight: 1.2,
               }}
             >
               {cap.title}

@@ -16,11 +16,11 @@ export default function LandingPage() {
     <main>
       <Hero />
       <Problem />
-      <Introducing />
       <Approach />
-      <StatsStrip />
       <Capabilities />
+      <Introducing />
       <TerminalShowcase />
+      <StatsStrip />
       <Pricing />
       <Waitlist />
       <FAQ />

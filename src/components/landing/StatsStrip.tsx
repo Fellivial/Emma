@@ -89,7 +89,6 @@ export default function StatsStrip() {
       ref={ref}
       style={{
         background: "var(--l-bg)",
-        borderBottom: "1px solid var(--l-border)",
         display: "grid",
         gridTemplateColumns: "repeat(4, 1fr)",
       }}

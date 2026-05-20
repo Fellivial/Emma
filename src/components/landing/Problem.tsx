@@ -14,61 +14,287 @@ function FragmentedStack() {
       style={{ display: "block" }}
     >
       {/* Corner brackets */}
-      <polyline points="28,52 28,28 52,28" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="168,28 192,28 192,52" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="52,192 28,192 28,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
-      <polyline points="168,192 192,192 192,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
+      <polyline
+        points="28,52 28,28 52,28"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="168,28 192,28 192,52"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="52,192 28,192 28,168"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
+      <polyline
+        points="168,192 192,192 192,168"
+        fill="none"
+        stroke="rgba(232,84,122,0.45)"
+        strokeWidth="1.5"
+      />
 
       {/* Top-left node: Avatar */}
-      <rect x="36" y="46" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
-      <text x="69" y="68" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">AVATAR</text>
-      <text x="69" y="83" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">face only</text>
+      <rect
+        x="36"
+        y="46"
+        width="66"
+        height="48"
+        fill="rgba(232,84,122,0.04)"
+        stroke="rgba(232,84,122,0.28)"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
+      <text
+        x="69"
+        y="68"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="7"
+        fill="rgba(232,84,122,0.5)"
+        letterSpacing="1.5"
+      >
+        AVATAR
+      </text>
+      <text
+        x="69"
+        y="83"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="6"
+        fill="rgba(242,240,234,0.28)"
+        letterSpacing="0.5"
+      >
+        face only
+      </text>
 
       {/* Top-right node: Voice */}
-      <rect x="118" y="46" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
-      <text x="151" y="68" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">VOICE</text>
-      <text x="151" y="83" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">reactive only</text>
+      <rect
+        x="118"
+        y="46"
+        width="66"
+        height="48"
+        fill="rgba(232,84,122,0.04)"
+        stroke="rgba(232,84,122,0.28)"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
+      <text
+        x="151"
+        y="68"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="7"
+        fill="rgba(232,84,122,0.5)"
+        letterSpacing="1.5"
+      >
+        VOICE
+      </text>
+      <text
+        x="151"
+        y="83"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="6"
+        fill="rgba(242,240,234,0.28)"
+        letterSpacing="0.5"
+      >
+        reactive only
+      </text>
 
       {/* Bottom-left node: Memory */}
-      <rect x="36" y="126" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
-      <text x="69" y="148" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">MEMORY</text>
-      <text x="69" y="163" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">session only</text>
+      <rect
+        x="36"
+        y="126"
+        width="66"
+        height="48"
+        fill="rgba(232,84,122,0.04)"
+        stroke="rgba(232,84,122,0.28)"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
+      <text
+        x="69"
+        y="148"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="7"
+        fill="rgba(232,84,122,0.5)"
+        letterSpacing="1.5"
+      >
+        MEMORY
+      </text>
+      <text
+        x="69"
+        y="163"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="6"
+        fill="rgba(242,240,234,0.28)"
+        letterSpacing="0.5"
+      >
+        session only
+      </text>
 
       {/* Bottom-right node: Agent */}
-      <rect x="118" y="126" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
-      <text x="151" y="148" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">AGENT</text>
-      <text x="151" y="163" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">no presence</text>
+      <rect
+        x="118"
+        y="126"
+        width="66"
+        height="48"
+        fill="rgba(232,84,122,0.04)"
+        stroke="rgba(232,84,122,0.28)"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
+      <text
+        x="151"
+        y="148"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="7"
+        fill="rgba(232,84,122,0.5)"
+        letterSpacing="1.5"
+      >
+        AGENT
+      </text>
+      <text
+        x="151"
+        y="163"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="6"
+        fill="rgba(242,240,234,0.28)"
+        letterSpacing="0.5"
+      >
+        no presence
+      </text>
 
       {/* Broken connection: horizontal top */}
-      <line x1="103" y1="70" x2="117" y2="70" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
-      <text x="110" y="74" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+      <line
+        x1="103"
+        y1="70"
+        x2="117"
+        y2="70"
+        stroke="rgba(232,84,122,0.15)"
+        strokeWidth="1"
+        strokeDasharray="2 2"
+      />
+      <text
+        x="110"
+        y="74"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="9"
+        fill="rgba(232,84,122,0.45)"
+      >
         ✕
-        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.4s" repeatCount="indefinite" />
+        <animate
+          attributeName="opacity"
+          values="0.45;0.75;0.45"
+          dur="2.4s"
+          repeatCount="indefinite"
+        />
       </text>
 
       {/* Broken connection: horizontal bottom */}
-      <line x1="103" y1="150" x2="117" y2="150" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
-      <text x="110" y="154" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+      <line
+        x1="103"
+        y1="150"
+        x2="117"
+        y2="150"
+        stroke="rgba(232,84,122,0.15)"
+        strokeWidth="1"
+        strokeDasharray="2 2"
+      />
+      <text
+        x="110"
+        y="154"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="9"
+        fill="rgba(232,84,122,0.45)"
+      >
         ✕
-        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.8s" repeatCount="indefinite" />
+        <animate
+          attributeName="opacity"
+          values="0.45;0.75;0.45"
+          dur="2.8s"
+          repeatCount="indefinite"
+        />
       </text>
 
       {/* Broken connection: vertical left */}
-      <line x1="69" y1="95" x2="69" y2="124" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
-      <text x="69" y="113" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+      <line
+        x1="69"
+        y1="95"
+        x2="69"
+        y2="124"
+        stroke="rgba(232,84,122,0.15)"
+        strokeWidth="1"
+        strokeDasharray="2 2"
+      />
+      <text
+        x="69"
+        y="113"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="9"
+        fill="rgba(232,84,122,0.45)"
+      >
         ✕
-        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="3.1s" repeatCount="indefinite" />
+        <animate
+          attributeName="opacity"
+          values="0.45;0.75;0.45"
+          dur="3.1s"
+          repeatCount="indefinite"
+        />
       </text>
 
       {/* Broken connection: vertical right */}
-      <line x1="151" y1="95" x2="151" y2="124" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
-      <text x="151" y="113" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+      <line
+        x1="151"
+        y1="95"
+        x2="151"
+        y2="124"
+        stroke="rgba(232,84,122,0.15)"
+        strokeWidth="1"
+        strokeDasharray="2 2"
+      />
+      <text
+        x="151"
+        y="113"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="9"
+        fill="rgba(232,84,122,0.45)"
+      >
         ✕
-        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.6s" repeatCount="indefinite" />
+        <animate
+          attributeName="opacity"
+          values="0.45;0.75;0.45"
+          dur="2.6s"
+          repeatCount="indefinite"
+        />
       </text>
 
       {/* Status label */}
-      <text x="110" y="200" textAnchor="middle" fontFamily="monospace" fontSize="7.5" fill="rgba(232,84,122,0.42)" letterSpacing="2">FRAGMENTED · NO BRIDGE</text>
+      <text
+        x="110"
+        y="200"
+        textAnchor="middle"
+        fontFamily="monospace"
+        fontSize="7.5"
+        fill="rgba(232,84,122,0.42)"
+        letterSpacing="2"
+      >
+        FRAGMENTED · NO BRIDGE
+      </text>
     </svg>
   );
 }

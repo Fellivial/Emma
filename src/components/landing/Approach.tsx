@@ -94,10 +94,7 @@ export default function Approach() {
   const panel = APPROACH_PANELS[activeStep.panelKey];
 
   return (
-    <section
-      id="approach"
-      style={{ background: "var(--l-bg)", borderBottom: "1px solid var(--l-border)" }}
-    >
+    <section id="approach" style={{ background: "var(--l-bg)" }}>
       {/* Section header */}
       <motion.div
         initial="hidden"

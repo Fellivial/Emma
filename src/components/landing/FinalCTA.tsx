@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
-const HEADLINE_LINES = ["Break free from", "generic AI."];
+const HEADLINE_LINES = ["Ready when", "you are."];
 
 function AnimatedHeadline() {
   const container = {

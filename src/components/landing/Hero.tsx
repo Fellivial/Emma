@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { NAV_LINKS, TICKER_ITEMS } from "@/lib/constants/landing";
+import { NAV_LINKS } from "@/lib/constants/landing";
 
 // ── Headline lines ────────────────────────────────────────────────────────────
 
@@ -108,85 +108,6 @@ function WatermarkE() {
   );
 }
 
-// ── Ticker ────────────────────────────────────────────────────────────────────
-
-function HeroTicker() {
-  return (
-    <div
-      style={{
-        overflow: "hidden",
-        position: "relative",
-        borderTop: "1px solid var(--l-border)",
-        flexShrink: 0,
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: "80px",
-          background: "linear-gradient(to right, #111113, transparent)",
-          zIndex: 1,
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: "80px",
-          background: "linear-gradient(to left, #111113, transparent)",
-          zIndex: 1,
-          pointerEvents: "none",
-        }}
-      />
-      <div style={{ display: "flex", width: "max-content" }}>
-        {[0, 1].map((copy) => (
-          <div
-            key={copy}
-            aria-hidden={copy === 1 ? "true" : undefined}
-            className="ticker-track"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "13px 0",
-              animation: "marquee 30s linear infinite",
-              willChange: "transform",
-            }}
-          >
-            {TICKER_ITEMS.map((item, i) => (
-              <span key={i} style={{ display: "flex", alignItems: "center" }}>
-                <span
-                  style={{
-                    fontFamily: "var(--font-l-mono)",
-                    fontSize: "11px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.12em",
-                    color: "var(--l-muted)",
-                    whiteSpace: "nowrap",
-                    padding: "0 24px",
-                  }}
-                >
-                  {item}
-                </span>
-                <span aria-hidden="true" style={{ color: "var(--l-muted2)", fontSize: "11px" }}>
-                  •
-                </span>
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── FadeUp helper ─────────────────────────────────────────────────────────────
 
 function FadeUp({
@@ -231,6 +152,24 @@ export default function Hero() {
       }}
     >
       <WatermarkE />
+
+      {/* Atmospheric radial glow — warm presence without dominating */}
+      <motion.div
+        aria-hidden
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 2.4, ease: [0.16, 1, 0.3, 1] }}
+        style={{
+          position: "absolute",
+          top: "35%",
+          right: "8%",
+          width: "640px",
+          height: "640px",
+          background: "radial-gradient(ellipse, rgba(232,84,122,0.08) 0%, transparent 70%)",
+          pointerEvents: "none",
+          transform: "translateY(-50%)",
+        }}
+      />
 
       {/* Subtle grid — barely perceptible on dark */}
       <motion.div
@@ -589,9 +528,6 @@ export default function Hero() {
           </div>
         </FadeUp>
       </div>
-
-      {/* ── Ticker strip at bottom ── */}
-      <HeroTicker />
     </section>
   );
 }
