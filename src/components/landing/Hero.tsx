@@ -1,8 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { NAV_LINKS, TICKER_ITEMS } from "@/lib/constants/landing";
+
+// ── Headline lines ────────────────────────────────────────────────────────────
+
+const HEADLINE_LINES = ["Your home.", "Her world.", "Your rules."];
+
+function AnimatedHeadline() {
+  const container = {
+    hidden: {},
+    show: {
+      transition: { staggerChildren: 0.14, delayChildren: 0.35 },
+    },
+  };
+
+  const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
+
+  const line = {
+    hidden: { clipPath: "inset(0 0 100% 0)", y: 24, opacity: 0 },
+    show: {
+      clipPath: "inset(0 0 0% 0)",
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.72, ease },
+    },
+  };
+
+  return (
+    <motion.h1
+      variants={container}
+      initial="hidden"
+      animate="show"
+      style={{
+        fontFamily: "var(--font-l-display)",
+        fontSize: "clamp(68px, 8vw, 118px)",
+        textTransform: "uppercase",
+        lineHeight: 0.91,
+        color: "#000",
+        marginBottom: "36px",
+        maxWidth: "860px",
+      }}
+    >
+      {HEADLINE_LINES.map((text) => (
+        <span key={text} style={{ display: "block", overflow: "hidden", paddingBottom: "0.06em" }}>
+          <motion.span style={{ display: "block" }} variants={line}>
+            {text}
+          </motion.span>
+        </span>
+      ))}
+    </motion.h1>
+  );
+}
+
+// ── Watermark E with mouse parallax ──────────────────────────────────────────
+
+function WatermarkE() {
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  const springX = useSpring(mouseX, { stiffness: 30, damping: 20 });
+  const springY = useSpring(mouseY, { stiffness: 30, damping: 20 });
+
+  const x = useTransform(springX, [-1, 1], [-18, 18]);
+  const y = useTransform(springY, [-1, 1], [-10, 10]);
+  const rotateY = useTransform(springX, [-1, 1], ["-6deg", "6deg"]);
+  const rotateX = useTransform(springY, [-1, 1], ["4deg", "-4deg"]);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      mouseX.set((e.clientX / window.innerWidth - 0.5) * 2);
+      mouseY.set((e.clientY / window.innerHeight - 0.5) * 2);
+    }
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [mouseX, mouseY]);
+
+  return (
+    <motion.div
+      aria-hidden
+      initial={{ opacity: 0, scale: 0.88 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+      style={{
+        position: "absolute",
+        right: "-4%",
+        top: "50%",
+        translateY: "-52%",
+        fontFamily: "var(--font-l-display)",
+        fontSize: "clamp(280px, 36vw, 560px)",
+        lineHeight: 1,
+        color: "rgba(0,0,0,0.055)",
+        pointerEvents: "none",
+        userSelect: "none",
+        letterSpacing: "-0.04em",
+        x,
+        y,
+        rotateX,
+        rotateY,
+      }}
+    >
+      E
+    </motion.div>
+  );
+}
+
+// ── Ticker ────────────────────────────────────────────────────────────────────
 
 function HeroTicker() {
   return (
@@ -81,6 +186,35 @@ function HeroTicker() {
   );
 }
 
+// ── FadeUp helper ─────────────────────────────────────────────────────────────
+
+function FadeUp({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.6,
+        ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+        delay,
+      }}
+      style={style}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ── Hero ──────────────────────────────────────────────────────────────────────
+
 export default function Hero() {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -95,29 +229,14 @@ export default function Hero() {
         overflow: "hidden",
       }}
     >
-      {/* Watermark E */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          right: "-4%",
-          top: "50%",
-          transform: "translateY(-52%)",
-          fontFamily: "var(--font-l-display)",
-          fontSize: "clamp(280px, 36vw, 560px)",
-          lineHeight: 1,
-          color: "rgba(0,0,0,0.055)",
-          pointerEvents: "none",
-          userSelect: "none",
-          letterSpacing: "-0.04em",
-        }}
-      >
-        E
-      </div>
+      <WatermarkE />
 
-      {/* Blueprint grid texture */}
-      <div
+      {/* Blueprint grid — fades in slowly */}
+      <motion.div
         aria-hidden
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.8 }}
         style={{
           position: "absolute",
           inset: 0,
@@ -130,7 +249,10 @@ export default function Hero() {
 
       {/* ── Embedded Nav ── */}
       <nav style={{ position: "relative", zIndex: 10, flexShrink: 0 }}>
-        <div
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
           style={{
             maxWidth: "1280px",
             margin: "0 auto",
@@ -238,7 +360,7 @@ export default function Hero() {
               />
             ))}
           </button>
-        </div>
+        </motion.div>
 
         {/* Mobile menu */}
         <div
@@ -309,168 +431,158 @@ export default function Hero() {
         }}
       >
         {/* Eyebrow */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            border: "1px solid rgba(0,0,0,0.2)",
-            padding: "5px 14px",
-            marginBottom: "36px",
-            animation: "heroFadeIn 0.5s ease both",
-            width: "fit-content",
-          }}
-        >
-          <span
+        <FadeUp delay={0.1}>
+          <div
             style={{
-              width: "5px",
-              height: "5px",
-              borderRadius: "50%",
-              background: "#000",
-              animation: "blink 1.8s ease infinite",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontFamily: "var(--font-l-mono)",
-              fontSize: "11px",
-              textTransform: "uppercase",
-              letterSpacing: "0.14em",
-              color: "#000",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              border: "1px solid rgba(0,0,0,0.2)",
+              padding: "5px 14px",
+              marginBottom: "36px",
+              width: "fit-content",
             }}
           >
-            Introducing Emma
-          </span>
-        </div>
+            <span
+              style={{
+                width: "5px",
+                height: "5px",
+                borderRadius: "50%",
+                background: "#000",
+                animation: "blink 1.8s ease infinite",
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-l-mono)",
+                fontSize: "11px",
+                textTransform: "uppercase",
+                letterSpacing: "0.14em",
+                color: "#000",
+              }}
+            >
+              Introducing Emma
+            </span>
+          </div>
+        </FadeUp>
 
-        {/* Headline */}
-        <h1
-          style={{
-            fontFamily: "var(--font-l-display)",
-            fontSize: "clamp(68px, 8vw, 118px)",
-            textTransform: "uppercase",
-            lineHeight: 0.91,
-            color: "#000",
-            marginBottom: "36px",
-            animation: "heroFadeIn 0.6s ease 0.1s both",
-            maxWidth: "860px",
-          }}
-        >
-          Your home.
-          <br />
-          Her world.
-          <br />
-          Your rules.
-        </h1>
+        {/* Headline — clip-path line wipe, staggered */}
+        <AnimatedHeadline />
 
         {/* Subtext */}
-        <p
-          style={{
-            fontFamily: "var(--font-l-body)",
-            fontSize: "16px",
-            color: "rgba(0,0,0,0.58)",
-            maxWidth: "420px",
-            marginBottom: "48px",
-            lineHeight: 1.7,
-            animation: "heroFadeIn 0.6s ease 0.2s both",
-          }}
-        >
-          Emma is the first AI companion system that integrates presence, voice, vision, memory, and
-          autonomous action into one coherent experience.
-        </p>
+        <FadeUp delay={0.72}>
+          <p
+            style={{
+              fontFamily: "var(--font-l-body)",
+              fontSize: "16px",
+              color: "rgba(0,0,0,0.58)",
+              maxWidth: "420px",
+              marginBottom: "48px",
+              lineHeight: 1.7,
+            }}
+          >
+            Emma is the first AI companion system that integrates presence, voice, vision, memory,
+            and autonomous action into one coherent experience.
+          </p>
+        </FadeUp>
 
         {/* CTAs */}
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            flexWrap: "wrap",
-            animation: "heroFadeIn 0.6s ease 0.3s both",
-          }}
-        >
-          <Link
-            href="/register"
-            className="l-interactive"
-            style={{
-              fontFamily: "var(--font-l-body)",
-              fontWeight: 700,
-              fontSize: "13px",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: "var(--l-accent)",
-              background: "#000",
-              padding: "14px 36px",
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            Request Access
-          </Link>
-          <a
-            href="#approach"
-            className="l-interactive"
-            style={{
-              fontFamily: "var(--font-l-body)",
-              fontWeight: 600,
-              fontSize: "13px",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: "#000",
-              background: "transparent",
-              border: "1px solid rgba(0,0,0,0.24)",
-              padding: "14px 36px",
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            Our Approach
-          </a>
-        </div>
+        <FadeUp delay={0.86}>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
+              <Link
+                href="/register"
+                className="l-interactive"
+                style={{
+                  fontFamily: "var(--font-l-body)",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "var(--l-accent)",
+                  background: "#000",
+                  padding: "14px 36px",
+                  textDecoration: "none",
+                  display: "inline-block",
+                }}
+              >
+                Request Access
+              </Link>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
+              <a
+                href="#approach"
+                className="l-interactive"
+                style={{
+                  fontFamily: "var(--font-l-body)",
+                  fontWeight: 600,
+                  fontSize: "13px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "#000",
+                  background: "transparent",
+                  border: "1px solid rgba(0,0,0,0.24)",
+                  padding: "14px 36px",
+                  textDecoration: "none",
+                  display: "inline-block",
+                }}
+              >
+                Our Approach
+              </a>
+            </motion.div>
+          </div>
+        </FadeUp>
 
         {/* Stats */}
-        <div
-          style={{
-            display: "flex",
-            gap: "36px",
-            marginTop: "56px",
-            paddingTop: "32px",
-            borderTop: "1px solid rgba(0,0,0,0.13)",
-            animation: "heroFadeIn 0.6s ease 0.4s both",
-            flexWrap: "wrap",
-          }}
-        >
-          {[
-            { val: "6", label: "Capabilities" },
-            { val: "100%", label: "On-Device" },
-            { val: "Always", label: "Present" },
-          ].map(({ val, label }) => (
-            <div key={label}>
-              <div
-                style={{
-                  fontFamily: "var(--font-l-display)",
-                  fontSize: "34px",
-                  lineHeight: 1,
-                  color: "#000",
-                }}
+        <FadeUp delay={1.0}>
+          <div
+            style={{
+              display: "flex",
+              gap: "36px",
+              marginTop: "56px",
+              paddingTop: "32px",
+              borderTop: "1px solid rgba(0,0,0,0.13)",
+              flexWrap: "wrap",
+            }}
+          >
+            {[
+              { val: "6", label: "Capabilities" },
+              { val: "100%", label: "On-Device" },
+              { val: "Always", label: "Present" },
+            ].map(({ val, label }, i) => (
+              <motion.div
+                key={label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut", delay: 1.0 + i * 0.08 }}
               >
-                {val}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-l-mono)",
-                  fontSize: "9px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.14em",
-                  color: "rgba(0,0,0,0.42)",
-                  marginTop: "6px",
-                }}
-              >
-                {label}
-              </div>
-            </div>
-          ))}
-        </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-l-display)",
+                    fontSize: "34px",
+                    lineHeight: 1,
+                    color: "#000",
+                  }}
+                >
+                  {val}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-l-mono)",
+                    fontSize: "9px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.14em",
+                    color: "rgba(0,0,0,0.42)",
+                    marginTop: "6px",
+                  }}
+                >
+                  {label}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </FadeUp>
       </div>
 
       {/* ── Ticker strip at bottom ── */}

@@ -1,27 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { useInView } from "@/lib/hooks/useInView";
+import { motion } from "framer-motion";
 import { PRICING_PLANS } from "@/lib/constants/landing";
 
-export default function Pricing() {
-  const { ref, inView } = useInView<HTMLElement>({ threshold: 0.08 });
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
+const wipeLine = {
+  hidden: { clipPath: "inset(0 0 100% 0)", opacity: 0 },
+  show: {
+    clipPath: "inset(0 0 0% 0)",
+    opacity: 1,
+    transition: { duration: 0.65, ease },
+  },
+};
+
+const cardVariant = (featured: boolean) => ({
+  hidden: { opacity: 0, y: 48, scale: featured ? 0.96 : 0.93 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.6, ease },
+  },
+});
+
+export default function Pricing() {
   return (
-    <section
-      id="pricing"
-      ref={ref}
-      style={{
-        background: "var(--l-bg)",
-        padding: "80px 40px",
-        opacity: inView ? 1 : 0,
-        transform: inView ? "none" : "translateY(24px)",
-        transition: "opacity 500ms ease, transform 500ms ease",
-      }}
-    >
+    <section id="pricing" style={{ background: "var(--l-bg)", padding: "80px 40px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "12px" }}>
-        <p
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.5 }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.14 } } }}
+        style={{ marginBottom: "48px" }}
+      >
+        <motion.p
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.4 } } }}
           style={{
             fontFamily: "var(--font-l-mono)",
             fontSize: "10px",
@@ -32,38 +48,51 @@ export default function Pricing() {
           }}
         >
           Pricing
-        </p>
-        <h2
-          style={{
-            fontFamily: "var(--font-l-cond)",
-            fontWeight: 900,
-            fontSize: "clamp(32px, 4vw, 52px)",
-            textTransform: "uppercase",
-            color: "var(--l-text)",
-            lineHeight: 1.05,
-            marginBottom: "16px",
+        </motion.p>
+        <div style={{ overflow: "hidden" }}>
+          <motion.h2
+            variants={wipeLine}
+            style={{
+              fontFamily: "var(--font-l-cond)",
+              fontWeight: 900,
+              fontSize: "clamp(32px, 4vw, 52px)",
+              textTransform: "uppercase",
+              color: "var(--l-text)",
+              lineHeight: 1.05,
+              marginBottom: "16px",
+            }}
+          >
+            Start free.
+            <br />
+            Scale when ready.
+          </motion.h2>
+        </div>
+        <motion.p
+          variants={{
+            hidden: { opacity: 0, y: 16 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.5, ease } },
           }}
-        >
-          Start free.
-          <br />
-          Scale when ready.
-        </h2>
-        <p
           style={{
             fontFamily: "var(--font-l-body)",
             fontSize: "15px",
             color: "var(--l-muted)",
             maxWidth: "480px",
             lineHeight: 1.6,
-            marginBottom: "48px",
           }}
         >
           Automation unlocks on Starter and above. Bring your own ElevenLabs key on any plan.
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
       {/* 4-col grid */}
-      <div
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+        variants={{
+          hidden: {},
+          show: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+        }}
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
@@ -74,8 +103,9 @@ export default function Pricing() {
         className="lg:grid-cols-4 sm:grid-cols-2 grid-cols-1"
       >
         {PRICING_PLANS.map((plan) => (
-          <div
+          <motion.div
             key={plan.name}
+            variants={cardVariant(!!plan.featured)}
             style={{
               background: plan.featured ? "var(--l-surface)" : "var(--l-bg)",
               padding: "40px 28px",
@@ -84,7 +114,6 @@ export default function Pricing() {
               borderTop: plan.featured ? "2px solid var(--l-accent)" : "2px solid transparent",
             }}
           >
-            {/* Plan name */}
             <p
               style={{
                 fontFamily: "var(--font-l-mono)",
@@ -98,7 +127,6 @@ export default function Pricing() {
               {plan.name}
             </p>
 
-            {/* Price */}
             <p
               style={{
                 fontFamily: "var(--font-l-display)",
@@ -123,7 +151,6 @@ export default function Pricing() {
               {plan.period}
             </p>
 
-            {/* Features */}
             <ul
               style={{
                 flex: 1,
@@ -135,14 +162,7 @@ export default function Pricing() {
               }}
             >
               {plan.features.map((feat) => (
-                <li
-                  key={feat}
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    alignItems: "flex-start",
-                  }}
-                >
+                <li key={feat} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
                   <span
                     style={{
                       fontFamily: "var(--font-l-mono)",
@@ -168,7 +188,6 @@ export default function Pricing() {
               ))}
             </ul>
 
-            {/* CTA */}
             <Link
               href={plan.ctaHref}
               className="l-interactive"
@@ -190,9 +209,9 @@ export default function Pricing() {
             >
               {plan.cta}
             </Link>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

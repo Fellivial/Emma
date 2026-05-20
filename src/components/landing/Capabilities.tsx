@@ -1,26 +1,42 @@
 "use client";
 
-import { useInView } from "@/lib/hooks/useInView";
+import { motion } from "framer-motion";
 import { CAPABILITIES } from "@/lib/constants/landing";
 
-export default function Capabilities() {
-  const { ref, inView } = useInView<HTMLElement>({ threshold: 0.08 });
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
+const cardVariant = {
+  hidden: { opacity: 0, y: 32, scale: 0.94 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.55, ease },
+  },
+};
+
+const wipeLine = {
+  hidden: { clipPath: "inset(0 0 100% 0)", opacity: 0 },
+  show: {
+    clipPath: "inset(0 0 0% 0)",
+    opacity: 1,
+    transition: { duration: 0.65, ease },
+  },
+};
+
+export default function Capabilities() {
   return (
-    <section
-      id="capabilities"
-      ref={ref}
-      style={{
-        background: "var(--l-bg)",
-        padding: "80px 40px",
-        opacity: inView ? 1 : 0,
-        transform: inView ? "none" : "translateY(24px)",
-        transition: "opacity 500ms ease, transform 500ms ease",
-      }}
-    >
+    <section id="capabilities" style={{ background: "var(--l-bg)", padding: "80px 40px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "48px" }}>
-        <p
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.5 }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }}
+        style={{ marginBottom: "48px" }}
+      >
+        <motion.p
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.4 } } }}
           style={{
             fontFamily: "var(--font-l-mono)",
             fontSize: "10px",
@@ -31,25 +47,35 @@ export default function Capabilities() {
           }}
         >
           What Emma can do
-        </p>
-        <h2
-          style={{
-            fontFamily: "var(--font-l-cond)",
-            fontWeight: 900,
-            fontSize: "clamp(32px, 4vw, 52px)",
-            textTransform: "uppercase",
-            color: "var(--l-text)",
-            lineHeight: 1.05,
-          }}
-        >
-          Six pillars.
-          <br />
-          One system.
-        </h2>
-      </div>
+        </motion.p>
+        <div style={{ overflow: "hidden" }}>
+          <motion.h2
+            variants={wipeLine}
+            style={{
+              fontFamily: "var(--font-l-cond)",
+              fontWeight: 900,
+              fontSize: "clamp(32px, 4vw, 52px)",
+              textTransform: "uppercase",
+              color: "var(--l-text)",
+              lineHeight: 1.05,
+            }}
+          >
+            Six pillars.
+            <br />
+            One system.
+          </motion.h2>
+        </div>
+      </motion.div>
 
       {/* 3x2 grid */}
-      <div
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.08 }}
+        variants={{
+          hidden: {},
+          show: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
+        }}
         style={{
           display: "grid",
           border: "1px solid var(--l-border)",
@@ -58,22 +84,13 @@ export default function Capabilities() {
         }}
         className="lg:grid-cols-3 md:grid-cols-2 grid-cols-1"
       >
-        {CAPABILITIES.map((cap, i) => (
-          <div
+        {CAPABILITIES.map((cap) => (
+          <motion.div
             key={cap.num}
-            style={{
-              background: "var(--l-bg)",
-              padding: "40px 32px",
-              opacity: inView ? 1 : 0,
-              transform: inView ? "none" : "translateY(16px)",
-              transition: `opacity 500ms ease ${i * 80}ms, transform 500ms ease ${i * 80}ms`,
-            }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLDivElement).style.background = "var(--l-surface)")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLDivElement).style.background = "var(--l-bg)")
-            }
+            variants={cardVariant}
+            whileHover={{ backgroundColor: "var(--l-surface)", scale: 1.01 }}
+            style={{ background: "var(--l-bg)", padding: "40px 32px", transformOrigin: "center" }}
+            transition={{ duration: 0.18 }}
           >
             <p
               style={{
@@ -109,9 +126,9 @@ export default function Capabilities() {
             >
               {cap.body}
             </p>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

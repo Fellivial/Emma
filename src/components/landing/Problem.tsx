@@ -1,209 +1,103 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { PROBLEM_CARDS } from "@/lib/constants/landing";
 
-function SurveillanceEye() {
-  const [pupil, setPupil] = useState({ x: 0, y: 0 });
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = e.clientX - cx;
-    const dy = e.clientY - cy;
-    const maxTravel = 20;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const scale = dist === 0 ? 0 : Math.min(1, maxTravel / dist);
-    setPupil({ x: dx * scale, y: dy * scale });
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [handleMouseMove]);
-
+function FragmentedStack() {
   return (
     <svg
-      ref={svgRef}
       width="220"
       height="220"
       viewBox="0 0 220 220"
       role="img"
-      aria-label="Surveillance eye monitoring graphic"
+      aria-label="Fragmented AI ecosystem showing disconnected capabilities"
       style={{ display: "block" }}
     >
-      {/* Corner viewfinder L-brackets */}
-      <polyline
-        points="28,52 28,28 52,28"
-        fill="none"
-        stroke="rgba(232,84,122,0.45)"
-        strokeWidth="1.5"
-      />
-      <polyline
-        points="168,28 192,28 192,52"
-        fill="none"
-        stroke="rgba(232,84,122,0.45)"
-        strokeWidth="1.5"
-      />
-      <polyline
-        points="52,192 28,192 28,168"
-        fill="none"
-        stroke="rgba(232,84,122,0.45)"
-        strokeWidth="1.5"
-      />
-      <polyline
-        points="168,192 192,192 192,168"
-        fill="none"
-        stroke="rgba(232,84,122,0.45)"
-        strokeWidth="1.5"
-      />
+      {/* Corner brackets */}
+      <polyline points="28,52 28,28 52,28" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
+      <polyline points="168,28 192,28 192,52" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
+      <polyline points="52,192 28,192 28,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
+      <polyline points="168,192 192,192 192,168" fill="none" stroke="rgba(232,84,122,0.45)" strokeWidth="1.5" />
 
-      {/* Outer rotating dashed ring */}
-      <circle
-        cx="110"
-        cy="110"
-        r="96"
-        fill="none"
-        stroke="rgba(232,84,122,0.09)"
-        strokeWidth="1"
-        strokeDasharray="4 7"
-      >
-        <animateTransform
-          attributeName="transform"
-          type="rotate"
-          from="0 110 110"
-          to="360 110 110"
-          dur="22s"
-          repeatCount="indefinite"
-        />
-      </circle>
+      {/* Top-left node: Avatar */}
+      <rect x="36" y="46" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
+      <text x="69" y="68" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">AVATAR</text>
+      <text x="69" y="83" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">face only</text>
 
-      {/* 5 concentric rings */}
-      {[78, 62, 47, 33, 19].map((r, i) => (
-        <circle
-          key={r}
-          cx="110"
-          cy="110"
-          r={r}
-          fill="none"
-          stroke={`rgba(232,84,122,${0.11 + i * 0.038})`}
-          strokeWidth="1"
-        />
-      ))}
+      {/* Top-right node: Voice */}
+      <rect x="118" y="46" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
+      <text x="151" y="68" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">VOICE</text>
+      <text x="151" y="83" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">reactive only</text>
 
-      {/* Crosshairs */}
-      <line x1="110" y1="32" x2="110" y2="188" stroke="rgba(232,84,122,0.09)" strokeWidth="1" />
-      <line x1="32" y1="110" x2="188" y2="110" stroke="rgba(232,84,122,0.09)" strokeWidth="1" />
+      {/* Bottom-left node: Memory */}
+      <rect x="36" y="126" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
+      <text x="69" y="148" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">MEMORY</text>
+      <text x="69" y="163" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">session only</text>
 
-      {/* Diagonal scan lines */}
-      <line
-        x1="58"
-        y1="58"
-        x2="162"
-        y2="162"
-        stroke="rgba(232,84,122,0.05)"
-        strokeWidth="1"
-        strokeDasharray="3 6"
-      />
-      <line
-        x1="162"
-        y1="58"
-        x2="58"
-        y2="162"
-        stroke="rgba(232,84,122,0.05)"
-        strokeWidth="1"
-        strokeDasharray="3 6"
-      />
+      {/* Bottom-right node: Agent */}
+      <rect x="118" y="126" width="66" height="48" fill="rgba(232,84,122,0.04)" stroke="rgba(232,84,122,0.28)" strokeWidth="1" strokeDasharray="3 3" />
+      <text x="151" y="148" textAnchor="middle" fontFamily="monospace" fontSize="7" fill="rgba(232,84,122,0.5)" letterSpacing="1.5">AGENT</text>
+      <text x="151" y="163" textAnchor="middle" fontFamily="monospace" fontSize="6" fill="rgba(242,240,234,0.28)" letterSpacing="0.5">no presence</text>
 
-      {/* Radar sweep */}
-      <g style={{ transformOrigin: "110px 110px" }}>
-        <animateTransform
-          attributeName="transform"
-          type="rotate"
-          from="0 110 110"
-          to="360 110 110"
-          dur="4.5s"
-          repeatCount="indefinite"
-          className="radar-sweep"
-        />
-        <path
-          d="M110 110 L110 32 A78 78 0 0 1 178 148 Z"
-          fill="url(#eyeSweepGrad)"
-          opacity="0.22"
-        />
-      </g>
-
-      {/* Mouse-tracking pupil */}
-      <g transform={`translate(${pupil.x}, ${pupil.y})`}>
-        {/* Iris */}
-        <circle
-          cx="110"
-          cy="110"
-          r="22"
-          fill="rgba(232,84,122,0.1)"
-          stroke="rgba(232,84,122,0.5)"
-          strokeWidth="1.5"
-        />
-        <circle
-          cx="110"
-          cy="110"
-          r="14"
-          fill="none"
-          stroke="rgba(232,84,122,0.22)"
-          strokeWidth="1"
-        />
-        {/* Pupil */}
-        <circle cx="110" cy="110" r="7" fill="#e8547a" opacity="0.92">
-          <animate
-            attributeName="opacity"
-            values="0.92;0.5;0.92"
-            dur="2.6s"
-            repeatCount="indefinite"
-          />
-          <animate attributeName="r" values="7;8.5;7" dur="2.6s" repeatCount="indefinite" />
-        </circle>
-        {/* Catchlight */}
-        <circle cx="113.5" cy="107" r="2" fill="rgba(255,255,255,0.35)" />
-      </g>
-
-      {/* Status text */}
-      <text
-        x="110"
-        y="198"
-        textAnchor="middle"
-        fontFamily="monospace"
-        fontSize="7.5"
-        fill="rgba(232,84,122,0.42)"
-        letterSpacing="2.5"
-      >
-        MONITORING ACTIVE
+      {/* Broken connection: horizontal top */}
+      <line x1="103" y1="70" x2="117" y2="70" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
+      <text x="110" y="74" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+        ✕
+        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.4s" repeatCount="indefinite" />
       </text>
 
-      <defs>
-        <radialGradient id="eyeSweepGrad" cx="0%" cy="100%" r="100%">
-          <stop offset="0%" stopColor="#e8547a" stopOpacity="0.65" />
-          <stop offset="100%" stopColor="#e8547a" stopOpacity="0" />
-        </radialGradient>
-      </defs>
+      {/* Broken connection: horizontal bottom */}
+      <line x1="103" y1="150" x2="117" y2="150" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
+      <text x="110" y="154" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+        ✕
+        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.8s" repeatCount="indefinite" />
+      </text>
+
+      {/* Broken connection: vertical left */}
+      <line x1="69" y1="95" x2="69" y2="124" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
+      <text x="69" y="113" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+        ✕
+        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="3.1s" repeatCount="indefinite" />
+      </text>
+
+      {/* Broken connection: vertical right */}
+      <line x1="151" y1="95" x2="151" y2="124" stroke="rgba(232,84,122,0.15)" strokeWidth="1" strokeDasharray="2 2" />
+      <text x="151" y="113" textAnchor="middle" fontFamily="monospace" fontSize="9" fill="rgba(232,84,122,0.45)">
+        ✕
+        <animate attributeName="opacity" values="0.45;0.75;0.45" dur="2.6s" repeatCount="indefinite" />
+      </text>
+
+      {/* Status label */}
+      <text x="110" y="200" textAnchor="middle" fontFamily="monospace" fontSize="7.5" fill="rgba(232,84,122,0.42)" letterSpacing="2">FRAGMENTED · NO BRIDGE</text>
     </svg>
   );
 }
 
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
+
+const cardVariant = {
+  hidden: { opacity: 0, y: 32, scale: 0.94 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.55, ease } },
+};
+
+const wipeLine = {
+  hidden: { clipPath: "inset(0 0 100% 0)", opacity: 0 },
+  show: { clipPath: "inset(0 0 0% 0)", opacity: 1, transition: { duration: 0.68, ease } },
+};
+
 export default function Problem() {
   return (
-    <section
-      id="problem"
-      style={{
-        background: "var(--l-bg)",
-        padding: "80px 40px",
-      }}
-    >
+    <section id="problem" style={{ background: "var(--l-bg)", padding: "80px 40px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "48px" }}>
-        <p
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.5 }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.14 } } }}
+        style={{ marginBottom: "48px" }}
+      >
+        <motion.p
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.4 } } }}
           style={{
             fontFamily: "var(--font-l-mono)",
             fontSize: "10px",
@@ -214,37 +108,50 @@ export default function Problem() {
           }}
         >
           The Problem
-        </p>
-        <h2
-          style={{
-            fontFamily: "var(--font-l-cond)",
-            fontWeight: 900,
-            fontSize: "clamp(32px, 4vw, 52px)",
-            textTransform: "uppercase",
-            color: "var(--l-text)",
-            lineHeight: 1.05,
-            maxWidth: "640px",
-          }}
-        >
-          The market has parts.
-          <br />
-          Nobody has the whole.
-        </h2>
-      </div>
+        </motion.p>
+        <div style={{ overflow: "hidden" }}>
+          <motion.h2
+            variants={wipeLine}
+            style={{
+              fontFamily: "var(--font-l-cond)",
+              fontWeight: 900,
+              fontSize: "clamp(32px, 4vw, 52px)",
+              textTransform: "uppercase",
+              color: "var(--l-text)",
+              lineHeight: 1.05,
+              maxWidth: "640px",
+            }}
+          >
+            The market has parts.
+            <br />
+            Nobody has the whole.
+          </motion.h2>
+        </div>
+      </motion.div>
 
       {/* Grid: eye + cards */}
-      <div
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.12 }}
+        variants={{
+          hidden: {},
+          show: { transition: { staggerChildren: 0.09, delayChildren: 0.1 } },
+        }}
         style={{
           display: "grid",
-          gridTemplateColumns: "300px 1fr",
           border: "1px solid var(--l-border)",
           gap: "1px",
           background: "var(--l-border)",
         }}
         className="lg:grid-cols-[300px_1fr] grid-cols-1"
       >
-        {/* Surveillance eye — hidden on small screens */}
-        <div
+        {/* Surveillance eye */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, scale: 0.88 },
+            show: { opacity: 1, scale: 1, transition: { duration: 0.7, ease } },
+          }}
           className="hidden lg:flex"
           style={{
             background: "var(--l-surface)",
@@ -253,26 +160,25 @@ export default function Problem() {
             padding: "40px",
           }}
         >
-          <SurveillanceEye />
-        </div>
+          <FragmentedStack />
+        </motion.div>
 
         {/* 2x2 cards */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
             gap: "1px",
             background: "var(--l-border)",
           }}
           className="sm:grid-cols-2 grid-cols-1"
         >
           {PROBLEM_CARDS.map((card) => (
-            <div
+            <motion.div
               key={card.num}
-              style={{
-                background: "var(--l-surface)",
-                padding: "32px",
-              }}
+              variants={cardVariant}
+              whileHover={{ backgroundColor: "var(--l-surface2)", scale: 1.01 }}
+              style={{ background: "var(--l-surface)", padding: "32px" }}
+              transition={{ duration: 0.15 }}
             >
               <div
                 style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}
@@ -321,10 +227,10 @@ export default function Problem() {
               >
                 {card.body}
               </p>
-            </div>
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

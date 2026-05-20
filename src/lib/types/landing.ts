@@ -57,11 +57,14 @@ export interface BarEntry {
 export interface PanelData {
   title: string;
   bars: BarEntry[];
+  description?: string;
+  note?: string;
 }
 
 export interface ApproachStep {
   label: string;
   title: string;
+  body: string;
   panelKey: "coverage" | "latency" | "memory";
 }
 

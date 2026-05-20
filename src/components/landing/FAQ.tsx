@@ -1,8 +1,20 @@
 "use client";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { useInView } from "@/lib/hooks/useInView";
+import { motion } from "framer-motion";
 import { FAQS } from "@/lib/constants/landing";
+
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
+
+const itemVariant = {
+  hidden: { opacity: 0, x: -20 },
+  show: { opacity: 1, x: 0, transition: { duration: 0.5, ease } },
+};
+
+const wipeLine = {
+  hidden: { clipPath: "inset(0 0 100% 0)", opacity: 0 },
+  show: { clipPath: "inset(0 0 0% 0)", opacity: 1, transition: { duration: 0.65, ease } },
+};
 
 function FAQItem({
   n,
@@ -26,9 +38,7 @@ function FAQItem({
   const id = `faq-answer-${index}`;
 
   useEffect(() => {
-    if (bodyRef.current) {
-      setHeight(bodyRef.current.scrollHeight);
-    }
+    if (bodyRef.current) setHeight(bodyRef.current.scrollHeight);
   }, [answer]);
 
   const handleKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -41,11 +51,7 @@ function FAQItem({
   };
 
   return (
-    <div
-      style={{
-        borderBottom: "1px solid var(--l-border)",
-      }}
-    >
+    <motion.div variants={itemVariant} style={{ borderBottom: "1px solid var(--l-border)" }}>
       <div
         role="button"
         tabIndex={0}
@@ -128,13 +134,12 @@ function FAQItem({
           </p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 export default function FAQ() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const { ref, inView } = useInView<HTMLElement>({ threshold: 0.08 });
 
   const toggle = (i: number) => setActiveIndex(activeIndex === i ? null : i);
   const closeAll = () => setActiveIndex(null);
@@ -142,46 +147,64 @@ export default function FAQ() {
   return (
     <section
       id="faq"
-      ref={ref}
       style={{
         background: "var(--l-bg)",
         padding: "80px 40px",
         maxWidth: "860px",
         margin: "0 auto",
-        opacity: inView ? 1 : 0,
-        transform: inView ? "none" : "translateY(24px)",
-        transition: "opacity 500ms ease, transform 500ms ease",
       }}
     >
-      <p
-        style={{
-          fontFamily: "var(--font-l-mono)",
-          fontSize: "10px",
-          textTransform: "uppercase",
-          letterSpacing: "0.16em",
-          color: "var(--l-accent)",
-          marginBottom: "12px",
-        }}
+      {/* Header */}
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.5 }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.14 } } }}
+        style={{ marginBottom: "48px" }}
       >
-        FAQ
-      </p>
-      <h2
-        style={{
-          fontFamily: "var(--font-l-cond)",
-          fontWeight: 900,
-          fontSize: "clamp(32px, 4vw, 52px)",
-          textTransform: "uppercase",
-          color: "var(--l-text)",
-          lineHeight: 1.05,
-          marginBottom: "48px",
-        }}
-      >
-        Frequently asked
-        <br />
-        questions.
-      </h2>
+        <motion.p
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.4 } } }}
+          style={{
+            fontFamily: "var(--font-l-mono)",
+            fontSize: "10px",
+            textTransform: "uppercase",
+            letterSpacing: "0.16em",
+            color: "var(--l-accent)",
+            marginBottom: "12px",
+          }}
+        >
+          FAQ
+        </motion.p>
+        <div style={{ overflow: "hidden" }}>
+          <motion.h2
+            variants={wipeLine}
+            style={{
+              fontFamily: "var(--font-l-cond)",
+              fontWeight: 900,
+              fontSize: "clamp(32px, 4vw, 52px)",
+              textTransform: "uppercase",
+              color: "var(--l-text)",
+              lineHeight: 1.05,
+            }}
+          >
+            Frequently asked
+            <br />
+            questions.
+          </motion.h2>
+        </div>
+      </motion.div>
 
-      <div style={{ borderTop: "1px solid var(--l-border)" }}>
+      {/* FAQ items — slide from left */}
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.05 }}
+        variants={{
+          hidden: {},
+          show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+        }}
+        style={{ borderTop: "1px solid var(--l-border)" }}
+      >
         {FAQS.map((faq, i) => (
           <FAQItem
             key={faq.n}
@@ -194,7 +217,7 @@ export default function FAQ() {
             index={i}
           />
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

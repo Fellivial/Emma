@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { motion, useInView } from "framer-motion";
 import { TERMINAL_LINES, TERMINAL_FOOTER } from "@/lib/constants/landing";
+
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
 const ASCII_EMMA = `
 ███████╗███╗   ███╗███╗   ███╗ █████╗
@@ -16,8 +19,11 @@ const RIGHT_LABELS = ["Persistent Memory", "Proactive AI", "Configurable"];
 
 export default function TerminalShowcase() {
   const [visibleCount, setVisibleCount] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
+  const inView = useInView(sectionRef, { once: true, amount: 0.2 });
 
   useEffect(() => {
+    if (!inView) return;
     if (visibleCount >= TERMINAL_LINES.length) return;
     const id = setInterval(() => {
       setVisibleCount((c) => {
@@ -29,31 +35,34 @@ export default function TerminalShowcase() {
       });
     }, 120);
     return () => clearInterval(id);
-  }, [visibleCount]);
+  }, [inView, visibleCount]);
 
   return (
-    <section
-      style={{
-        background: "var(--l-bg)",
-        padding: "80px 40px",
-      }}
-    >
-      <h2
-        style={{
-          fontFamily: "var(--font-l-cond)",
-          fontWeight: 900,
-          fontSize: "clamp(28px, 3.5vw, 44px)",
-          textTransform: "uppercase",
-          color: "var(--l-text)",
-          textAlign: "center",
-          marginBottom: "48px",
-          letterSpacing: "0.02em",
-        }}
-      >
-        Built for the devoted.
-      </h2>
+    <section ref={sectionRef} style={{ background: "var(--l-bg)", padding: "80px 40px" }}>
+      {/* Headline — clip-path wipe */}
+      <div style={{ overflow: "hidden", textAlign: "center", marginBottom: "48px" }}>
+        <motion.h2
+          initial={{ clipPath: "inset(0 0 100% 0)", opacity: 0, y: 16 }}
+          animate={inView ? { clipPath: "inset(0 0 0% 0)", opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7, ease, delay: 0.1 }}
+          style={{
+            fontFamily: "var(--font-l-cond)",
+            fontWeight: 900,
+            fontSize: "clamp(28px, 3.5vw, 44px)",
+            textTransform: "uppercase",
+            color: "var(--l-text)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          Built for the devoted.
+        </motion.h2>
+      </div>
 
-      <div
+      {/* Terminal box — scale + Y entrance */}
+      <motion.div
+        initial={{ opacity: 0, y: 48, scale: 0.97 }}
+        animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
+        transition={{ duration: 0.75, ease, delay: 0.25 }}
         style={{
           display: "grid",
           gap: "0",
@@ -63,7 +72,7 @@ export default function TerminalShowcase() {
         }}
         className="lg:grid-cols-[180px_1fr_180px] grid-cols-1"
       >
-        {/* Left sidebar — blueprint annotation style */}
+        {/* Left sidebar */}
         <div
           className="hidden lg:flex"
           style={{
@@ -97,7 +106,6 @@ export default function TerminalShowcase() {
               >
                 {label}
               </span>
-              {/* Connector line to terminal boundary */}
               <div
                 style={{
                   position: "absolute",
@@ -109,7 +117,6 @@ export default function TerminalShowcase() {
                   background: "linear-gradient(to right, transparent, rgba(232,84,122,0.45))",
                 }}
               />
-              {/* Blueprint dot at terminal boundary */}
               <div
                 style={{
                   position: "absolute",
@@ -177,14 +184,7 @@ export default function TerminalShowcase() {
           </div>
 
           {/* Terminal body */}
-          <div
-            style={{
-              padding: "20px",
-              flex: 1,
-              overflowX: "auto",
-            }}
-          >
-            {/* ASCII art */}
+          <div style={{ padding: "20px", flex: 1, overflowX: "auto" }}>
             <pre
               style={{
                 fontFamily: "var(--font-l-mono)",
@@ -198,7 +198,6 @@ export default function TerminalShowcase() {
               {ASCII_EMMA}
             </pre>
 
-            {/* Log lines */}
             {TERMINAL_LINES.slice(0, visibleCount).map((line, i) => (
               <div
                 key={i}
@@ -218,7 +217,6 @@ export default function TerminalShowcase() {
               </div>
             ))}
 
-            {/* Blinking cursor */}
             {visibleCount <= TERMINAL_LINES.length && (
               <span
                 style={{
@@ -233,13 +231,7 @@ export default function TerminalShowcase() {
             )}
           </div>
 
-          {/* Footer bar */}
-          <div
-            style={{
-              borderTop: "1px solid var(--l-border)",
-              padding: "8px 16px",
-            }}
-          >
+          <div style={{ borderTop: "1px solid var(--l-border)", padding: "8px 16px" }}>
             <span
               style={{
                 fontFamily: "var(--font-l-mono)",
@@ -254,7 +246,7 @@ export default function TerminalShowcase() {
           </div>
         </div>
 
-        {/* Right sidebar — blueprint annotation style */}
+        {/* Right sidebar */}
         <div
           className="hidden lg:flex"
           style={{
@@ -277,7 +269,6 @@ export default function TerminalShowcase() {
                 borderBottom: i < RIGHT_LABELS.length - 1 ? "1px solid var(--l-border)" : "none",
               }}
             >
-              {/* Blueprint dot at terminal boundary */}
               <div
                 style={{
                   position: "absolute",
@@ -292,7 +283,6 @@ export default function TerminalShowcase() {
                   zIndex: 2,
                 }}
               />
-              {/* Connector line from terminal boundary */}
               <div
                 style={{
                   position: "absolute",
@@ -320,7 +310,7 @@ export default function TerminalShowcase() {
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

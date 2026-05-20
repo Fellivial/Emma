@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useInView } from "@/lib/hooks/useInView";
+import { useInView } from "framer-motion";
 
 interface ScanLinesProps {
   direction?: "ltr" | "rtl";
 }
 
 export default function ScanLines({ direction = "ltr" }: ScanLinesProps) {
-  const { ref, inView } = useInView<HTMLDivElement>({ threshold: 0.5 });
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.5 });
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {

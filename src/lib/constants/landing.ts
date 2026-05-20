@@ -44,16 +44,16 @@ export const PROBLEM_CARDS: ProblemCard[] = [
     body: "Reactive by design. They answer when spoken to and vanish when you don't.",
   },
   {
-    tag: "Smart Home AI",
+    tag: "AI Assistants",
     num: "003",
-    title: "They automate. They don't understand.",
-    body: "Rules and triggers. No memory of your patterns, moods, or context.",
+    title: "They know everything. Remember nothing.",
+    body: "Every conversation is the first conversation. No continuity. No compounding.",
   },
   {
-    tag: "Cloud Assistants",
+    tag: "Workflow Agents",
     num: "004",
-    title: "They reset every session. You don't.",
-    body: "Every conversation is the first conversation. Your history evaporates.",
+    title: "They automate tasks. Not relationships.",
+    body: "Triggers and scripts. No emotional context, no persistent identity, no presence.",
   },
 ];
 
@@ -91,10 +91,10 @@ export const CAPABILITIES: Capability[] = [
 ];
 
 export const STATS: StatItem[] = [
-  { label: "Latency", value: "<200ms", sub: "Local inference, no round-trip" },
+  { label: "Tools", value: "8", sub: "In the agent loop", numeric: 8 },
   { label: "Memory", value: "∞", sub: "Persistent, server-side" },
   { label: "Cost/Token", value: "$0", sub: "Free tier, always available" },
-  { label: "Pillars", value: "5", sub: "Integrated into one system", numeric: 5 },
+  { label: "Pillars", value: "6", sub: "Integrated into one system", numeric: 6 },
 ];
 
 export const TERMINAL_LINES: TerminalLine[] = [
@@ -106,7 +106,7 @@ export const TERMINAL_LINES: TerminalLine[] = [
   { text: "> Emotion engine online · 3-signal fusion" },
   { text: "" },
   { text: "✓ Ready. Persona: Flirty Teasing Mommy" },
-  { text: "Network: ON · Telemetry: OFF · Memory: LOCAL" },
+  { text: "Network: ON · Telemetry: OFF · Memory: ENCRYPTED" },
 ];
 
 export const TERMINAL_FOOTER = "EMOTION ENGINE · PLAYFUL · L5 CORE · 91 FILES LOADED";
@@ -220,17 +220,20 @@ export const FAQS: FAQ[] = [
 export const APPROACH_STEPS: ApproachStep[] = [
   {
     label: "Step 01",
-    title: "A brain trained for presence, not just response.",
+    title: "Full stack. Nothing outsourced.",
+    body: "Six pillars — avatar, voice, vision, memory, emotion, and autonomous agent — designed as a single system. Not assembled from point solutions. Built together.",
     panelKey: "coverage",
   },
   {
     label: "Step 02",
-    title: "Full perception — vision, voice, and environment.",
+    title: "Responses that stream, not wait.",
+    body: "Streaming SSE delivers the first token in under a second. Responses begin before Emma has finished generating. No loading screens. Just presence.",
     panelKey: "latency",
   },
   {
     label: "Step 03",
-    title: "Memory that compounds. Context that survives sessions.",
+    title: "Memory that outlasts the session.",
+    body: "Every exchange is stored server-side with AES-256 encryption. Context compounds across every conversation. Emma remembers your preferences, patterns, and history indefinitely.",
     panelKey: "memory",
   },
 ];
@@ -238,43 +241,50 @@ export const APPROACH_STEPS: ApproachStep[] = [
 export const APPROACH_PANELS: Record<"coverage" | "latency" | "memory", PanelData> = {
   coverage: {
     title: "Pillar Coverage",
+    description: "Emma integrates every capability into one coherent system. Competitors solve one layer — Emma solves all six.",
     bars: [
-      { label: "Emma", pct: 100, isEmma: true, display: "5 / 5 pillars" },
-      { label: "D-ID / HeyGen", pct: 20, display: "~1 / 5 pillars" },
-      { label: "Lindy", pct: 25, display: "~1 / 5 pillars" },
+      { label: "Emma", pct: 100, isEmma: true, display: "6 / 6 pillars" },
+      { label: "Avatar platforms", pct: 17, display: "~1 / 6 pillars" },
+      { label: "Workflow agents", pct: 17, display: "~1 / 6 pillars" },
     ],
+    note: "Pillars: avatar · voice · vision · memory · emotion · agent loop",
   },
   latency: {
-    title: "Response Latency",
+    title: "Streaming Latency",
+    description: "Emma starts responding before the full reply is ready. First-token delivery via SSE, not batch payload delivery.",
     bars: [
-      { label: "Emma", pct: 17, isEmma: true, display: "<200ms" },
-      { label: "Cloud APIs", pct: 100, display: "400 – 1200ms" },
+      { label: "Emma (streaming SSE)", pct: 20, isEmma: true, display: "~500ms first token" },
+      { label: "Standard API", pct: 60, display: "2 – 4s full response" },
+      { label: "Batch processing", pct: 100, display: "5 – 15s" },
     ],
+    note: "Lower bar = faster first-token delivery",
   },
   memory: {
     title: "Memory Persistence",
+    description: "Emma's memory is server-side and permanent. No session resets. No expiry windows. Context that compounds over months.",
     bars: [
-      { label: "Emma", pct: 100, isEmma: true, display: "Persistent · 847 entries" },
-      { label: "Session-based", pct: 0, display: "Resets to 0" },
-      { label: "Cloud (120-day)", pct: 55, display: "Expires after 120 days" },
+      { label: "Emma", pct: 100, isEmma: true, display: "Persistent · encrypted" },
+      { label: "Session-based AI", pct: 0, display: "Resets every session" },
+      { label: "Cloud (120-day cap)", pct: 55, display: "Expires after 120 days" },
     ],
+    note: "AES-256-GCM encrypted · stored in your Supabase instance",
   },
 };
 
 export const FEATURE_STRIP: FeatureStrip[] = [
   {
-    tag: "Offline-capable",
-    title: "Work uninterrupted.",
-    body: "Core runs without a live connection.",
+    tag: "Memory",
+    title: "Every session remembered.",
+    body: "Persistent cross-session memory. Emma builds on what she already knows about you.",
   },
   {
     tag: "Privacy",
-    title: "Sever the cloud.",
-    body: "Voice, face, and data stay on your machine.",
+    title: "Your conversations, yours alone.",
+    body: "Nothing used to train models. Telemetry off by default. AES-256 encrypted memory.",
   },
   {
-    tag: "Latency",
-    title: "Stop waiting.",
-    body: "Local inference, millisecond response.",
+    tag: "Presence",
+    title: "Always available.",
+    body: "Cloud-native AI. Reach Emma from any device, any session, any time.",
   },
 ];

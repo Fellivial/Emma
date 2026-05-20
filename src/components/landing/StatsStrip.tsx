@@ -1,8 +1,11 @@
 "use client";
 
-import { useInView } from "@/lib/hooks/useInView";
+import { useRef } from "react";
+import { motion, useInView } from "framer-motion";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { STATS } from "@/lib/constants/landing";
+
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
 function StatCell({
   label,
@@ -10,18 +13,23 @@ function StatCell({
   sub,
   numeric,
   enabled,
+  index,
 }: {
   label: string;
   value: string;
   sub: string;
   numeric?: number;
   enabled: boolean;
+  index: number;
 }) {
-  const count = useCountUp(numeric ?? 0, 1400, enabled && numeric !== undefined);
+  const count = useCountUp(numeric ?? 0, 1600, enabled && numeric !== undefined);
   const display = numeric !== undefined ? String(count) : value;
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 40, scale: 0.88 }}
+      animate={enabled ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.88 }}
+      transition={{ duration: 0.65, ease, delay: index * 0.1 }}
       style={{
         padding: "48px 32px",
         borderRight: "1px solid var(--l-border)",
@@ -41,17 +49,22 @@ function StatCell({
       >
         {label}
       </p>
-      <p
-        style={{
-          fontFamily: "var(--font-l-display)",
-          fontSize: "72px",
-          lineHeight: 0.92,
-          letterSpacing: "-0.02em",
-          color: "var(--l-text)",
-        }}
-      >
-        {display}
-      </p>
+      <div style={{ overflow: "hidden" }}>
+        <motion.p
+          initial={{ y: "100%" }}
+          animate={enabled ? { y: "0%" } : { y: "100%" }}
+          transition={{ duration: 0.7, ease, delay: index * 0.1 + 0.15 }}
+          style={{
+            fontFamily: "var(--font-l-display)",
+            fontSize: "72px",
+            lineHeight: 0.92,
+            letterSpacing: "-0.02em",
+            color: "var(--l-text)",
+          }}
+        >
+          {display}
+        </motion.p>
+      </div>
       <p
         style={{
           fontFamily: "var(--font-l-mono)",
@@ -62,12 +75,13 @@ function StatCell({
       >
         {sub}
       </p>
-    </div>
+    </motion.div>
   );
 }
 
 export default function StatsStrip() {
-  const { ref, inView } = useInView<HTMLElement>({ threshold: 0.2 });
+  const ref = useRef<HTMLElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.3 });
 
   return (
     <section
@@ -77,13 +91,10 @@ export default function StatsStrip() {
         borderBottom: "1px solid var(--l-border)",
         display: "grid",
         gridTemplateColumns: "repeat(4, 1fr)",
-        opacity: inView ? 1 : 0,
-        transform: inView ? "none" : "translateY(24px)",
-        transition: "opacity 500ms ease, transform 500ms ease",
       }}
       className="lg:grid-cols-4 sm:grid-cols-2 grid-cols-1"
     >
-      {STATS.map((stat) => (
+      {STATS.map((stat, i) => (
         <StatCell
           key={stat.label}
           label={stat.label}
@@ -91,6 +102,7 @@ export default function StatsStrip() {
           sub={stat.sub}
           numeric={stat.numeric}
           enabled={inView}
+          index={i}
         />
       ))}
     </section>

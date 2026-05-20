@@ -1,42 +1,113 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useInView } from "@/lib/hooks/useInView";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { APPROACH_STEPS, APPROACH_PANELS } from "@/lib/constants/landing";
-import type { ApproachStep } from "@/lib/types/landing";
+import type { BarEntry } from "@/lib/types/landing";
+
+const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
+
+const wipeLine = {
+  hidden: { clipPath: "inset(0 0 100% 0)", opacity: 0 },
+  show: { clipPath: "inset(0 0 0% 0)", opacity: 1, transition: { duration: 0.68, ease } },
+};
+
+function BarRow({ bar }: { bar: BarEntry }) {
+  return (
+    <div style={{ marginBottom: "18px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: "6px",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-l-mono)",
+            fontSize: "9px",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            color: bar.isEmma ? "var(--l-accent)" : "var(--l-muted2)",
+            fontWeight: bar.isEmma ? 700 : 400,
+          }}
+        >
+          {bar.label}
+        </span>
+        {bar.display && (
+          <span
+            style={{
+              fontFamily: "var(--font-l-mono)",
+              fontSize: "9px",
+              color: bar.isEmma ? "var(--l-accent)" : "var(--l-muted2)",
+            }}
+          >
+            {bar.display}
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          height: "3px",
+          background: "rgba(242,240,234,0.06)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(bar.pct, 2)}%` }}
+          transition={{ duration: 0.7, ease }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            height: "100%",
+            background: bar.isEmma
+              ? "var(--l-accent)"
+              : bar.pct === 0
+                ? "rgba(239,68,68,0.3)"
+                : "rgba(242,240,234,0.18)",
+          }}
+        />
+        {bar.pct === 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "rgba(239,68,68,0.08)",
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Approach() {
-  const [activeStep, setActiveStep] = useState(0);
-  const [fading, setFading] = useState(false);
-  const { ref: sectionRef, inView } = useInView<HTMLElement>({ threshold: 0.12 });
-
-  const panelKey = APPROACH_STEPS[activeStep].panelKey;
-  const panel = APPROACH_PANELS[panelKey];
-
-  const changeStep = (i: number) => {
-    if (i === activeStep) return;
-    setFading(true);
-    setTimeout(() => {
-      setActiveStep(i);
-      setFading(false);
-    }, 200);
-  };
+  const [activeIdx, setActiveIdx] = useState(0);
+  const activeStep = APPROACH_STEPS[activeIdx];
+  const panel = APPROACH_PANELS[activeStep.panelKey];
 
   return (
     <section
       id="approach"
-      ref={sectionRef}
-      style={{
-        background: "var(--l-bg)",
-        borderBottom: "1px solid var(--l-border)",
-        opacity: inView ? 1 : 0,
-        transform: inView ? "none" : "translateY(24px)",
-        transition: "opacity 500ms ease, transform 500ms ease",
-      }}
+      style={{ background: "var(--l-bg)", borderBottom: "1px solid var(--l-border)" }}
     >
       {/* Section header */}
-      <div style={{ padding: "80px 40px 48px" }}>
-        <p
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.5 }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.14 } } }}
+        style={{ padding: "80px 40px 48px" }}
+      >
+        <motion.p
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.4 } } }}
           style={{
             fontFamily: "var(--font-l-mono)",
             fontSize: "10px",
@@ -47,197 +118,195 @@ export default function Approach() {
           }}
         >
           How Emma works
-        </p>
-        <h2
-          style={{
-            fontFamily: "var(--font-l-cond)",
-            fontWeight: 900,
-            fontSize: "clamp(32px, 4vw, 52px)",
-            textTransform: "uppercase",
-            color: "var(--l-text)",
-            lineHeight: 1.05,
-          }}
-        >
-          Built different
-          <br />
-          by design.
-        </h2>
-      </div>
+        </motion.p>
+        <div style={{ overflow: "hidden" }}>
+          <motion.h2
+            variants={wipeLine}
+            style={{
+              fontFamily: "var(--font-l-cond)",
+              fontWeight: 900,
+              fontSize: "clamp(32px, 4vw, 52px)",
+              textTransform: "uppercase",
+              color: "var(--l-text)",
+              lineHeight: 1.05,
+            }}
+          >
+            Built different.
+            <br />
+            By design.
+          </motion.h2>
+        </div>
+      </motion.div>
 
-      {/* Two-col layout */}
-      <div
+      {/* Step selector + panel */}
+      <motion.div
+        initial={{ opacity: 0, y: 32 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.6, ease }}
         style={{
           display: "grid",
+          gap: "1px",
+          background: "var(--l-border)",
           borderTop: "1px solid var(--l-border)",
         }}
-        className="lg:grid-cols-[380px_1fr] grid-cols-1"
+        className="lg:grid-cols-2 grid-cols-1"
       >
-        {/* Left: steps */}
-        <div style={{ borderRight: "1px solid var(--l-border)" }}>
-          {APPROACH_STEPS.map((step: ApproachStep, i: number) => (
-            <button
-              key={step.panelKey}
-              onClick={() => changeStep(i)}
-              className="l-interactive"
+        {/* Left: step list */}
+        <div style={{ background: "var(--l-bg)" }}>
+          {APPROACH_STEPS.map((step, i) => {
+            const isActive = i === activeIdx;
+            return (
+              <button
+                key={step.panelKey}
+                onClick={() => setActiveIdx(i)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom:
+                    i < APPROACH_STEPS.length - 1 ? "1px solid var(--l-border)" : "none",
+                  borderLeft: isActive ? "2px solid var(--l-accent)" : "2px solid transparent",
+                  padding: isActive ? "36px 40px" : "24px 40px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-l-mono)",
+                    fontSize: "9px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.16em",
+                    color: isActive ? "var(--l-accent)" : "var(--l-muted2)",
+                    marginBottom: "10px",
+                    fontWeight: isActive ? 700 : 400,
+                    transition: "color 0.2s ease",
+                  }}
+                >
+                  {step.label}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-l-cond)",
+                    fontWeight: 700,
+                    fontSize: isActive ? "clamp(22px, 2.5vw, 30px)" : "18px",
+                    textTransform: "uppercase",
+                    color: isActive ? "var(--l-text)" : "var(--l-muted)",
+                    lineHeight: 1.1,
+                    marginBottom: isActive ? "14px" : "0",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {step.title}
+                </span>
+                {isActive && (
+                  <AnimatePresence>
+                    <motion.span
+                      key={step.panelKey + "-body"}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3, ease }}
+                      style={{
+                        display: "block",
+                        fontFamily: "var(--font-l-body)",
+                        fontSize: "14px",
+                        color: "var(--l-muted)",
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      {step.body}
+                    </motion.span>
+                  </AnimatePresence>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right: elevated panel card */}
+        <div
+          style={{
+            background: "var(--l-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "40px",
+          }}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeStep.panelKey}
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.99 }}
+              transition={{ duration: 0.35, ease }}
               style={{
                 width: "100%",
-                textAlign: "left",
-                padding: "32px 40px",
-                background: i === activeStep ? "var(--l-surface)" : "transparent",
-                borderBottom: i < APPROACH_STEPS.length - 1 ? "1px solid var(--l-border)" : "none",
-                borderLeft:
-                  i === activeStep ? "3px solid var(--l-accent)" : "3px solid transparent",
-                cursor: "pointer",
-                transition: "background 150ms, border-color 150ms",
+                maxWidth: "420px",
+                border: "1px solid var(--l-border)",
+                borderTop: "2px solid var(--l-accent)",
+                background: "var(--l-surface)",
+                padding: "32px",
               }}
             >
               <p
                 style={{
                   fontFamily: "var(--font-l-mono)",
-                  fontSize: "10px",
+                  fontSize: "9px",
                   textTransform: "uppercase",
                   letterSpacing: "0.14em",
-                  color: "var(--l-muted2)",
-                  marginBottom: "8px",
+                  color: "var(--l-accent)",
+                  marginBottom: "16px",
                 }}
               >
-                {step.label}
+                {panel.title}
               </p>
-              <h3
-                style={{
-                  fontFamily: "var(--font-l-cond)",
-                  fontWeight: 700,
-                  fontSize: "18px",
-                  textTransform: "uppercase",
-                  color: i === activeStep ? "var(--l-text)" : "var(--l-muted)",
-                  lineHeight: 1.25,
-                  transition: "color 150ms",
-                }}
-              >
-                {step.title}
-              </h3>
-            </button>
-          ))}
-        </div>
 
-        {/* Right: data panel */}
-        <div
-          style={{
-            padding: "48px 48px",
-            minHeight: "340px",
-            opacity: fading ? 0 : 1,
-            transition: "opacity 200ms",
-          }}
-        >
-          <p
-            style={{
-              fontFamily: "var(--font-l-mono)",
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.16em",
-              color: "var(--l-muted2)",
-              marginBottom: "28px",
-            }}
-          >
-            {panel.title}
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            {panel.bars.map((bar, i) => (
-              <BarRow
-                key={bar.label}
-                label={bar.label}
-                pct={bar.pct}
-                isEmma={bar.isEmma}
-                display={bar.display}
-                delay={i * 150}
-                animate={inView && !fading}
-              />
-            ))}
-          </div>
+              {panel.description && (
+                <p
+                  style={{
+                    fontFamily: "var(--font-l-body)",
+                    fontSize: "13px",
+                    color: "var(--l-muted)",
+                    lineHeight: 1.65,
+                    marginBottom: "28px",
+                  }}
+                >
+                  {panel.description}
+                </p>
+              )}
+
+              <div>
+                {panel.bars.map((bar) => (
+                  <BarRow key={bar.label} bar={bar} />
+                ))}
+              </div>
+
+              {panel.note && (
+                <p
+                  style={{
+                    fontFamily: "var(--font-l-mono)",
+                    fontSize: "9px",
+                    color: "var(--l-muted2)",
+                    letterSpacing: "0.06em",
+                    marginTop: "20px",
+                    paddingTop: "16px",
+                    borderTop: "1px solid var(--l-border)",
+                  }}
+                >
+                  {panel.note}
+                </p>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     </section>
-  );
-}
-
-function BarRow({
-  label,
-  pct,
-  isEmma,
-  display,
-  delay,
-  animate,
-}: {
-  label: string;
-  pct: number;
-  isEmma?: boolean;
-  display?: string;
-  delay: number;
-  animate: boolean;
-}) {
-  const barRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!barRef.current) return;
-    if (animate) {
-      barRef.current.style.transitionDelay = `${delay}ms`;
-      barRef.current.style.transform = `scaleX(${pct / 100})`;
-    } else {
-      barRef.current.style.transitionDelay = "0ms";
-      barRef.current.style.transform = "scaleX(0)";
-    }
-  }, [animate, pct, delay]);
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: "8px",
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "var(--font-l-body)",
-            fontSize: "13px",
-            color: isEmma ? "var(--l-text)" : "var(--l-muted)",
-          }}
-        >
-          {label}
-        </span>
-        {display && (
-          <span
-            style={{
-              fontFamily: "var(--font-l-mono)",
-              fontSize: "11px",
-              color: isEmma ? "var(--l-green)" : "var(--l-muted2)",
-            }}
-          >
-            {display}
-          </span>
-        )}
-      </div>
-      <div
-        style={{
-          height: "6px",
-          background: "var(--l-surface2)",
-          borderRadius: 0,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          ref={barRef}
-          style={{
-            height: "100%",
-            width: "100%",
-            background: isEmma ? "var(--l-green)" : "var(--l-surface2)",
-            transition: "transform 1s ease",
-            transform: "scaleX(0)",
-            transformOrigin: "left",
-          }}
-        />
-      </div>
-    </div>
   );
 }
