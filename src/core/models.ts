@@ -7,10 +7,10 @@
  */
 
 // Brain — main chat/NLU (persona + device control + expression)
-export const MODEL_BRAIN = "claude-sonnet-4-20250514";
+export const MODEL_BRAIN = "claude-sonnet-4-6";
 
 // Vision — scene analysis (needs strong multimodal)
-export const MODEL_VISION = "claude-sonnet-4-20250514";
+export const MODEL_VISION = "claude-sonnet-4-6";
 
 // Utility — emotion detection, memory extraction, summarization
 export const MODEL_UTILITY = "claude-haiku-4-5-20251001";

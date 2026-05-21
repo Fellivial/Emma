@@ -37,6 +37,7 @@ interface RetryOptions {
   baseDelay: number; // ms
   maxDelay: number; // ms
   retryOn?: number[]; // HTTP status codes to retry on
+  connectionTimeoutMs?: number; // Abort if no response headers within this window
 }
 
 const DEFAULT_RETRY: RetryOptions = {
@@ -57,8 +58,19 @@ export async function fetchWithRetry(
   const opts = { ...DEFAULT_RETRY, ...retryOpts };
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
+    let abortController: AbortController | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     try {
-      const res = await fetch(url, options);
+      if (opts.connectionTimeoutMs) {
+        abortController = new AbortController();
+        timeoutId = setTimeout(() => abortController!.abort(), opts.connectionTimeoutMs);
+      }
+
+      const res = await fetch(url, abortController ? { ...options, signal: abortController.signal } : options);
+
+      // Headers received — connection succeeded, clear the timeout
+      if (timeoutId) clearTimeout(timeoutId);
 
       // Success or non-retryable error
       if (res.ok || !opts.retryOn?.includes(res.status)) {
@@ -82,6 +94,13 @@ export async function fetchWithRetry(
 
       await new Promise((resolve) => setTimeout(resolve, delay));
     } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // Connection timed out — don't retry, surface as 504
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new EmmaError("Connection timed out", "TIMEOUT", 504, false);
+      }
+
       // Network error
       if (attempt === opts.maxRetries) throw err;
 
@@ -109,6 +128,8 @@ export function getPersonaErrorMessage(status: number): string {
     case 502:
     case 503:
       return "Something went wrong on my end. Give me a moment… I'll be right back.";
+    case 504:
+      return "Mmm. I couldn't reach my brain in time. Try again in a moment?";
     case 529:
       return "Mmm. I'm a little overwhelmed right now. Try again in a minute?";
     default:

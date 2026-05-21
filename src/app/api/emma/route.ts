@@ -5,7 +5,7 @@ import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma
 import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
 import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
-import { fetchWithRetry, getPersonaErrorMessage } from "@/lib/errors";
+import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
 import {
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
           stream: true,
         }),
       },
-      { maxRetries: 2 }
+      { maxRetries: 2, connectionTimeoutMs: 30_000 }
     );
 
     if (!anthropicRes.ok) {
@@ -364,8 +364,9 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     Sentry.captureException(err);
     console.error("[EMMA API] Unexpected error:", err);
-    return new Response(JSON.stringify({ error: getPersonaErrorMessage(500) }), {
-      status: 500,
+    const status = err instanceof EmmaError ? err.status : 500;
+    return new Response(JSON.stringify({ error: getPersonaErrorMessage(status) }), {
+      status,
       headers: { "Content-Type": "application/json" },
     });
   }
