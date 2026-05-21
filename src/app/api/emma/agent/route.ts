@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
           .from("approvals")
           .select("action_log_id, task_id")
           .eq("id", body.approvalId)
+          .eq("user_id", userId)
           .single();
 
         await supabase
@@ -189,7 +190,8 @@ export async function POST(req: NextRequest) {
             decided_by: userId,
             decided_at: new Date().toISOString(),
           })
-          .eq("id", body.approvalId);
+          .eq("id", body.approvalId)
+          .eq("user_id", userId);
 
         audit({
           userId,

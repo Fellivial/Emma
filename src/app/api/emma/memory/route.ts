@@ -12,17 +12,19 @@ import { getUser } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user (fallback to body.userId for dev)
-    let userId: string | null = null;
-    try {
+    // Get authenticated user; dev mode (no Supabase) uses a fixed stub
+    let userId: string;
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       const user = await getUser();
-      userId = user?.id || null;
-    } catch {
-      // Auth not configured — allow unauthenticated in dev
+      if (!user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      userId = user.id;
+    } else {
+      userId = "dev-user";
     }
 
-    const body = (await req.json()) as MemoryApiRequest & { userId?: string };
-    userId = userId || body.userId || "dev-user";
+    const body = (await req.json()) as MemoryApiRequest;
 
     switch (body.action) {
       case "get": {

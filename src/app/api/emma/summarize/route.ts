@@ -1,5 +1,6 @@
 import { MODEL_UTILITY } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
+import { getUser } from "@/lib/supabase/server";
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a conversation summarizer for a smart home AI agent called Emma. Your job is to compress conversation history into a compact summary that preserves all important context.
 
@@ -16,6 +17,11 @@ Rules:
 This summary will be injected into future conversations so Emma can maintain continuity.`;
 
 export async function POST(req: NextRequest) {
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {

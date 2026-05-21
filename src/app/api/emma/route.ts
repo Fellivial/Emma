@@ -16,6 +16,7 @@ import {
 } from "@/core/usage-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
+import { getUser } from "@/lib/supabase/server";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -65,13 +66,27 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    // Require authentication in production; dev mode (no Supabase) falls through
+    let sessionUserId: string | undefined;
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const sessionUser = await getUser();
+      if (!sessionUser) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      sessionUserId = sessionUser.id;
+    }
+
     const body = (await req.json()) as EmmaApiRequest;
     const { messages, visionContext, persona = "mommy", activeUser, emotionState } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
 
-    // Load memories from Supabase (or fallback to empty)
-    const userId = activeUser?.id;
+    // Use session-verified ID for data operations; fall back to body for dev mode
+    const userId = sessionUserId ?? activeUser?.id;
     let memories: any[] = [];
     if (userId) {
       try {

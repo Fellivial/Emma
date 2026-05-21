@@ -1,6 +1,7 @@
 import { MODEL_VISION } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { VisionApiRequest, VisionApiResponse, VisionAnalysis } from "@/types/emma";
+import { getUser } from "@/lib/supabase/server";
 
 const VISION_SYSTEM_PROMPT = `You are EMMA's vision subsystem. You analyze screenshots of the user's screen.
 
@@ -25,6 +26,13 @@ If you see sensitive fields, note "sensitive data visible" without reading the c
 Be concise but thorough. This data feeds into your ability to help the user contextually.`;
 
 export async function POST(req: NextRequest) {
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ analysis: null, error: "Unauthorized" } as VisionApiResponse, {
+      status: 401,
+    });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {

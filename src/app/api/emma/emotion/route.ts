@@ -1,5 +1,6 @@
 import { MODEL_UTILITY } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
+import { getUser } from "@/lib/supabase/server";
 
 const EMOTION_VISION_PROMPT = `You analyze facial expressions in webcam frames for a smart home agent's emotion detection system.
 
@@ -25,6 +26,11 @@ Base your analysis on:
 If no face is clearly visible, return: {"primary":"neutral","confidence":0.1,"valence":0,"arousal":0.3}`;
 
 export async function POST(req: NextRequest) {
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
