@@ -147,7 +147,7 @@ export function useVoice(): UseVoiceReturn {
         setMode("idle");
 
         // Check for specific error types
-        const errEvent = e as SpeechRecognitionErrorEvent;
+        const errEvent = e as unknown as { error: string };
         if (errEvent.error === "not-allowed") {
           console.warn("[EMMA Voice] Microphone permission denied");
         } else if (errEvent.error === "no-speech") {

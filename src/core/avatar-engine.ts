@@ -299,7 +299,7 @@ export function useAvatar(): UseAvatarReturn {
 
       const PIXI = await import("pixi.js");
       const { Live2DModel } = await import("pixi-live2d-display/cubism4");
-      Live2DModel.registerTicker(PIXI.Ticker);
+      Live2DModel.registerTicker(PIXI.Ticker as any);
       (window as any).PIXI = PIXI;
 
       const app = new PIXI.Application({

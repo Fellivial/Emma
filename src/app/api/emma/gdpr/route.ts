@@ -140,7 +140,20 @@ export async function POST(req: NextRequest) {
         .eq("user_id", user.id);
       deletionLog.push(`client_memberships: ${memberCount || 0}`);
 
-      // 6. Tasks
+      // 6. Audit log (keep only the deletion entry itself, written above)
+      try {
+        const deletionAuditThreshold = new Date(Date.now() - 5000).toISOString();
+        await supabase
+          .from("audit_log")
+          .delete()
+          .eq("user_id", user.id)
+          .lt("created_at", deletionAuditThreshold);
+        deletionLog.push("audit_log: cleared");
+      } catch {
+        deletionLog.push("audit_log: skipped");
+      }
+
+      // 7. Tasks
       try {
         await supabase.from("tasks").delete().eq("user_id", user.id);
         deletionLog.push("tasks: cleared");
@@ -148,7 +161,7 @@ export async function POST(req: NextRequest) {
         deletionLog.push("tasks: skipped");
       }
 
-      // 7. Profile
+      // 8. Profile
       const { error: profileErr } = await supabase.from("profiles").delete().eq("id", user.id);
       deletionLog.push(profileErr ? "profile: failed" : "profile: deleted");
 

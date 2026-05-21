@@ -198,8 +198,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ tracked: true });
     }
 
-    // ── Convert affiliate referral ───────────────────────────────────────
+    // ── Convert affiliate referral (admin only) ─────────────────────────
     if (action === "convert") {
+      const user = await getUser();
+      if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase());
+      if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+        return NextResponse.json({ error: "Admin only" }, { status: 403 });
+      }
+
       const { affiliateCode, email, planId, monthlyRevenue } = body;
       if (!affiliateCode || !email) {
         return NextResponse.json({ error: "affiliateCode and email required" }, { status: 400 });
@@ -207,13 +216,13 @@ export async function POST(req: NextRequest) {
 
       const { data: affiliate } = await supabase
         .from("affiliates")
-        .select("id, commission_rate")
+        .select("id, commission_rate, total_earned")
         .eq("affiliate_code", affiliateCode)
         .single();
 
       if (!affiliate) return NextResponse.json({ error: "Invalid affiliate" }, { status: 404 });
 
-      const commission = (monthlyRevenue || 0) * (affiliate.commission_rate || 0.2);
+      const commission = (monthlyRevenue || 0) * ((affiliate as any).commission_rate || 0.2);
 
       await supabase
         .from("affiliate_referrals")
@@ -224,16 +233,16 @@ export async function POST(req: NextRequest) {
           commission_paid: commission,
           converted_at: new Date().toISOString(),
         })
-        .eq("affiliate_id", affiliate.id)
+        .eq("affiliate_id", (affiliate as any).id)
         .eq("referred_email", email.toLowerCase());
 
-      // Update total earned
+      // Update total earned (use fetched value to avoid NaN from undefined)
       await supabase
         .from("affiliates")
         .update({
-          total_earned: (affiliate as any).total_earned + commission,
+          total_earned: ((affiliate as any).total_earned || 0) + commission,
         })
-        .eq("id", affiliate.id);
+        .eq("id", (affiliate as any).id);
 
       return NextResponse.json({ converted: true, commission });
     }

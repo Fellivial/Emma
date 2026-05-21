@@ -62,6 +62,9 @@ const MOCK_CONFIG = {
   autonomyTier: 2 as const,
   proactiveVision: false,
   verticalId: null,
+  formSteps: null,
+  ownerEmail: null,
+  sheetsId: null,
 };
 
 const OK_USAGE = { status: "ok" as const, planId: "starter", allWindows: [] };
