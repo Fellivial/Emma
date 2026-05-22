@@ -519,6 +519,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         }
       }
 
+      // pause_turn: server-side tool loop (web_search etc.) hit the 10-iteration
+      // limit — append the partial response and resend to let it continue.
+      if (data.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: contentBlocks });
+        continue;
+      }
+
       // If Claude returned only text (no tool use), it's done thinking
       if (!hasToolUse && data.stop_reason === "end_turn") {
         const textOutput = contentBlocks
