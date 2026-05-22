@@ -290,6 +290,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
+          "anthropic-beta": "compact-2026-01-12",
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,
@@ -298,6 +299,14 @@ export async function POST(req: NextRequest) {
           messages: apiMessages,
           stream: true,
           output_config: { effort: detectEffort(messages) },
+          context_management: {
+            edits: [
+              {
+                type: "compact_20260112",
+                trigger: { type: "input_tokens", value: 600_000 },
+              },
+            ],
+          },
         }),
       },
       { maxRetries: 2, connectionTimeoutMs: 30_000 }
@@ -330,6 +339,9 @@ export async function POST(req: NextRequest) {
         let outputTokens = 0;
         let cacheReadTokens = 0;
         let cacheCreationTokens = 0;
+        // Accumulate non-text content blocks (compaction blocks) so the client
+        // can preserve them in the next request's assistant message.
+        const nonTextBlocks: Record<string, unknown>[] = [];
 
         try {
           while (true) {
@@ -357,6 +369,15 @@ export async function POST(req: NextRequest) {
                 }
                 if (event.type === "message_delta" && event.usage) {
                   outputTokens = event.usage.output_tokens || 0;
+                }
+
+                // Capture non-text content blocks (compaction, server_tool_use, etc.)
+                if (
+                  event.type === "content_block_start" &&
+                  event.content_block?.type &&
+                  event.content_block.type !== "text"
+                ) {
+                  nonTextBlocks.push(event.content_block as Record<string, unknown>);
                 }
 
                 // Content block delta — stream text to client
@@ -394,6 +415,7 @@ export async function POST(req: NextRequest) {
             routineId: routineId || null,
             expression: expression || null,
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+            compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
             enforcement: enforcementResult
               ? {
                   status: enforcementResult.status,

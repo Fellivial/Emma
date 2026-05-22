@@ -97,9 +97,10 @@ export interface ApiMessage {
 }
 
 export interface ApiMessageContent {
-  type: "text" | "image";
+  type: string; // "text" | "image" | compaction/tool block types passed through verbatim
   text?: string;
   source?: { type: "base64"; media_type: string; data: string };
+  [key: string]: unknown;
 }
 
 // ─── Voice Types ─────────────────────────────────────────────────────────────

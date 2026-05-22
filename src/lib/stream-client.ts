@@ -14,6 +14,8 @@ export interface StreamDoneEvent {
   routineId: string | null;
   expression: AvatarExpression | null;
   enforcement: StreamEnforcement | null;
+  /** Non-text content blocks (e.g. compaction blocks) to preserve in history. */
+  compactionBlocks?: Record<string, unknown>[];
 }
 
 interface StreamCallbacks {
@@ -90,6 +92,7 @@ export async function streamEmmaResponse(
                 routineId: event.routineId || null,
                 expression: event.expression || null,
                 enforcement: event.enforcement || null,
+                compactionBlocks: event.compactionBlocks || undefined,
               });
               break;
 

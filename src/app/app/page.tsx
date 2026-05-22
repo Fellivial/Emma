@@ -495,9 +495,20 @@ export default function EmmaPage() {
                     : m
                 )
               );
+              // Preserve compaction blocks alongside the text so Anthropic can
+              // reconstruct compressed history on the next turn.
               setApiMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: event.raw || event.text },
+                {
+                  role: "assistant" as const,
+                  content:
+                    event.compactionBlocks && event.compactionBlocks.length > 0
+                      ? ([
+                          ...event.compactionBlocks,
+                          { type: "text", text: event.raw || event.text },
+                        ] as import("@/types/emma").ApiMessageContent[])
+                      : event.raw || event.text,
+                },
               ]);
 
               // Handle enforcement metadata
