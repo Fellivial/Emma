@@ -151,11 +151,15 @@ export interface VisionApiRequest {
   frame: string;
   mediaType: string;
   context?: string;
+  /** Cached Files API file_id — if provided, skips re-upload and uses this directly. */
+  fileId?: string;
 }
 
 export interface VisionApiResponse {
   analysis: VisionAnalysis | null;
   error?: string;
+  /** Files API file_id for the uploaded frame — cache and pass back on subsequent calls. */
+  fileId?: string;
 }
 
 // ─── Memory Types (L2) ──────────────────────────────────────────────────────
