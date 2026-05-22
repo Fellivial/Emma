@@ -402,6 +402,7 @@ export async function POST(req: NextRequest) {
       "compact-2026-01-12",
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
+      "message-edits-2025-11-15",
       ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
     ];
 
@@ -481,6 +482,9 @@ export async function POST(req: NextRequest) {
           citations: { enabled: true },
           context_management: {
             edits: [
+              // Clear accumulated tool results and thinking blocks before full compaction.
+              { type: "clear_tool_results" },
+              { type: "clear_thinking_blocks" },
               {
                 type: "compact_20260112",
                 trigger: { type: "input_tokens", value: 600_000 },
