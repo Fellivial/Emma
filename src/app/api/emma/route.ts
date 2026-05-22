@@ -19,6 +19,7 @@ import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { decrypt } from "@/core/security/encryption";
+import { getToolsForClaude } from "@/core/tool-registry";
 import { LIMIT_BLOCK_MESSAGE } from "@/core/pricing";
 
 const MAX_HISTORY_MESSAGES = 20;
@@ -404,7 +405,17 @@ export async function POST(req: NextRequest) {
       ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
     ];
 
-    // ── Build server-side tools ───────────────────────────────────────────────
+    // ── Build tools array ────────────────────────────────────────────────────
+    // tool_search (BM25) must be non-deferred so Claude can always invoke it.
+    // Integration tools are deferred — their full JSON schemas don't load into
+    // context until Claude calls tool_search and selects one, saving ~85% of
+    // baseline token cost from tool definitions.
+    const toolSearchTool: Record<string, unknown> = {
+      type: "tool_search_tool_bm25_20251119",
+      name: "tool_search",
+    };
+    const deferredIntegrationTools = getToolsForClaude(undefined, { deferIntegrations: true });
+
     // web_search_20260209 and web_fetch_20260209 are Anthropic-hosted (GA).
     // No beta header needed. Code execution inside these tools is free.
     const webSearchTool: Record<string, unknown> = {
@@ -456,7 +467,13 @@ export async function POST(req: NextRequest) {
           max_tokens: detectMaxTokens(messages, hasDocuments),
           system: systemBlocks,
           messages: apiMessages,
-          tools: [webSearchTool, webFetchTool, ...(codeExecutionTool ? [codeExecutionTool] : [])],
+          tools: [
+            toolSearchTool,
+            webSearchTool,
+            webFetchTool,
+            ...(codeExecutionTool ? [codeExecutionTool] : []),
+            ...deferredIntegrationTools,
+          ],
           ...(container && { container }),
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,

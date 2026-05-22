@@ -87,15 +87,29 @@ const TOOL_INTEGRATION_MAP: Record<string, string> = {
   speak_text: "elevenlabs",
 };
 
+export interface GetToolsOptions {
+  /**
+   * When true, tools that require an integration are marked with
+   * defer_loading: true so their full JSON schemas are not loaded into context
+   * until Claude searches for and selects them (saves ~85% baseline token cost).
+   */
+  deferIntegrations?: boolean;
+}
+
 /**
  * Get tool definitions formatted for Claude's tool_use API.
  * Pass connectedIntegrations to exclude tools whose integration isn't active.
+ * Pass options.deferIntegrations to mark integration tools as deferred.
  */
-export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
+export function getToolsForClaude(
+  connectedIntegrations?: Set<string>,
+  options?: GetToolsOptions
+): Array<{
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
   strict: true;
+  defer_loading?: true;
 }> {
   return getAllTools()
     .filter((t) => {
@@ -104,12 +118,25 @@ export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
       if (!connectedIntegrations) return true;
       return connectedIntegrations.has(required);
     })
-    .map((t) => ({
-      name: t.name,
-      description: `${t.description} [Risk: ${t.riskLevel}]`,
-      input_schema: t.inputSchema,
-      strict: true as const,
-    }));
+    .map((t) => {
+      const isIntegration = Boolean(TOOL_INTEGRATION_MAP[t.name]);
+      const entry: {
+        name: string;
+        description: string;
+        input_schema: Record<string, unknown>;
+        strict: true;
+        defer_loading?: true;
+      } = {
+        name: t.name,
+        description: `${t.description} [Risk: ${t.riskLevel}]`,
+        input_schema: t.inputSchema,
+        strict: true as const,
+      };
+      if (options?.deferIntegrations && isIntegration) {
+        entry.defer_loading = true;
+      }
+      return entry;
+    });
 }
 
 // ─── Built-in Tools ──────────────────────────────────────────────────────────
