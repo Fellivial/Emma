@@ -113,11 +113,28 @@ interface PromptContext {
   vertical?: VerticalConfig;
 }
 
-export function buildSystemPrompt(ctx: PromptContext): string {
+export interface SystemBlock {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+}
+
+/**
+ * Returns the system prompt as two Anthropic system blocks:
+ *   [0] Stable block — persona, routines, memories, user profile. Marked with
+ *       cache_control so Anthropic caches it across turns (saves ~90% input cost
+ *       on the prefix once the cache warms up).
+ *   [1] Dynamic block — vision context + emotion state. Omitted when neither is
+ *       present. Never cached because both change every turn.
+ *
+ * Pass the return value directly as the `system` field of the Anthropic request.
+ */
+export function buildSystemPromptBlocks(ctx: PromptContext): SystemBlock[] {
   const persona = PERSONAS[ctx.personaId];
   const routineList = serializeRoutines();
 
-  let prompt = `${persona.systemPrompt}
+  // ── Stable prefix (cacheable) ──────────────────────────────────────────────
+  let stable = `${persona.systemPrompt}
 ${RESPONSE_LENGTH_PROMPT}
 ${ROUTINE_PROMPT}
 ${AVATAR_PROMPT}
@@ -136,9 +153,8 @@ You are a workspace agent. You can:
 
 You do NOT control physical devices, smart home equipment, or IoT hardware.`;
 
-  // ── Inject vertical (industry) context ────────────────────────────────────
   if (ctx.vertical) {
-    prompt += `
+    stable += `
 
 ## Industry Context
 ${ctx.vertical.personaPrompt}
@@ -146,11 +162,10 @@ ${ctx.vertical.personaPrompt}
 Pay special attention to: ${ctx.vertical.memoryFocusAreas.join(", ")}`;
   }
 
-  // ── Inject persistent memories ─────────────────────────────────────────────
   if (ctx.memories && ctx.memories.length > 0) {
     const cappedMemories = ctx.memories.slice(0, 10);
     const serialized = serializeMemories(cappedMemories);
-    prompt += `
+    stable += `
 
 ## Long-Term Memory (things you know about this user across sessions)
 ${serialized}
@@ -158,49 +173,59 @@ ${serialized}
 Use these naturally in conversation. Reference memories as if you personally remember them.
 Never say "according to my memory" — just weave them in.`;
   } else {
-    prompt += `
+    stable += `
 
 ## Memory
 No long-term memories stored yet. Pay attention — learn what you can about the user.`;
   }
 
-  // ── Inject vision context ──────────────────────────────────────────────────
-  if (ctx.visionContext) {
-    prompt += `
-
-## Current Screen (from screen share)
-${ctx.visionContext}
-
-You can reference what you see on the user's screen naturally. Help them with what they're working on.`;
-  }
-
-  // ── Inject active user context ─────────────────────────────────────────────
   if (ctx.activeUser) {
-    const userCtx = serializeUserContext(ctx.activeUser);
-    prompt += `
+    stable += `
 
 ## Active User
-${userCtx}
+${serializeUserContext(ctx.activeUser)}
 
 Adapt your behavior to this user's preferences. Use their name naturally.`;
   }
 
-  // ── Inject emotion state ───────────────────────────────────────────────────
+  const blocks: SystemBlock[] = [
+    { type: "text", text: stable, cache_control: { type: "ephemeral" } },
+  ];
+
+  // ── Dynamic suffix (per-turn, never cached) ────────────────────────────────
+  const dynamicParts: string[] = [];
+
+  if (ctx.visionContext) {
+    dynamicParts.push(`## Current Screen (from screen share)
+${ctx.visionContext}
+
+You can reference what you see on the user's screen naturally. Help them with what they're working on.`);
+  }
+
   if (ctx.emotionState && ctx.emotionState.confidence > 0.3) {
     const e = ctx.emotionState;
-    prompt += `
-
-## User's Current Emotional State
+    dynamicParts.push(`## User's Current Emotional State
 Detected emotion: ${e.primary} (confidence: ${Math.round(e.confidence * 100)}%)
 Valence: ${e.valence > 0 ? "positive" : e.valence < 0 ? "negative" : "neutral"} (${e.valence.toFixed(2)})
 Arousal: ${e.arousal > 0.6 ? "high" : e.arousal < 0.3 ? "low" : "moderate"} (${e.arousal.toFixed(2)})
 Source: ${e.source}
 
 Adapt your tone accordingly. If they seem distressed, lead with care. If happy, match their energy.
-Never say "I detect you're feeling X" — just naturally adjust your warmth and approach.`;
+Never say "I detect you're feeling X" — just naturally adjust your warmth and approach.`);
   }
 
-  return prompt;
+  if (dynamicParts.length > 0) {
+    blocks.push({ type: "text", text: dynamicParts.join("\n\n") });
+  }
+
+  return blocks;
+}
+
+/** Backward-compat wrapper — returns a single concatenated string. */
+export function buildSystemPrompt(ctx: PromptContext): string {
+  return buildSystemPromptBlocks(ctx)
+    .map((b) => b.text)
+    .join("\n\n");
 }
 
 export function getPersona(id: PersonaId): Persona {

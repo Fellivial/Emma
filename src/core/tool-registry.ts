@@ -95,6 +95,7 @@ export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  strict: true;
 }> {
   return getAllTools()
     .filter((t) => {
@@ -107,6 +108,7 @@ export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
       name: t.name,
       description: `${t.description} [Risk: ${t.riskLevel}]`,
       input_schema: t.inputSchema,
+      strict: true as const,
     }));
 }
 
@@ -122,12 +124,13 @@ registerTool({
     properties: {
       topic: { type: "string", description: "What to summarize" },
       style: {
-        type: "string",
-        enum: ["brief", "detailed", "bullet_points"],
-        description: "Summary style",
+        type: ["string", "null"],
+        enum: ["brief", "detailed", "bullet_points", null],
+        description: "Summary style (null for default brief)",
       },
     },
-    required: ["topic"],
+    required: ["topic", "style"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {
@@ -182,6 +185,7 @@ registerTool({
       query: { type: "string", description: "Search query" },
     },
     required: ["query"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {
@@ -244,6 +248,7 @@ registerTool({
       routine_id: { type: "string", description: "ID of the workflow routine to run" },
     },
     required: ["routine_id"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input) => {
@@ -263,9 +268,14 @@ registerTool({
     properties: {
       title: { type: "string" },
       message: { type: "string" },
-      priority: { type: "string", enum: ["low", "medium", "high"] },
+      priority: {
+        type: ["string", "null"],
+        enum: ["low", "medium", "high", null],
+        description: "Notification priority (null for default medium)",
+      },
     },
-    required: ["title", "message"],
+    required: ["title", "message", "priority"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {
@@ -289,6 +299,7 @@ registerTool({
       body: { type: "string" },
     },
     required: ["to", "subject", "body"],
+    additionalProperties: false,
   },
   riskLevel: "dangerous",
   handler: async (input, context) => {
@@ -334,10 +345,18 @@ registerTool({
       title: { type: "string" },
       date: { type: "string", description: "ISO date string" },
       time: { type: "string", description: "HH:mm format" },
-      duration_minutes: { type: "number" },
-      attendees: { type: "array", items: { type: "string" } },
+      duration_minutes: {
+        type: ["number", "null"],
+        description: "Duration in minutes (null defaults to 60)",
+      },
+      attendees: {
+        type: ["array", "null"],
+        items: { type: "string" },
+        description: "Attendee email addresses (null for no attendees)",
+      },
     },
-    required: ["title", "date", "time"],
+    required: ["title", "date", "time", "duration_minutes", "attendees"],
+    additionalProperties: false,
   },
   riskLevel: "dangerous",
   handler: async (input, context) => {
@@ -383,11 +402,22 @@ registerTool({
     type: "object",
     properties: {
       category: {
-        type: "string",
-        enum: ["preference", "routine", "personal", "episodic", "environment"],
+        anyOf: [
+          {
+            type: "string",
+            enum: ["preference", "routine", "personal", "episodic", "environment"],
+          },
+          { type: "null" },
+        ],
+        description: "Memory category to filter by (null for all categories)",
       },
-      keyword: { type: "string", description: "Keyword to search for" },
+      keyword: {
+        type: ["string", "null"],
+        description: "Keyword to search for (null to return all in category)",
+      },
     },
+    required: ["category", "keyword"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -438,12 +468,13 @@ registerTool({
     type: "object",
     properties: {
       email: { type: "string", description: "Contact email address" },
-      firstname: { type: "string" },
-      lastname: { type: "string" },
-      company: { type: "string" },
-      phone: { type: "string" },
+      firstname: { type: ["string", "null"], description: "First name (null if unknown)" },
+      lastname: { type: ["string", "null"], description: "Last name (null if unknown)" },
+      company: { type: ["string", "null"], description: "Company name (null if unknown)" },
+      phone: { type: ["string", "null"], description: "Phone number (null if unknown)" },
     },
-    required: ["email"],
+    required: ["email", "firstname", "lastname", "company", "phone"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -505,13 +536,16 @@ registerTool({
     properties: {
       contact_id: { type: "string", description: "HubSpot contact ID" },
       activity_type: {
-        type: "string",
-        enum: ["call", "email", "meeting"],
-        description: "Type of activity",
+        anyOf: [
+          { type: "string", enum: ["call", "email", "meeting"] },
+          { type: "null" },
+        ],
+        description: "Type of activity (null defaults to generic note)",
       },
       note: { type: "string", description: "Activity details or notes" },
     },
-    required: ["contact_id", "note"],
+    required: ["contact_id", "activity_type", "note"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -583,11 +617,12 @@ registerTool({
       channel: { type: "string", description: "Slack channel ID or name (e.g. #general)" },
       message: { type: "string", description: "Message text to send" },
       thread_ts: {
-        type: "string",
-        description: "Thread timestamp to reply in a thread (optional)",
+        type: ["string", "null"],
+        description: "Thread timestamp to reply in a thread (null to post as new message)",
       },
     },
-    required: ["channel", "message"],
+    required: ["channel", "message", "thread_ts"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -628,15 +663,17 @@ registerTool({
       filename: { type: "string", description: "Name for the file (including extension)" },
       content: { type: "string", description: "File text content" },
       mime_type: {
-        type: "string",
-        description: "MIME type (default: text/plain, e.g. text/markdown, application/json)",
+        type: ["string", "null"],
+        description:
+          "MIME type (null defaults to text/plain; e.g. text/markdown, application/json)",
       },
       folder_id: {
-        type: "string",
-        description: "Google Drive folder ID to upload into (optional, defaults to root)",
+        type: ["string", "null"],
+        description: "Google Drive folder ID to upload into (null defaults to root)",
       },
     },
-    required: ["filename", "content"],
+    required: ["filename", "content", "mime_type", "folder_id"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -672,10 +709,18 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      query: { type: "string", description: "Search by filename (optional)" },
-      folder_id: { type: "string", description: "List files in a specific folder ID (optional)" },
-      page_size: { type: "number", description: "Max results to return (default 20)" },
+      query: { type: ["string", "null"], description: "Search by filename (null to list all)" },
+      folder_id: {
+        type: ["string", "null"],
+        description: "List files in a specific folder ID (null for root)",
+      },
+      page_size: {
+        type: ["number", "null"],
+        description: "Max results to return (null defaults to 20)",
+      },
     },
+    required: ["query", "folder_id", "page_size"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -717,6 +762,7 @@ registerTool({
       },
     },
     required: ["file_id"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -751,8 +797,13 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Max channels to return (default 100, max 200)" },
+      limit: {
+        type: ["number", "null"],
+        description: "Max channels to return (null defaults to 100, max 200)",
+      },
     },
+    required: ["limit"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -791,11 +842,12 @@ registerTool({
       filename: { type: "string", description: "Filename to display in Slack" },
       content: { type: "string", description: "File text content" },
       mime_type: {
-        type: "string",
-        description: "MIME type (default: text/plain)",
+        type: ["string", "null"],
+        description: "MIME type (null defaults to text/plain)",
       },
     },
-    required: ["channel", "filename", "content"],
+    required: ["channel", "filename", "content", "mime_type"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -832,9 +884,13 @@ registerTool({
     properties: {
       parent_page_id: { type: "string", description: "ID of the parent Notion page" },
       title: { type: "string", description: "Page title" },
-      content: { type: "string", description: "Page body content (optional)" },
+      content: {
+        type: ["string", "null"],
+        description: "Page body content (null for an empty page)",
+      },
     },
-    required: ["parent_page_id", "title"],
+    required: ["parent_page_id", "title", "content"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -869,9 +925,13 @@ registerTool({
     type: "object",
     properties: {
       query: { type: "string", description: "Search query to find matching Notion pages" },
-      page_size: { type: "number", description: "Number of results to return (default 10)" },
+      page_size: {
+        type: ["number", "null"],
+        description: "Number of results to return (null defaults to 10)",
+      },
     },
-    required: ["query"],
+    required: ["query", "page_size"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -908,10 +968,14 @@ registerTool({
     type: "object",
     properties: {
       page_id: { type: "string", description: "ID of the Notion page to update" },
-      title: { type: "string", description: "New page title (optional)" },
-      content: { type: "string", description: "Content to append to the page (optional)" },
+      title: { type: ["string", "null"], description: "New page title (null to keep existing)" },
+      content: {
+        type: ["string", "null"],
+        description: "Content to append to the page (null for no content change)",
+      },
     },
-    required: ["page_id"],
+    required: ["page_id", "title", "content"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -952,6 +1016,7 @@ registerTool({
       message: { type: "string", description: "WhatsApp message body" },
     },
     required: ["to", "message"],
+    additionalProperties: false,
   },
   riskLevel: "dangerous",
   handler: async (input) => {
@@ -977,6 +1042,7 @@ registerTool({
       content: { type: "string", description: "Document body text (newlines become paragraphs)" },
     },
     required: ["filename", "title", "content"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1008,6 +1074,7 @@ registerTool({
       content: { type: "string", description: "Document body text" },
     },
     required: ["filename", "title", "content"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1037,11 +1104,13 @@ registerTool({
     properties: {
       url: { type: "string", description: "Webhook URL (must be a public HTTPS endpoint)" },
       payload: {
-        type: "object",
-        description: "JSON payload to send in the request body",
+        type: "string",
+        description:
+          "JSON payload to send in the request body, serialized as a string (e.g. '{\"key\": \"value\"}')",
       },
     },
     required: ["url", "payload"],
+    additionalProperties: false,
   },
   riskLevel: "dangerous",
   handler: async (input) => {
@@ -1063,9 +1132,16 @@ registerTool({
       return { success: false, output: "Webhook URL must point to a public host." };
     }
 
+    // Validate and normalize the JSON payload string
+    const payloadStr = input.payload as string;
+    try {
+      JSON.parse(payloadStr);
+    } catch {
+      return { success: false, output: "payload must be valid JSON." };
+    }
+
     // Cap outbound payload at 64 KB
-    const serialized = JSON.stringify(input.payload);
-    if (serialized.length > 65_536) {
+    if (payloadStr.length > 65_536) {
       return { success: false, output: "Webhook payload exceeds 64 KB limit." };
     }
 
@@ -1076,7 +1152,7 @@ registerTool({
       const res = await fetch(rawUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: serialized,
+        body: payloadStr,
         signal: controller.signal,
       });
 
@@ -1105,12 +1181,22 @@ registerTool({
     type: "object",
     properties: {
       dealname: { type: "string", description: "Deal name" },
-      amount: { type: "string", description: "Deal amount (e.g. '50000')" },
-      pipeline: { type: "string", description: "Pipeline ID (default: 'default')" },
-      dealstage: { type: "string", description: "Deal stage ID (e.g. 'appointmentscheduled')" },
-      contact_id: { type: "string", description: "HubSpot contact ID to associate with this deal" },
+      amount: { type: ["string", "null"], description: "Deal amount (null if not set)" },
+      pipeline: {
+        type: ["string", "null"],
+        description: "Pipeline ID (null defaults to 'default')",
+      },
+      dealstage: {
+        type: ["string", "null"],
+        description: "Deal stage ID (null for default stage; e.g. 'appointmentscheduled')",
+      },
+      contact_id: {
+        type: ["string", "null"],
+        description: "HubSpot contact ID to associate with this deal (null for no association)",
+      },
     },
-    required: ["dealname"],
+    required: ["dealname", "amount", "pipeline", "dealstage", "contact_id"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -1147,9 +1233,13 @@ registerTool({
     properties: {
       deal_id: { type: "string", description: "HubSpot deal ID" },
       dealstage: { type: "string", description: "New deal stage ID (e.g. 'closedwon')" },
-      amount: { type: "string", description: "Updated deal amount (optional)" },
+      amount: {
+        type: ["string", "null"],
+        description: "Updated deal amount (null to leave unchanged)",
+      },
     },
-    required: ["deal_id", "dealstage"],
+    required: ["deal_id", "dealstage", "amount"],
+    additionalProperties: false,
   },
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -1186,11 +1276,12 @@ registerTool({
     properties: {
       document_id: { type: "string", description: "UUID of the ingested document" },
       query: {
-        type: "string",
-        description: "Specific keyword or topic to extract from the document (optional)",
+        type: ["string", "null"],
+        description: "Specific keyword or topic to extract from the document (null for full text)",
       },
     },
-    required: ["document_id"],
+    required: ["document_id", "query"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {
@@ -1240,13 +1331,21 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Number of emails to return (default 5, max 20)" },
-      keyword: { type: "string", description: "Filter by subject keyword (optional)" },
+      limit: {
+        type: ["number", "null"],
+        description: "Number of emails to return (null defaults to 5, max 20)",
+      },
+      keyword: {
+        type: ["string", "null"],
+        description: "Filter by subject keyword (null for no filter)",
+      },
       unprocessed_only: {
-        type: "boolean",
-        description: "Only return unprocessed emails (optional)",
+        type: ["boolean", "null"],
+        description: "Only return unprocessed emails (null treats as false)",
       },
     },
+    required: ["limit", "keyword", "unprocessed_only"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1307,9 +1406,17 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Number of messages to return (default 5)" },
-      from_number: { type: "string", description: "Filter by sender phone number (optional)" },
+      limit: {
+        type: ["number", "null"],
+        description: "Number of messages to return (null defaults to 5)",
+      },
+      from_number: {
+        type: ["string", "null"],
+        description: "Filter by sender phone number (null for all senders)",
+      },
     },
+    required: ["limit", "from_number"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1358,12 +1465,17 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      image_url: { type: "string", description: "Public URL of the image to OCR (optional)" },
+      image_url: {
+        type: ["string", "null"],
+        description: "Public HTTPS URL of the image to OCR (null if using document_id)",
+      },
       document_id: {
-        type: "string",
-        description: "UUID of an already-ingested image document (optional)",
+        type: ["string", "null"],
+        description: "UUID of an already-ingested image document (null if using image_url)",
       },
     },
+    required: ["image_url", "document_id"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {
@@ -1429,9 +1541,17 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      max_results: { type: "number", description: "Maximum events to return (default 10)" },
-      days_ahead: { type: "number", description: "How many days ahead to look (default 7)" },
+      max_results: {
+        type: ["number", "null"],
+        description: "Maximum events to return (null defaults to 10)",
+      },
+      days_ahead: {
+        type: ["number", "null"],
+        description: "How many days ahead to look (null defaults to 7)",
+      },
     },
+    required: ["max_results", "days_ahead"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1466,7 +1586,12 @@ registerTool({
 registerTool({
   name: "calendar_get_today",
   description: "Get all Google Calendar events for today. Requires Google Calendar integration.",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: {
+    type: "object",
+    properties: {},
+    required: [],
+    additionalProperties: false,
+  },
   riskLevel: "safe",
   handler: async (_input, context) => {
     try {
@@ -1499,9 +1624,17 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Number of contacts to return (default 10, max 100)" },
-      query: { type: "string", description: "Search contacts by name or email (optional)" },
+      limit: {
+        type: ["number", "null"],
+        description: "Number of contacts to return (null defaults to 10, max 100)",
+      },
+      query: {
+        type: ["string", "null"],
+        description: "Search contacts by name or email (null to list all)",
+      },
     },
+    required: ["limit", "query"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1532,12 +1665,17 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Number of deals to return (default 10)" },
+      limit: {
+        type: ["number", "null"],
+        description: "Number of deals to return (null defaults to 10)",
+      },
       stage: {
-        type: "string",
-        description: "Filter by deal stage ID (optional, e.g. 'appointmentscheduled')",
+        type: ["string", "null"],
+        description: "Filter by deal stage ID (null for all stages; e.g. 'appointmentscheduled')",
       },
     },
+    required: ["limit", "stage"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1570,6 +1708,7 @@ registerTool({
       contact_id: { type: "string", description: "HubSpot contact ID" },
     },
     required: ["contact_id"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1602,12 +1741,13 @@ registerTool({
         description: "Text to speak aloud (max 1000 characters)",
       },
       voice_id: {
-        type: "string",
+        type: ["string", "null"],
         description:
-          "ElevenLabs voice ID (optional — uses user's configured voice or default Rachel)",
+          "ElevenLabs voice ID (null uses user's configured voice or default Rachel)",
       },
     },
-    required: ["text"],
+    required: ["text", "voice_id"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input, context) => {
@@ -1699,6 +1839,7 @@ registerTool({
       summary: { type: "string", description: "Summary of what was done" },
     },
     required: ["summary"],
+    additionalProperties: false,
   },
   riskLevel: "safe",
   handler: async (input) => {

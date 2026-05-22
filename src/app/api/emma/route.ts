@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { MODEL_BRAIN } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
-import { buildSystemPrompt } from "@/core/personas";
+import { buildSystemPromptBlocks } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
 import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       ? getVertical(clientConfigForPrompt.verticalId)
       : undefined;
 
-    const systemPrompt = buildSystemPrompt({
+    const systemBlocks = buildSystemPromptBlocks({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
       memories,
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: MODEL_BRAIN,
           max_tokens: detectMaxTokens(messages),
-          system: systemPrompt,
+          system: systemBlocks,
           messages: apiMessages,
           stream: true,
         }),
@@ -259,6 +259,8 @@ export async function POST(req: NextRequest) {
         let buffer = "";
         let inputTokens = 0;
         let outputTokens = 0;
+        let cacheReadTokens = 0;
+        let cacheCreationTokens = 0;
 
         try {
           while (true) {
@@ -279,7 +281,10 @@ export async function POST(req: NextRequest) {
 
                 // Capture token usage from Anthropic stream events
                 if (event.type === "message_start" && event.message?.usage) {
-                  inputTokens = event.message.usage.input_tokens || 0;
+                  const u = event.message.usage;
+                  inputTokens = u.input_tokens || 0;
+                  cacheReadTokens = u.cache_read_input_tokens || 0;
+                  cacheCreationTokens = u.cache_creation_input_tokens || 0;
                 }
                 if (event.type === "message_delta" && event.usage) {
                   outputTokens = event.usage.output_tokens || 0;
@@ -319,7 +324,7 @@ export async function POST(req: NextRequest) {
             commands,
             routineId: routineId || null,
             expression: expression || null,
-            usage: { inputTokens, outputTokens },
+            usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
             enforcement: enforcementResult
               ? {
                   status: enforcementResult.status,
