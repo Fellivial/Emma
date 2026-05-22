@@ -23,6 +23,7 @@ alter table leads enable row level security;
 -- The intake API uses SUPABASE_SERVICE_ROLE_KEY which bypasses RLS entirely,
 -- so no explicit allow policy is needed for writes.
 -- This policy makes the table invisible to anon and authenticated roles.
+drop policy if exists "deny all non-service-role access" on leads;
 create policy "deny all non-service-role access"
   on leads
   for all

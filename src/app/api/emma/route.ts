@@ -428,7 +428,6 @@ export async function POST(req: NextRequest) {
       "compact-2026-01-12",
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
-      "message-edits-2025-11-15",
       "cache-diagnosis-2026-04-07",
       ...(skills?.length
         ? [
@@ -447,7 +446,7 @@ export async function POST(req: NextRequest) {
     // baseline token cost from tool definitions.
     const toolSearchTool: Record<string, unknown> = {
       type: "tool_search_tool_bm25_20251119",
-      name: "tool_search",
+      name: "tool_search_tool_bm25",
     };
     const deferredIntegrationTools = getToolsForClaude(undefined, {
       deferIntegrations: true,
