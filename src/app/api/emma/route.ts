@@ -28,19 +28,28 @@ function truncateHistory(msgs: ApiMessage[]): ApiMessage[] {
   return msgs.slice(-MAX_HISTORY_MESSAGES);
 }
 
-function detectMaxTokens(msgs: ApiMessage[]): number {
+function getLastMessageText(msgs: ApiMessage[]): string {
   const last = msgs[msgs.length - 1];
-  const text =
-    typeof last?.content === "string"
-      ? last.content
-      : Array.isArray(last?.content)
-        ? (last.content as ApiMessageContent[])
-            .map((b) => (b.type === "text" ? b.text || "" : ""))
-            .join(" ")
-        : "";
+  if (typeof last?.content === "string") return last.content;
+  if (Array.isArray(last?.content)) {
+    return (last.content as ApiMessageContent[])
+      .map((b) => (b.type === "text" ? b.text || "" : ""))
+      .join(" ");
+  }
+  return "";
+}
+
+function detectMaxTokens(msgs: ApiMessage[]): number {
+  const text = getLastMessageText(msgs);
   if (DEEP_PATTERN.test(text)) return 1200;
   if (text.length < 80) return 350;
   return 700;
+}
+
+// "high" for analytical/generative tasks; "medium" for everything else.
+// Avoids burning full effort budget on "what's on my calendar today".
+function detectEffort(msgs: ApiMessage[]): "high" | "medium" {
+  return DEEP_PATTERN.test(getLastMessageText(msgs)) ? "high" : "medium";
 }
 
 /**
@@ -229,6 +238,7 @@ export async function POST(req: NextRequest) {
           system: systemBlocks,
           messages: apiMessages,
           stream: true,
+          output_config: { effort: detectEffort(messages) },
         }),
       },
       { maxRetries: 2, connectionTimeoutMs: 30_000 }
