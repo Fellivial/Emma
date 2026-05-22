@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
       pdfUrls,
       userLocation,
       searchResults,
+      skills,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -395,6 +396,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Build beta header (dynamic — grows when optional features are enabled) ──
+    const betaHeaderParts = [
+      "compact-2026-01-12",
+      "files-api-2025-04-14",
+      "mcp-client-2025-11-20",
+      ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
+    ];
+
     // ── Build server-side tools ───────────────────────────────────────────────
     // web_search_20260209 and web_fetch_20260209 are Anthropic-hosted (GA).
     // No beta header needed. Code execution inside these tools is free.
@@ -414,6 +423,21 @@ export async function POST(req: NextRequest) {
       name: "web_fetch",
       max_content_tokens: 5000,
     };
+    // code_execution is a server-side tool — Anthropic runs the code in a
+    // sandboxed container. Only included when the client requests skills.
+    const codeExecutionTool: Record<string, unknown> | null = skills?.length
+      ? { type: "code_execution_20250825", name: "code_execution" }
+      : null;
+    // Skills container — pre-built Anthropic skill sets for document generation.
+    const container: Record<string, unknown> | null = skills?.length
+      ? {
+          skills: skills.map((skill_id) => ({
+            type: "anthropic",
+            skill_id,
+            version: "latest",
+          })),
+        }
+      : null;
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
 
@@ -425,14 +449,15 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "compact-2026-01-12,files-api-2025-04-14,mcp-client-2025-11-20",
+          "anthropic-beta": betaHeaderParts.join(","),
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,
           max_tokens: detectMaxTokens(messages, hasDocuments),
           system: systemBlocks,
           messages: apiMessages,
-          tools: [webSearchTool, webFetchTool],
+          tools: [webSearchTool, webFetchTool, ...(codeExecutionTool ? [codeExecutionTool] : [])],
+          ...(container && { container }),
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,
           output_config: { effort: detectEffort(messages, hasDocuments) },
@@ -482,6 +507,8 @@ export async function POST(req: NextRequest) {
         const nonTextBlocks: Record<string, unknown>[] = [];
         // Accumulate citation blocks delivered via citations_delta stream events.
         const citations: Record<string, unknown>[] = [];
+        // Accumulate file_ids produced by code_execution tool invocations.
+        const generatedFiles: { file_id: string; name?: string }[] = [];
 
         try {
           while (true) {
@@ -535,6 +562,33 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
+                // Extract file_ids from code_execution tool results.
+                // server_tool_result blocks produced by code_execution may contain
+                // document blocks or direct file references in their content array.
+                if (
+                  event.type === "content_block_start" &&
+                  event.content_block?.type === "server_tool_result" &&
+                  Array.isArray(event.content_block.content)
+                ) {
+                  for (const item of event.content_block.content as Record<string, unknown>[]) {
+                    // Direct file reference: { file_id, filename? }
+                    if (typeof item.file_id === "string") {
+                      generatedFiles.push({
+                        file_id: item.file_id,
+                        name: typeof item.filename === "string" ? item.filename : undefined,
+                      });
+                    }
+                    // Document block with file source: { type:"document", source:{ type:"file", file_id }, title? }
+                    const src = item.source as Record<string, unknown> | undefined;
+                    if (item.type === "document" && src?.type === "file" && typeof src.file_id === "string") {
+                      generatedFiles.push({
+                        file_id: src.file_id,
+                        name: typeof item.title === "string" ? item.title : undefined,
+                      });
+                    }
+                  }
+                }
+
                 // Capture citations delivered as citations_delta events.
                 if (
                   event.type === "content_block_delta" &&
@@ -580,6 +634,7 @@ export async function POST(req: NextRequest) {
             expression: expression || null,
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
             citations: citations.length > 0 ? citations : undefined,
+            generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
             enforcement: enforcementResult
               ? {

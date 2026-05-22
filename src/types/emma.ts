@@ -472,6 +472,17 @@ export interface EmmaApiRequest {
   userLocation?: UserLocation;
   /** RAG results to pass as a search_results content block for native citation support. */
   searchResults?: SearchResult[];
+  /**
+   * Document generation skills to enable: "pptx" | "xlsx" | "docx" | "pdf".
+   * When set, the code_execution tool and an Anthropic skills container are
+   * included in the request so Emma can produce real downloadable files.
+   */
+  skills?: string[];
+}
+
+export interface GeneratedFile {
+  file_id: string;
+  name?: string;
 }
 
 export interface EmmaApiResponse {
