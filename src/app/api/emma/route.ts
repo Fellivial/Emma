@@ -117,7 +117,14 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as EmmaApiRequest;
-    const { messages, visionContext, persona = "mommy", activeUser, emotionState } = body;
+    const {
+      messages,
+      visionContext,
+      persona = "mommy",
+      activeUser,
+      emotionState,
+      attachedFiles,
+    } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
 
@@ -233,7 +240,7 @@ export async function POST(req: NextRequest) {
 
     // Build API messages (truncate to last 20 to control input token cost)
     const truncatedMessages = truncateHistory(messages);
-    const apiMessages = truncatedMessages.map((m: ApiMessage) => {
+    const apiMessages: ApiMessage[] = truncatedMessages.map((m: ApiMessage) => {
       if (typeof m.content === "string") {
         return { role: m.role, content: m.content };
       }
@@ -247,6 +254,31 @@ export async function POST(req: NextRequest) {
         }),
       };
     });
+
+    // ── Attach uploaded files to the last user message ───────────────────────
+    // Files already uploaded to Anthropic via /api/emma/files are referenced
+    // by file_id. Images become "image" blocks; everything else becomes
+    // "document" blocks (PDFs, plain text, etc.).
+    if (attachedFiles && attachedFiles.length > 0) {
+      const last = apiMessages[apiMessages.length - 1];
+      if (last?.role === "user") {
+        const textContent = typeof last.content === "string" ? last.content : "";
+        const textBlock: import("@/types/emma").ApiMessageContent = {
+          type: "text",
+          text: textContent,
+        };
+        const fileBlocks: import("@/types/emma").ApiMessageContent[] = attachedFiles.map((f) => {
+          if (f.media_type.startsWith("image/")) {
+            return { type: "image", source: { type: "file", file_id: f.file_id } };
+          }
+          return { type: "document", source: { type: "file", file_id: f.file_id } };
+        });
+        apiMessages[apiMessages.length - 1] = {
+          ...last,
+          content: [textBlock, ...fileBlocks] as unknown as import("@/types/emma").ApiMessageContent[],
+        };
+      }
+    }
 
     // ── Proactive token pre-count ─────────────────────────────────────────────
     // Estimate this request's input cost before streaming. If the estimate
@@ -290,7 +322,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "compact-2026-01-12",
+          "anthropic-beta": "compact-2026-01-12,files-api-2025-04-14",
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,

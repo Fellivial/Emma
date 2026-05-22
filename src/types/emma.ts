@@ -97,10 +97,16 @@ export interface ApiMessage {
 }
 
 export interface ApiMessageContent {
-  type: string; // "text" | "image" | compaction/tool block types passed through verbatim
+  type: string;
   text?: string;
-  source?: { type: "base64"; media_type: string; data: string };
-  [key: string]: unknown;
+  source?:
+    | { type: "base64"; media_type: string; data: string }
+    | { type: "file"; file_id: string }
+    | { type: "url"; url: string };
+  // Extra fields for compaction/tool blocks passed through verbatim
+  id?: string;
+  name?: string;
+  input?: unknown;
 }
 
 // ─── Voice Types ─────────────────────────────────────────────────────────────
@@ -413,6 +419,12 @@ export interface ActionLogEntry {
 
 // ─── API Types ───────────────────────────────────────────────────────────────
 
+export interface AttachedFile {
+  file_id: string;
+  media_type: string;
+  name: string;
+}
+
 export interface EmmaApiRequest {
   messages: ApiMessage[];
   deviceGraph: DeviceGraph;
@@ -421,6 +433,8 @@ export interface EmmaApiRequest {
   persona?: string;
   activeUser?: UserProfile;
   emotionState?: EmotionState;
+  /** Files already uploaded to Anthropic Files API to attach to this turn. */
+  attachedFiles?: AttachedFile[];
 }
 
 export interface EmmaApiResponse {

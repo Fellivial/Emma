@@ -504,7 +504,7 @@ export default function EmmaPage() {
                   content:
                     event.compactionBlocks && event.compactionBlocks.length > 0
                       ? ([
-                          ...event.compactionBlocks,
+                          ...(event.compactionBlocks as unknown as import("@/types/emma").ApiMessageContent[]),
                           { type: "text", text: event.raw || event.text },
                         ] as import("@/types/emma").ApiMessageContent[])
                       : event.raw || event.text,
