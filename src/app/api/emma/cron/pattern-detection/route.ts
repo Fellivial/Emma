@@ -7,7 +7,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { detectPatterns, persistPatterns } from "@/core/pattern-detector";
+import {
+  detectPatterns,
+  persistPatterns,
+  generateSuggestionsViaBatch,
+  type DetectedPattern,
+} from "@/core/pattern-detector";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,21 +58,59 @@ export async function GET(req: NextRequest) {
   }
 
   const userIds = [...new Set(userRows.map((r: any) => r.user_id as string))];
-  let totalPatterns = 0;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
 
+  // ── Phase 1: Detect patterns (no Anthropic API calls) ─────────────────────
+  const allPatterns: DetectedPattern[] = [];
   for (const userId of userIds) {
     try {
-      const patterns = await detectPatterns(userId);
-      await persistPatterns(patterns);
-      totalPatterns += patterns.length;
+      const patterns = await detectPatterns(userId, true); // skip per-pattern API calls
+      allPatterns.push(...patterns);
     } catch {
       // Continue processing other users on failure
     }
   }
 
+  if (allPatterns.length === 0) {
+    return NextResponse.json({
+      processed: userIds.length,
+      patternsFound: 0,
+      suggestionsGenerated: 0,
+      ranAt: new Date().toISOString(),
+    });
+  }
+
+  // ── Phase 2: Batch-generate all suggestions in a single API call ──────────
+  // All requests are submitted at once — 50% cost vs serial calls.
+  // Batch times out after 5 minutes; patterns without suggestions are still
+  // persisted so the frontend shows the pattern even without a suggestion text.
+  let suggestionsGenerated = 0;
+  if (apiKey) {
+    const batchInputs = allPatterns.map((p, i) => ({
+      id: `p${i}`,
+      patternType: p.patternType,
+      description: p.description,
+      exampleGoals: p.exampleGoals,
+    }));
+
+    const suggestions = await generateSuggestionsViaBatch(apiKey, batchInputs);
+
+    for (let i = 0; i < allPatterns.length; i++) {
+      const text = suggestions.get(`p${i}`);
+      if (text) {
+        allPatterns[i].suggestion = text;
+        suggestionsGenerated++;
+      }
+    }
+  }
+
+  // ── Phase 3: Persist all patterns ─────────────────────────────────────────
+  await persistPatterns(allPatterns);
+
   return NextResponse.json({
     processed: userIds.length,
-    patternsFound: totalPatterns,
+    patternsFound: allPatterns.length,
+    suggestionsGenerated,
     ranAt: new Date().toISOString(),
   });
 }
