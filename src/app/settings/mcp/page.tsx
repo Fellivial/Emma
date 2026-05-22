@@ -302,6 +302,38 @@ export default function McpPage() {
         </div>
       </section>
 
+      {/* ── MCP Tunnels callout ──────────────────────────────────── */}
+      <section className="mb-8">
+        <div className="rounded-xl border border-emma-300/10 bg-emma-300/5 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-base mt-0.5">🔒</span>
+            <div>
+              <p className="text-xs font-medium text-emma-200/60 mb-1">
+                Private network server?
+              </p>
+              <p className="text-[11px] text-emma-200/35 leading-relaxed">
+                If your MCP server runs behind a firewall, use{" "}
+                <strong className="text-emma-200/50">MCP Tunnels</strong> — a Cloudflare-backed
+                outbound-only connector that exposes your server without opening inbound ports.
+                Deploy the tunnel inside your network, then paste the routed URL here (e.g.{" "}
+                <span className="font-mono text-emma-300/50">
+                  https://service.your-domain/mcp
+                </span>
+                ).
+              </p>
+              <a
+                href="https://platform.claude.com/docs/en/agents-and-tools/mcp-tunnels/overview"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 text-[10px] text-emma-300/50 hover:text-emma-300/70 transition-colors"
+              >
+                Set up MCP Tunnels →
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Discovery list ────────────────────────────────────────── */}
       <section>
         <h2 className="text-[10px] font-medium text-emma-200/20 uppercase tracking-[0.2em] mb-3">
