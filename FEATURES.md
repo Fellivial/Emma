@@ -7,27 +7,27 @@ Last updated: 2026-05-22. Re-run when a new Claude API feature ships.
 
 ## Summary
 
-After reading all Anthropic platform docs (two sessions, 52 URLs total), 26 distinct
-API capabilities were identified for Emma's Sonnet 4.6 architecture. 7 are
-high-ROI and low-effort. 6 are high-value but require more wiring. The rest
-are worth tracking.
+After reading all Anthropic platform docs (two sessions, 52 URLs total) + a second
+pass covering MCP Tunnels and Managed Agents (29 additional URLs), 29 distinct
+API capabilities were identified for Emma's Sonnet 4.6 architecture.
 
-Emma's biggest gaps right now:
-1. **No strict tool schemas** — Emma's integration tools accept malformed inputs silently.
-2. **No prompt caching** — Emma re-pays for the full system prompt every turn.
-3. **No file handling** — Users can't send documents to Emma.
-4. **No web search** — Emma can't look up current information.
+**All P1 and P2 items are implemented. All P3 items are implemented or deferred.**
+
+Items #1–25 are fully implemented. #26 (Advisor Tool) is deferred pending Opus 4.7
+adoption. #27 (MCP Tunnels) is implemented as a UI callout. #28 (Dreams) and
+#29 (Managed Agents Platform) are deferred pending GA and ZDR support.
 
 **Critical constraint:** Prefill (putting words in Claude's mouth via assistant-turn
-message content) is NOT supported on Sonnet 4.6 or Opus 4.7. Any code that uses
-prefill will receive a 400 error. Use Structured Outputs (`output_config.format`)
-instead.
+message content) is NOT supported on Sonnet 4.6 or Opus 4.7. Audited and guarded
+(intake route strips trailing assistant turns; no prefill found in main route).
 
 ---
 
 ## P1 — Implement now (high ROI, low risk)
 
 ### 1. Strict Tool Use
+**Status:** ✓ Implemented — `src/core/tool-registry.ts` (`strict: true` on all tools via `getToolsForClaude`)
+
 **What:** Add `strict: true` to every tool definition in Emma's tool registry.
 Grammar-constrained sampling guarantees tool inputs exactly match their JSON schema.
 No more silent type coercions or missing required fields.
@@ -58,6 +58,8 @@ No more silent type coercions or missing required fields.
 ---
 
 ### 2. Prompt Caching
+**Status:** ✓ Implemented — `personas.ts` (system block `cache_control`) + `route.ts` (conversation history cache on last assistant message)
+
 **What:** Cache Emma's system prompt so subsequent turns pay 10% of the base
 input price instead of 100%.
 
@@ -94,6 +96,8 @@ input price instead of 100%.
 ---
 
 ### 3. Effort Parameter
+**Status:** ✓ Implemented — `route.ts` (`output_config: { effort }` with high/medium detection via `detectEffort()`)
+
 **What:** Set `output_config: { effort: "medium" }` on Emma's brain route to
 reduce token spend on routine conversations.
 
@@ -121,6 +125,8 @@ reduce token spend on routine conversations.
 ---
 
 ### 4. Token Counting (pre-request estimation)
+**Status:** ✓ Implemented — `route.ts` (`countRequestTokens()` pre-checks against metering windows before streaming)
+
 **What:** Call `/v1/messages/count_tokens` before sending to Emma to estimate
 usage and enforce limits proactively.
 
@@ -143,6 +149,8 @@ usage and enforce limits proactively.
 ---
 
 ### 5. Context Compaction
+**Status:** ✓ Implemented — `route.ts` (`compact-2026-01-12` beta header, `compact_20260112` trigger at 600K tokens)
+
 **What:** Automatically summarize old conversation turns when Emma approaches
 the 1M-token context limit.
 
@@ -169,6 +177,8 @@ the 1M-token context limit.
 ---
 
 ### 6. Files API — Document Upload
+**Status:** ✓ Implemented — `src/app/api/emma/files/route.ts`, `[id]/route.ts`, `download/[file_id]/route.ts`
+
 **What:** Let users upload PDFs, images, and plain text to a persistent
 workspace store. Emma references them by `file_id` instead of re-uploading.
 
@@ -198,6 +208,8 @@ workspace store. Emma references them by `file_id` instead of re-uploading.
 ---
 
 ### 7. PDF Support (paired with Files API)
+**Status:** ✓ Implemented — `route.ts` (document blocks via `file_id` source or direct URL via `pdfUrls`)
+
 **What:** Send PDFs to Emma for analysis. Claude extracts both text and visual
 content (charts, tables, diagrams) from each page.
 
@@ -226,6 +238,8 @@ content (charts, tables, diagrams) from each page.
 ## P2 — Implement next (high value, more wiring)
 
 ### 8. Web Search Tool
+**Status:** ✓ Implemented — `route.ts` (`web_search_20260209` + `web_fetch_20260209`, user location wired)
+
 **What:** Give Emma the ability to search the web in real time. Use the
 `web_search_20260209` version for dynamic filtering and free code execution.
 
@@ -261,6 +275,8 @@ content (charts, tables, diagrams) from each page.
 ---
 
 ### 9. Structured Outputs
+**Status:** ✓ N/A — no prefill existed to replace; `output_config.format` available in `route.ts` if needed for future structured extraction
+
 **What:** Guarantee JSON schema conformance on Emma's API responses using
 `output_config.format`. **This replaces prefill** for any case where Emma's
 current code uses assistant-turn prefill.
@@ -290,6 +306,8 @@ current code uses assistant-turn prefill.
 ---
 
 ### 10. Citations
+**Status:** ✓ Implemented — `route.ts` (`citations: { enabled: true }`, `citations_delta` captured and forwarded to client)
+
 **What:** Ground Emma's responses in source documents so users can verify
 claims against original text.
 
@@ -316,6 +334,8 @@ claims against original text.
 ---
 
 ### 11. Search Results Content Blocks
+**Status:** ✓ Implemented — `route.ts` (`search_results` block injected from `searchResults` request param)
+
 **What:** Pass structured search results to Emma as native content blocks
 (`RequestSearchResultBlock`) for natural citations and source attribution.
 
@@ -337,6 +357,8 @@ claims against original text.
 ---
 
 ### 12. MCP Connector — User-Pluggable Tools
+**Status:** ✓ Implemented — `route.ts` (`mcp-client-2025-11-20`, `loadMcpServers()` from `user_mcp_servers` table with encrypted tokens)
+
 **What:** Let users connect their own remote MCP servers to Emma.
 
 **Why it matters for Emma:**
@@ -364,6 +386,8 @@ claims against original text.
 ---
 
 ### 13. Agent Skills — Document Generation
+**Status:** ✓ Implemented — `route.ts` (`skills-2025-10-02` + `code-execution-2025-08-25` beta headers; `container.skills` array; `code_execution` tool; `file_id` parsed from `code_execution_tool_result`)
+
 **What:** Let Emma produce real downloadable files: Excel spreadsheets,
 PowerPoint presentations, Word documents, PDFs.
 
@@ -394,6 +418,8 @@ PowerPoint presentations, Word documents, PDFs.
 ## P3 — Track and implement when relevant
 
 ### 14. Tool Search (`tool_search_tool_bm25_20251119`)
+**Status:** ✓ Implemented — `route.ts` (`tool_search_tool_bm25_20251119` tool; integration tools marked `defer_loading: true` in `tool-registry.ts`)
+
 **What:** When Emma's tool set grows past 20 actions, defer-load all tools and
 use tool search to dynamically discover the right one.
 
@@ -415,6 +441,8 @@ prompt caching effective.
 ---
 
 ### 15. Fine-Grained Tool Streaming
+**Status:** ✓ Implemented — `route.ts` (`eager_input_streaming: true` on all tool definitions; `stream-client.ts` handles partial JSON input deltas)
+
 **What:** Add `eager_input_streaming: true` to Emma's tool definitions to stream
 tool inputs without buffering.
 
@@ -430,6 +458,8 @@ see tool parameters appearing in real time rather than waiting for full JSON.
 ---
 
 ### 16. Vision Enhancement (image uploads via Files API)
+**Status:** ✓ Implemented — `vision/route.ts` (uploads image to Files API, caches `file_id`; subsequent calls use `{ type: "file", file_id }` instead of base64)
+
 **What:** Emma's vision route already exists. Upgrade it to use Files API so
 images are uploaded once and referenced by `file_id` rather than sent as base64
 on every call.
@@ -444,6 +474,8 @@ on every call.
 ---
 
 ### 17. Context Editing (tool result clearing)
+**Status:** ✓ Implemented — `route.ts` (`message-edits-2025-11-15` beta header; `context_management.edits` with `clear_tool_results` and `clear_thinking_blocks` when agentic session exceeds threshold)
+
 **What:** Selectively clear old tool results from conversation history when
 Emma is running long agentic sessions.
 
@@ -461,6 +493,8 @@ of `tool_result` blocks that are no longer relevant.
 ---
 
 ### 18. Programmatic Tool Calling
+**Status:** ✓ Implemented — `route.ts` (`code_execution_20260120` tool; `allowed_callers` on integration tools; `programmaticTools` flag in `EmmaApiRequest`)
+
 **What:** Let Emma write Python code to call multiple integration tools in a
 single pass without multiple model round-trips.
 
@@ -482,6 +516,8 @@ one script, never loading intermediate data into context.
 ---
 
 ### 19. Cache Diagnostics
+**Status:** ✓ Implemented — `route.ts` (`cache-diagnosis-2026-04-07` beta header; `diagnostics.previous_message_id` from `lastResponseId`; cache diagnostics logged server-side)
+
 **What:** Debug prompt caching misses by passing previous response ID.
 
 **Why:** Once prompt caching is live (P1 #2), this helps diagnose why cache
@@ -497,6 +533,8 @@ misses happen unexpectedly.
 ---
 
 ### 20. Adaptive Thinking
+**Status:** ✓ Implemented — `route.ts` (`thinking: { type: "adaptive" }` enabled when `effort` is `high` or above)
+
 **What:** Enable Claude to show its reasoning before answering. For Sonnet 4.6,
 use `thinking: { type: "adaptive" }` — manual `budget_tokens` is deprecated on
 this model.
@@ -517,6 +555,8 @@ analytical tasks, not conversational turns.
 ---
 
 ### 21. Memory Tool
+**Status:** ✓ Implemented — `agent-loop.ts` (`memory_20250818` scratchpad tool; file operations handled in-process against an in-memory store for long agentic sessions)
+
 **What:** Native Anthropic memory tool (`memory_20250818`) that persists facts
 across sessions via client-side file operations on a `/memories` directory.
 
@@ -539,6 +579,8 @@ sessions rather than a replacement.
 ---
 
 ### 22. Batch Processing (Messages Batches API)
+**Status:** ✓ Implemented — `cron/pattern-detection/route.ts` (`generateSuggestionsViaBatch` uses Batches API at 50% cost reduction for background suggestion generation)
+
 **What:** Submit requests asynchronously at 50% cost reduction. Results
 returned within 24 hours.
 
@@ -553,6 +595,8 @@ route — only for background tasks.
 ---
 
 ### 23. Streaming Refusals (`stop_reason: "refusal"`)
+**Status:** ✓ Implemented — `stream-client.ts` (synthetic fallback message on `stop_reason: "refusal"`); `route.ts` + `page.tsx` (rollback `apiMessages` to not include refused exchange)
+
 **What:** Claude 4+ returns `stop_reason: "refusal"` when it refuses to answer.
 No refusal message is included in the response.
 
@@ -570,6 +614,8 @@ reason. Without handling it, the client receives an empty/partial response.
 ---
 
 ### 24. `model_context_window_exceeded` Stop Reason
+**Status:** ✓ Implemented — `page.tsx` (hard-truncate `apiMessages` to last 6 on `model_context_window_exceeded`; retry automatically)
+
 **What:** New stop reason that fires when the request exceeds the model's
 context window. Allows requesting max tokens without knowing input size upfront.
 
@@ -585,6 +631,8 @@ Default behavior on Sonnet 4.5+.
 ---
 
 ### 25. Tool Input Examples (`input_examples`)
+**Status:** ✓ Implemented — `tool-registry.ts` (`input_examples` on HubSpot deal tools, Notion create/update, and calendar tools)
+
 **What:** Add `input_examples: [{ ... }]` to Emma's complex tool definitions
 to improve tool selection reliability and parameter quality.
 
@@ -601,6 +649,8 @@ Adds 20–200 tokens per tool but measurably improves accuracy on complex schema
 ---
 
 ### 26. Advisor Tool (deferred — requires Opus 4.7)
+**Status:** ⏸ Deferred — requires Opus 4.7 as advisor; adds Opus pricing on every complex agentic turn. Revisit when Emma adopts Opus.
+
 **What:** Pair Emma's Sonnet 4.6 executor with an Opus 4.7 advisor model that
 reviews the full conversation mid-generation and injects guidance.
 
@@ -619,6 +669,8 @@ and returns 400–700 tokens of guidance before the executor continues.
 ---
 
 ### 27. MCP Tunnels (enterprise infrastructure — no Emma code change)
+**Status:** ✓ Implemented — `src/app/settings/mcp/page.tsx` (UI callout explaining tunnel-hosted MCP URLs; links to MCP Tunnels setup docs; no API change needed)
+
 **What:** Deploy a lightweight tunnel agent (cloudflared + Anthropic proxy) inside
 a private network so Claude can reach MCP servers behind a firewall without opening
 inbound ports. Each MCP server gets a routed hostname under a customer-controlled
@@ -646,6 +698,8 @@ Not ZDR or HIPAA eligible. Depends on Cloudflare as transport.
 ---
 
 ### 28. Managed Agents — Dreams (async memory consolidation)
+**Status:** ⏸ Deferred — research preview; not ZDR eligible; depends on Managed Agents Sessions (#29) for session IDs. Revisit after #29.
+
 **What:** An async pipeline that reads a memory store + a set of past session
 transcripts and produces a new reorganized memory store. Deduplicates facts,
 resolves contradictions, surfaces emerging patterns, prunes stale entries.
@@ -690,6 +744,8 @@ Pick up after evaluating item #29.
 ---
 
 ### 29. Managed Agents Platform (strategic — deferred)
+**Status:** ⏸ Deferred — research preview; not ZDR or HIPAA eligible; full rewrite of agent-loop, task system, and approval flow. Revisit when GA + ZDR support added.
+
 **What:** Replace Emma's custom `agent-loop.ts` with Anthropic-managed Sessions.
 An Agent is a versioned config (model + system prompt + tools + MCP servers + skills).
 A Session is a running instance of an Agent with its own container, conversation
