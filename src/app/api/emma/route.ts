@@ -399,6 +399,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Prompt cache: conversation history ───────────────────────────────────
+    // Mark the last assistant message with cache_control so the stable
+    // conversation prefix is cached after the first turn. Combined with the
+    // system-prompt cache in personas.ts, this saves ~90% of input token cost
+    // once both caches are warm.
+    const lastAssistantIdx = apiMessages.reduceRight(
+      (found, m, i) => (found === -1 && m.role === "assistant" ? i : found),
+      -1
+    );
+    if (lastAssistantIdx !== -1) {
+      const msg = apiMessages[lastAssistantIdx];
+      if (typeof msg.content === "string") {
+        apiMessages[lastAssistantIdx] = {
+          ...msg,
+          content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }],
+        };
+      } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+        const blocks = [...(msg.content as ApiMessageContent[])];
+        const last = blocks[blocks.length - 1];
+        blocks[blocks.length - 1] = { ...last, cache_control: { type: "ephemeral" } };
+        apiMessages[lastAssistantIdx] = { ...msg, content: blocks };
+      }
+    }
+
     // ── Build beta header (dynamic — grows when optional features are enabled) ──
     const betaHeaderParts = [
       "compact-2026-01-12",
