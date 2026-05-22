@@ -416,6 +416,8 @@ export default function EmmaPage() {
       };
 
       const newApiMsgs: ApiMessage[] = [...apiMessages, { role: "user", content: text.trim() }];
+      // Snapshot pre-send state so a refusal can roll back this exchange.
+      const preSendApiMessages = apiMessages;
       setMessages((prev) => [...prev, userMsg]);
       setLoading(true);
 
@@ -495,21 +497,28 @@ export default function EmmaPage() {
                     : m
                 )
               );
-              // Preserve compaction blocks alongside the text so Anthropic can
-              // reconstruct compressed history on the next turn.
-              setApiMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant" as const,
-                  content:
-                    event.compactionBlocks && event.compactionBlocks.length > 0
-                      ? ([
-                          ...(event.compactionBlocks as unknown as import("@/types/emma").ApiMessageContent[]),
-                          { type: "text", text: event.raw || event.text },
-                        ] as import("@/types/emma").ApiMessageContent[])
-                      : event.raw || event.text,
-                },
-              ]);
+              // Refused exchanges must not enter API history — Anthropic
+              // rejects turns that follow a refusal in the same context.
+              // Roll back to the snapshot taken before this send.
+              if (event.refused) {
+                setApiMessages(preSendApiMessages);
+              } else {
+                // Preserve compaction blocks alongside the text so Anthropic can
+                // reconstruct compressed history on the next turn.
+                setApiMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant" as const,
+                    content:
+                      event.compactionBlocks && event.compactionBlocks.length > 0
+                        ? ([
+                            ...(event.compactionBlocks as unknown as import("@/types/emma").ApiMessageContent[]),
+                            { type: "text", text: event.raw || event.text },
+                          ] as import("@/types/emma").ApiMessageContent[])
+                        : event.raw || event.text,
+                  },
+                ]);
+              }
 
               // Handle enforcement metadata
               if (event.enforcement?.status === "warning" && event.enforcement.message) {

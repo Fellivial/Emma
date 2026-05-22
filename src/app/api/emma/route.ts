@@ -563,6 +563,8 @@ export async function POST(req: NextRequest) {
         // Anthropic message ID captured from message_start — returned to client
         // so it can be passed back as lastResponseId for cache diagnostics.
         let messageId: string | undefined;
+        // stop_reason from message_delta — "refusal" requires a synthetic fallback.
+        let stopReason = "";
 
         try {
           while (true) {
@@ -595,6 +597,7 @@ export async function POST(req: NextRequest) {
                 }
                 if (event.type === "message_delta" && event.usage) {
                   outputTokens = event.usage.output_tokens || 0;
+                  if (event.delta?.stop_reason) stopReason = event.delta.stop_reason as string;
                 }
 
                 // Capture non-text content blocks (compaction, server_tool_use,
@@ -728,6 +731,16 @@ export async function POST(req: NextRequest) {
           }
 
           // ── Final event with parsed response ────────────────────────────────
+          // Claude 4+ signals a refusal via stop_reason="refusal" with no text.
+          // Inject a persona-appropriate fallback so the UI never shows a blank
+          // response, and signal the client to drop this exchange from API history.
+          const refused = stopReason === "refusal";
+          if (refused && !fullText) {
+            fullText =
+              persona === "mommy"
+                ? "Mmm. That one I'm going to skip, baby. Ask me something else? [emotion: concerned]"
+                : "I'm not able to help with that. What else can I do for you?";
+          }
           const { text, commands, routineId, expression } = parseEmmaResponse(fullText);
 
           // Note: commands array is no longer dispatched to physical devices.
@@ -742,6 +755,7 @@ export async function POST(req: NextRequest) {
             expression: expression || null,
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
             messageId: messageId || undefined,
+            refused: refused || undefined,
             citations: citations.length > 0 ? citations : undefined,
             generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,

@@ -22,6 +22,12 @@ export interface StreamDoneEvent {
   compactionBlocks?: Record<string, unknown>[];
   /** Anthropic message ID — pass back as lastResponseId for cache diagnostics. */
   messageId?: string;
+  /**
+   * True when Claude refused the request (stop_reason === "refusal").
+   * The client must NOT add this exchange to API history — roll back apiMessages
+   * so the refused turn is not replayed to Anthropic on the next request.
+   */
+  refused?: boolean;
 }
 
 interface StreamCallbacks {
@@ -104,6 +110,7 @@ export async function streamEmmaResponse(
                 generatedFiles: event.generatedFiles || undefined,
                 compactionBlocks: event.compactionBlocks || undefined,
                 messageId: event.messageId || undefined,
+                refused: event.refused || undefined,
               });
               break;
 
