@@ -28,6 +28,8 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Example parameter objects shown to Claude to improve call accuracy on complex schemas. */
+  inputExamples?: Record<string, unknown>[];
   riskLevel: RiskLevel;
   handler: (input: Record<string, unknown>, context: ToolContext) => Promise<ToolResult>;
 }
@@ -114,6 +116,7 @@ export function getToolsForClaude(
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  input_examples?: Record<string, unknown>[];
   strict?: true;
   defer_loading?: true;
   eager_input_streaming?: true;
@@ -134,6 +137,7 @@ export function getToolsForClaude(
         name: string;
         description: string;
         input_schema: Record<string, unknown>;
+        input_examples?: Record<string, unknown>[];
         strict?: true;
         defer_loading?: true;
         eager_input_streaming?: true;
@@ -142,6 +146,7 @@ export function getToolsForClaude(
         name: t.name,
         description: `${t.description} [Risk: ${t.riskLevel}]`,
         input_schema: t.inputSchema,
+        ...(t.inputExamples && { input_examples: t.inputExamples }),
         eager_input_streaming: true as const,
         ...(useProgrammatic
           ? { allowed_callers: ["code_execution_20260120"] }
@@ -400,6 +405,10 @@ registerTool({
     required: ["title", "date", "time", "duration_minutes", "attendees"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { title: "Product Demo with Acme", date: "2025-11-14", time: "14:00", duration_minutes: 60, attendees: ["jane@acme.com", "bob@acme.com"] },
+    { title: "Team Standup", date: "2025-11-15", time: "09:00", duration_minutes: 30, attendees: null },
+  ],
   riskLevel: "dangerous",
   handler: async (input, context) => {
     try {
@@ -518,6 +527,10 @@ registerTool({
     required: ["email", "firstname", "lastname", "company", "phone"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { email: "jane.doe@acme.com", firstname: "Jane", lastname: "Doe", company: "Acme Inc", phone: "+14155550100" },
+    { email: "lead@example.org", firstname: null, lastname: null, company: null, phone: null },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
@@ -589,6 +602,10 @@ registerTool({
     required: ["contact_id", "activity_type", "note"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { contact_id: "12345", activity_type: "call", note: "Discussed Q4 pricing. Will follow up next week." },
+    { contact_id: "67890", activity_type: null, note: "Sent proposal PDF via email." },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
@@ -934,6 +951,10 @@ registerTool({
     required: ["parent_page_id", "title", "content"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { parent_page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", title: "Meeting Notes 2024-01-15", content: "Discussed Q1 roadmap and action items." },
+    { parent_page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891", title: "Project Brief", content: null },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
@@ -1019,6 +1040,10 @@ registerTool({
     required: ["page_id", "title", "content"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", title: "Updated Title", content: "Appended section with new details." },
+    { page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891", title: null, content: "Additional notes appended." },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
@@ -1240,6 +1265,10 @@ registerTool({
     required: ["dealname", "amount", "pipeline", "dealstage", "contact_id"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { dealname: "Acme Corp — Enterprise Plan", amount: "12000", pipeline: null, dealstage: "appointmentscheduled", contact_id: "12345" },
+    { dealname: "New Inbound Lead", amount: null, pipeline: null, dealstage: null, contact_id: null },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
@@ -1283,6 +1312,10 @@ registerTool({
     required: ["deal_id", "dealstage", "amount"],
     additionalProperties: false,
   },
+  inputExamples: [
+    { deal_id: "98765", dealstage: "closedwon", amount: "15000" },
+    { deal_id: "98765", dealstage: "contractsent", amount: null },
+  ],
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
