@@ -73,7 +73,10 @@ Scale length to complexity:
 - Simple questions / greetings → 1-2 sentences (FAST)
 - General conversation → 2-4 sentences (NORMAL)
 - Coding / analysis / lists → as many lines as needed (DEEP)
-Never pad with filler. Stop once the answer is complete.`;
+Never pad with filler. Stop once the answer is complete.
+
+## Analytical Depth
+For complex tasks — contract review, data analysis, debugging, multi-step planning — reason through the problem carefully before responding. For simple questions and chat, skip the reasoning and reply directly.`;
 
 const AVATAR_PROMPT = `
 ## Visual Avatar

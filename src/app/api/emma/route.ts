@@ -470,6 +470,7 @@ export async function POST(req: NextRequest) {
       : null;
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
+    const effort = detectEffort(messages, hasDocuments);
 
     const anthropicRes = await fetchWithRetry(
       "https://api.anthropic.com/v1/messages",
@@ -496,7 +497,12 @@ export async function POST(req: NextRequest) {
           ...(container && { container }),
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,
-          output_config: { effort: detectEffort(messages, hasDocuments) },
+          output_config: { effort },
+          // Adaptive thinking: enabled for analytical/deep tasks (effort=high).
+          // Pairs with the effort parameter rather than a manual budget_tokens.
+          // clear_thinking_blocks in context_management strips these from history
+          // so they don't accumulate across turns.
+          ...(effort === "high" && { thinking: { type: "adaptive" } }),
           ...(lastResponseId && {
             diagnostics: { previous_message_id: lastResponseId },
           }),
