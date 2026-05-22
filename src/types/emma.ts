@@ -425,6 +425,12 @@ export interface AttachedFile {
   name: string;
 }
 
+export interface UserLocation {
+  city?: string;
+  country?: string;
+  timezone?: string;
+}
+
 export interface EmmaApiRequest {
   messages: ApiMessage[];
   deviceGraph: DeviceGraph;
@@ -437,6 +443,8 @@ export interface EmmaApiRequest {
   attachedFiles?: AttachedFile[];
   /** Direct PDF (or other document) URLs to attach as document blocks this turn. */
   pdfUrls?: string[];
+  /** User's approximate location for web search result localization. */
+  userLocation?: UserLocation;
 }
 
 export interface EmmaApiResponse {

@@ -128,6 +128,7 @@ export async function POST(req: NextRequest) {
       emotionState,
       attachedFiles,
       pdfUrls,
+      userLocation,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -330,6 +331,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Build server-side tools ───────────────────────────────────────────────
+    // web_search_20260209 and web_fetch_20260209 are Anthropic-hosted (GA).
+    // No beta header needed. Code execution inside these tools is free.
+    const webSearchTool: Record<string, unknown> = {
+      type: "web_search_20260209",
+      name: "web_search",
+      ...(userLocation && {
+        user_location: {
+          ...(userLocation.city && { city: userLocation.city }),
+          ...(userLocation.country && { country: userLocation.country }),
+          ...(userLocation.timezone && { timezone: userLocation.timezone }),
+        },
+      }),
+    };
+    const webFetchTool: Record<string, unknown> = {
+      type: "web_fetch_20260209",
+      name: "web_fetch",
+      max_content_tokens: 5000,
+    };
+
     // ── Streaming request to Anthropic ───────────────────────────────────────
 
     const anthropicRes = await fetchWithRetry(
@@ -347,8 +368,10 @@ export async function POST(req: NextRequest) {
           max_tokens: detectMaxTokens(messages, hasDocuments),
           system: systemBlocks,
           messages: apiMessages,
+          tools: [webSearchTool, webFetchTool],
           stream: true,
           output_config: { effort: detectEffort(messages, hasDocuments) },
+          citations: { enabled: true },
           context_management: {
             edits: [
               {
@@ -421,13 +444,22 @@ export async function POST(req: NextRequest) {
                   outputTokens = event.usage.output_tokens || 0;
                 }
 
-                // Capture non-text content blocks (compaction, server_tool_use, etc.)
+                // Capture non-text content blocks (compaction, server_tool_use,
+                // server_tool_result) so the client can preserve them in history.
+                // Also emit a tool_start event so the UI can show a "Searching…" indicator.
                 if (
                   event.type === "content_block_start" &&
                   event.content_block?.type &&
                   event.content_block.type !== "text"
                 ) {
                   nonTextBlocks.push(event.content_block as Record<string, unknown>);
+                  if (event.content_block.type === "server_tool_use") {
+                    const toolEvent = JSON.stringify({
+                      type: "tool_start",
+                      tool: event.content_block.name ?? "unknown",
+                    });
+                    controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
+                  }
                 }
 
                 // Content block delta — stream text to client

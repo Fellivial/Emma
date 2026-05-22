@@ -22,6 +22,8 @@ interface StreamCallbacks {
   onDelta: (text: string) => void;
   onDone: (event: StreamDoneEvent) => void;
   onError: (error: string) => void;
+  /** Called when a server-side tool (web_search, web_fetch) starts executing. */
+  onToolStart?: (tool: string) => void;
 }
 
 /**
@@ -94,6 +96,10 @@ export async function streamEmmaResponse(
                 enforcement: event.enforcement || null,
                 compactionBlocks: event.compactionBlocks || undefined,
               });
+              break;
+
+            case "tool_start":
+              callbacks.onToolStart?.(event.tool);
               break;
 
             case "error":
