@@ -118,9 +118,16 @@ export async function POST(
       { status: 422 }
     );
   }
+  // Strip any trailing non-user messages so we never send a trailing assistant
+  // turn to Anthropic (Sonnet 4.6 returns 400 on assistant-turn prefill).
+  const trimmedMessages = messages.slice(
+    0,
+    messages.findLastIndex((m) => m.role === "user") + 1
+  );
+
   // Replace last user message content with sanitised version
-  const safeMessages = messages.map((m, i) =>
-    i === messages.length - 1 && m.role === "user" ? { ...m, content: sanitised.clean } : m
+  const safeMessages = trimmedMessages.map((m, i) =>
+    i === trimmedMessages.length - 1 ? { ...m, content: sanitised.clean } : m
   );
 
   // ── A4: Per-client usage metering ─────────────────────────────────────────
