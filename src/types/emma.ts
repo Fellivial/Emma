@@ -431,6 +431,15 @@ export interface UserLocation {
   timezone?: string;
 }
 
+/** A single result in a RequestSearchResultBlock — for RAG / custom knowledge base retrieval. */
+export interface SearchResult {
+  /** URL of the source document. */
+  source: string;
+  title?: string;
+  /** The retrieved text content for this result. */
+  content: string;
+}
+
 export interface CitationBlock {
   type: "char_location" | "page_location" | "content_block_location" | "web_search_result_location";
   cited_text: string;
@@ -461,6 +470,8 @@ export interface EmmaApiRequest {
   pdfUrls?: string[];
   /** User's approximate location for web search result localization. */
   userLocation?: UserLocation;
+  /** RAG results to pass as a search_results content block for native citation support. */
+  searchResults?: SearchResult[];
 }
 
 export interface EmmaApiResponse {

@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
       attachedFiles,
       pdfUrls,
       userLocation,
+      searchResults,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -271,9 +272,14 @@ export async function POST(req: NextRequest) {
     // without requiring a prior upload.
     const hasDocuments =
       (attachedFiles?.some((f) => !f.media_type.startsWith("image/")) ?? false) ||
-      (pdfUrls?.length ?? 0) > 0;
+      (pdfUrls?.length ?? 0) > 0 ||
+      (searchResults?.length ?? 0) > 0;
 
-    if ((attachedFiles && attachedFiles.length > 0) || (pdfUrls && pdfUrls.length > 0)) {
+    if (
+      (attachedFiles && attachedFiles.length > 0) ||
+      (pdfUrls && pdfUrls.length > 0) ||
+      (searchResults && searchResults.length > 0)
+    ) {
       const last = apiMessages[apiMessages.length - 1];
       if (last?.role === "user") {
         const textContent = typeof last.content === "string" ? last.content : "";
@@ -292,9 +298,25 @@ export async function POST(req: NextRequest) {
         const urlBlocks: import("@/types/emma").ApiMessageContent[] = (pdfUrls ?? []).map(
           (url) => ({ type: "document", source: { type: "url", url } })
         );
+        // search_results block: native RAG content for citation-quality source attribution.
+        // Each result becomes a search_result entry with source URL, optional title, and text.
+        const searchBlock =
+          searchResults && searchResults.length > 0
+            ? [
+                {
+                  type: "search_results",
+                  results: searchResults.map((r) => ({
+                    type: "search_result",
+                    source: r.source,
+                    ...(r.title && { title: r.title }),
+                    content: [{ type: "text", text: r.content }],
+                  })),
+                } as unknown as import("@/types/emma").ApiMessageContent,
+              ]
+            : [];
         apiMessages[apiMessages.length - 1] = {
           ...last,
-          content: [textBlock, ...fileBlocks, ...urlBlocks] as unknown as import("@/types/emma").ApiMessageContent[],
+          content: [textBlock, ...fileBlocks, ...urlBlocks, ...searchBlock] as unknown as import("@/types/emma").ApiMessageContent[],
         };
       }
     }
