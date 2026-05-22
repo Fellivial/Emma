@@ -12,7 +12,7 @@ function getSupabase() {
 // DELETE /api/emma/mcp/[id] — remove an MCP server config
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,10 +20,11 @@ export async function DELETE(
   const supabase = getSupabase();
   if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
+  const { id } = await params;
   const { error } = await supabase
     .from("user_mcp_servers")
     .delete()
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,7 +35,7 @@ export async function DELETE(
 // PATCH /api/emma/mcp/[id] — toggle enabled or update name/tools
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,6 +43,7 @@ export async function PATCH(
   const supabase = getSupabase();
   if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
+  const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const updates: Record<string, unknown> = {};
   if (typeof body.enabled === "boolean") updates.enabled = body.enabled;
@@ -56,7 +58,7 @@ export async function PATCH(
   const { error } = await supabase
     .from("user_mcp_servers")
     .update(updates)
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

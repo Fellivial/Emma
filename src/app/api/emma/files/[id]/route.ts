@@ -14,7 +14,7 @@ function getSupabase() {
 // DELETE /api/emma/files/[id] — delete a file from Anthropic and Supabase
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,7 +25,7 @@ export async function DELETE(
   const supabase = getSupabase();
   if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
-  const rowId = params.id;
+  const { id: rowId } = await params;
 
   // Fetch the row to verify ownership and get the Anthropic file_id
   const { data: row, error: fetchErr } = await supabase
