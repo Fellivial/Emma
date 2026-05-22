@@ -488,6 +488,11 @@ export interface EmmaApiRequest {
    * Requires skills to be enabled. Incompatible with strict: true on tools.
    */
   programmaticTools?: boolean;
+  /**
+   * Message ID returned by the previous response. When provided, the API
+   * returns cache diagnostics so the server can log where the prefix diverged.
+   */
+  lastResponseId?: string;
 }
 
 export interface GeneratedFile {

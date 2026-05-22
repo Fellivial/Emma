@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
       searchResults,
       skills,
       programmaticTools,
+      lastResponseId,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -404,6 +405,7 @@ export async function POST(req: NextRequest) {
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
       "message-edits-2025-11-15",
+      "cache-diagnosis-2026-04-07",
       ...(skills?.length
         ? [
             // code_execution_20260120 supports programmatic tool calling;
@@ -495,6 +497,9 @@ export async function POST(req: NextRequest) {
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,
           output_config: { effort: detectEffort(messages, hasDocuments) },
+          ...(lastResponseId && {
+            diagnostics: { previous_message_id: lastResponseId },
+          }),
           citations: { enabled: true },
           context_management: {
             edits: [
@@ -549,6 +554,9 @@ export async function POST(req: NextRequest) {
         // Accumulate partial JSON inputs from eager_input_streaming tool_use blocks.
         // Key = Anthropic block index, value = { arrayIdx in nonTextBlocks, accumulated JSON }
         const toolInputPartials = new Map<number, { arrayIdx: number; json: string }>();
+        // Anthropic message ID captured from message_start — returned to client
+        // so it can be passed back as lastResponseId for cache diagnostics.
+        let messageId: string | undefined;
 
         try {
           while (true) {
@@ -567,12 +575,17 @@ export async function POST(req: NextRequest) {
               try {
                 const event = JSON.parse(data);
 
-                // Capture token usage from Anthropic stream events
-                if (event.type === "message_start" && event.message?.usage) {
-                  const u = event.message.usage;
+                // Capture token usage and message ID from Anthropic stream events.
+                // Diagnostics (cache miss details) are logged when present.
+                if (event.type === "message_start" && event.message) {
+                  const u = event.message.usage || {};
                   inputTokens = u.input_tokens || 0;
                   cacheReadTokens = u.cache_read_input_tokens || 0;
                   cacheCreationTokens = u.cache_creation_input_tokens || 0;
+                  if (event.message.id) messageId = event.message.id as string;
+                  if (event.message.diagnostics) {
+                    console.info("[EMMA Cache Diagnostics]", JSON.stringify(event.message.diagnostics));
+                  }
                 }
                 if (event.type === "message_delta" && event.usage) {
                   outputTokens = event.usage.output_tokens || 0;
@@ -722,6 +735,7 @@ export async function POST(req: NextRequest) {
             routineId: routineId || null,
             expression: expression || null,
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+            messageId: messageId || undefined,
             citations: citations.length > 0 ? citations : undefined,
             generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,

@@ -20,6 +20,8 @@ export interface StreamDoneEvent {
   generatedFiles?: GeneratedFile[];
   /** Non-text content blocks (e.g. compaction blocks) to preserve in history. */
   compactionBlocks?: Record<string, unknown>[];
+  /** Anthropic message ID — pass back as lastResponseId for cache diagnostics. */
+  messageId?: string;
 }
 
 interface StreamCallbacks {
@@ -101,6 +103,7 @@ export async function streamEmmaResponse(
                 citations: event.citations || undefined,
                 generatedFiles: event.generatedFiles || undefined,
                 compactionBlocks: event.compactionBlocks || undefined,
+                messageId: event.messageId || undefined,
               });
               break;
 
