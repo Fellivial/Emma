@@ -17,6 +17,8 @@ import {
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+import { decrypt } from "@/core/security/encryption";
 import { LIMIT_BLOCK_MESSAGE } from "@/core/pricing";
 
 const MAX_HISTORY_MESSAGES = 20;
@@ -82,6 +84,40 @@ async function countRequestTokens(
   }
 }
 
+// Loads the user's enabled MCP server configs from Supabase, decrypts tokens,
+// and returns the mcp_servers array for the Anthropic request. Fails open.
+async function loadMcpServers(userId: string): Promise<Record<string, unknown>[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return [];
+  try {
+    const supabase = createClient(url, key);
+    const { data } = await supabase
+      .from("user_mcp_servers")
+      .select("name, url, auth_token, allowed_tools, blocked_tools")
+      .eq("user_id", userId)
+      .eq("enabled", true);
+    if (!data || data.length === 0) return [];
+    return data.map((row) => {
+      const entry: Record<string, unknown> = {
+        type: "url",
+        url: row.url,
+        name: row.name,
+      };
+      if (row.auth_token) {
+        entry.authorization_token = decrypt(row.auth_token);
+      }
+      const toolConfig: Record<string, unknown> = { enabled: true };
+      if (row.allowed_tools?.length) toolConfig.allowed_tools = row.allowed_tools;
+      if (row.blocked_tools?.length) toolConfig.blocked_tools = row.blocked_tools;
+      entry.tool_configuration = toolConfig;
+      return entry;
+    });
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Streaming brain route.
  *
@@ -143,6 +179,12 @@ export async function POST(req: NextRequest) {
       } catch {
         // DB not available — continue without memories
       }
+    }
+
+    // Load user's MCP server configs (fail-open)
+    let mcpServers: Record<string, unknown>[] = [];
+    if (userId) {
+      mcpServers = await loadMcpServers(userId);
     }
 
     // Load per-client config and resolve vertical (fail-open)
@@ -383,7 +425,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "compact-2026-01-12,files-api-2025-04-14",
+          "anthropic-beta": "compact-2026-01-12,files-api-2025-04-14,mcp-client-2025-11-20",
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,
@@ -391,6 +433,7 @@ export async function POST(req: NextRequest) {
           system: systemBlocks,
           messages: apiMessages,
           tools: [webSearchTool, webFetchTool],
+          ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,
           output_config: { effort: detectEffort(messages, hasDocuments) },
           citations: { enabled: true },
@@ -477,10 +520,16 @@ export async function POST(req: NextRequest) {
                   event.content_block.type !== "text"
                 ) {
                   nonTextBlocks.push(event.content_block as Record<string, unknown>);
-                  if (event.content_block.type === "server_tool_use") {
+                  if (
+                    event.content_block.type === "server_tool_use" ||
+                    event.content_block.type === "mcp_tool_use"
+                  ) {
                     const toolEvent = JSON.stringify({
                       type: "tool_start",
                       tool: event.content_block.name ?? "unknown",
+                      ...(event.content_block.server_name && {
+                        server: event.content_block.server_name,
+                      }),
                     });
                     controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
                   }
