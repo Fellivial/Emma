@@ -17,6 +17,7 @@ import {
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
+import { LIMIT_BLOCK_MESSAGE } from "@/core/pricing";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -50,6 +51,32 @@ function detectMaxTokens(msgs: ApiMessage[]): number {
 // Avoids burning full effort budget on "what's on my calendar today".
 function detectEffort(msgs: ApiMessage[]): "high" | "medium" {
   return DEEP_PATTERN.test(getLastMessageText(msgs)) ? "high" : "medium";
+}
+
+// Calls /v1/messages/count_tokens to estimate input token cost before streaming.
+// Returns 0 on any error so callers always fail open.
+async function countRequestTokens(
+  apiKey: string,
+  model: string,
+  system: unknown[],
+  messages: unknown[]
+): Promise<number> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages/count_tokens", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ model, system, messages }),
+    });
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return typeof data.input_tokens === "number" ? data.input_tokens : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -220,6 +247,38 @@ export async function POST(req: NextRequest) {
         }),
       };
     });
+
+    // ── Proactive token pre-count ─────────────────────────────────────────────
+    // Estimate this request's input cost before streaming. If the estimate
+    // would push any metering window over its limit, block now rather than
+    // mid-response. Fails open: if countRequestTokens errors it returns 0.
+    if (enforcementResult && enforcementResult.allWindows.length > 0) {
+      const estimated = await countRequestTokens(apiKey, MODEL_BRAIN, systemBlocks, apiMessages);
+      if (estimated > 0) {
+        const overflowWindow = enforcementResult.allWindows.find(
+          (w) => w.tokensLimit > 0 && w.tokensUsed + estimated >= w.tokensLimit
+        );
+        if (overflowWindow) {
+          const blockMsg = LIMIT_BLOCK_MESSAGE;
+          const preCountBlock = `data: ${JSON.stringify({
+            type: "done",
+            text: blockMsg,
+            raw: blockMsg,
+            commands: [],
+            routineId: null,
+            expression: "warm",
+            enforcement: {
+              status: "blocked",
+              upgradeUrl: "/settings/billing?addon=extra_pack",
+              window: overflowWindow.windowType,
+            },
+          })}\n\n`;
+          return new Response(preCountBlock, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          });
+        }
+      }
+    }
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
 
