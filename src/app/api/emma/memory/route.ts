@@ -64,6 +64,31 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "API key not set" }, { status: 500 });
         }
 
+        const memorySchema = {
+          type: "object",
+          properties: {
+            memories: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  category: {
+                    type: "string",
+                    enum: ["preference", "routine", "personal", "episodic", "environment"],
+                  },
+                  key: { type: "string" },
+                  value: { type: "string" },
+                  confidence: { type: "number" },
+                },
+                required: ["category", "key", "value", "confidence"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["memories"],
+          additionalProperties: false,
+        };
+
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
@@ -81,6 +106,12 @@ export async function POST(req: NextRequest) {
                 content: `Extract memories from this conversation:\n\n${body.conversationText}`,
               },
             ],
+            output_config: {
+              format: {
+                type: "json_schema",
+                json_schema: { name: "memory_extraction", schema: memorySchema },
+              },
+            },
           }),
         });
 
@@ -92,11 +123,12 @@ export async function POST(req: NextRequest) {
         const rawText =
           data.content
             ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-            .join("") || "[]";
+            .join("") || '{"memories":[]}';
 
+        // Structured output guarantees valid JSON — no cleanup needed.
         let parsed: Array<{ category: string; key: string; value: string; confidence: number }>;
         try {
-          parsed = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+          parsed = (JSON.parse(rawText) as { memories: typeof parsed }).memories;
         } catch {
           parsed = [];
         }

@@ -24,20 +24,12 @@ export function serializeMemories(entries: MemoryEntry[]): string {
   return lines.join("\n");
 }
 
-export const MEMORY_EXTRACTION_PROMPT = `Analyze the conversation and extract any facts worth remembering about the user. Return ONLY a JSON array of memory objects (no markdown, no backticks, no preamble).
+export const MEMORY_EXTRACTION_PROMPT = `Analyze the conversation and extract any facts worth remembering about the user.
 
-Each object should have:
-- "category": one of "preference", "routine", "personal", "episodic", "environment"
-- "key": a short snake_case identifier (e.g., "favorite_color", "morning_wakeup_time")
-- "value": the actual fact as a concise string
-- "confidence": 0.0 to 1.0 — how confident you are this is a real, persistent fact
+Each memory needs:
+- category: preference | routine | personal | episodic | environment
+- key: short snake_case identifier (e.g. favorite_color, morning_wakeup_time)
+- value: the actual fact as a concise string
+- confidence: 0.0–1.0 — use ≥0.7 for explicit statements, 0.4–0.6 for inferences
 
-Rules:
-- Only extract genuinely useful, persistent facts
-- Don't extract transient statements like "I'm hungry right now"
-- DO extract: preferences, habits, personal details, relationship info, environmental facts
-- If nothing worth remembering, return an empty array: []
-- confidence >= 0.7 for explicit statements, 0.4-0.6 for inferences
-
-Example output:
-[{"category":"preference","key":"favorite_music","value":"lo-fi hip hop","confidence":0.9}]`;
+Only extract genuinely useful, persistent facts. Do not extract transient statements like "I'm hungry right now". If nothing is worth remembering, return an empty memories array.`;

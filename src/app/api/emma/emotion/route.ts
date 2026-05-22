@@ -2,28 +2,29 @@ import { MODEL_UTILITY } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 
-const EMOTION_VISION_PROMPT = `You analyze facial expressions in webcam frames for a smart home agent's emotion detection system.
+const EMOTION_VISION_PROMPT = `Analyze the facial expression in the webcam frame for an emotion detection system.
 
-Respond ONLY with a JSON object (no markdown, no backticks, no preamble):
-{
-  "primary": "<emotion_label>",
-  "confidence": <0.0-1.0>,
-  "valence": <-1.0 to 1.0>,
-  "arousal": <0.0 to 1.0>
-}
+Emotion labels: neutral, happy, sad, angry, anxious, tired, excited, frustrated, calm, stressed.
+Valence: -1 = very negative, 0 = neutral, 1 = very positive.
+Arousal: 0 = very calm/sleepy, 1 = very energetic/agitated.
+Confidence: 0–1, use 0.1 when no face is clearly visible.
 
-Emotion labels: "neutral", "happy", "sad", "angry", "anxious", "tired", "excited", "frustrated", "calm", "stressed"
+Base your analysis on facial muscle tension (brow, jaw, mouth corners), eye openness and gaze direction, overall posture if visible, and skin color/flushing.`;
 
-Valence: -1 = very negative, 0 = neutral, 1 = very positive
-Arousal: 0 = very calm/sleepy, 1 = very energetic/agitated
-
-Base your analysis on:
-- Facial muscle tension (brow, jaw, mouth corners)
-- Eye openness and gaze direction
-- Overall posture if visible
-- Skin color / flushing
-
-If no face is clearly visible, return: {"primary":"neutral","confidence":0.1,"valence":0,"arousal":0.3}`;
+const EMOTION_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    primary: {
+      type: "string",
+      enum: ["neutral","happy","sad","angry","anxious","tired","excited","frustrated","calm","stressed"],
+    },
+    confidence: { type: "number" },
+    valence: { type: "number" },
+    arousal: { type: "number" },
+  },
+  required: ["primary", "confidence", "valence", "arousal"],
+  additionalProperties: false,
+} as const;
 
 export async function POST(req: NextRequest) {
   const user = await getUser();
@@ -71,6 +72,12 @@ export async function POST(req: NextRequest) {
             ],
           },
         ],
+        output_config: {
+          format: {
+            type: "json_schema",
+            json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
+          },
+        },
       }),
     });
 
@@ -85,8 +92,8 @@ export async function POST(req: NextRequest) {
         .join("") || "";
 
     try {
-      const cleaned = rawText.replace(/```json|```/g, "").trim();
-      const emotion = JSON.parse(cleaned);
+      // With structured outputs the response is guaranteed-valid JSON — no cleanup needed.
+      const emotion = JSON.parse(rawText);
       return NextResponse.json({ emotion });
     } catch {
       return NextResponse.json({
