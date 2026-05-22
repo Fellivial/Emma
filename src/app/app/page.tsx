@@ -502,6 +502,10 @@ export default function EmmaPage() {
               // Roll back to the snapshot taken before this send.
               if (event.refused) {
                 setApiMessages(preSendApiMessages);
+              } else if (event.contextWindowExceeded) {
+                // Input overflowed the 1M context window. Hard-truncate to the
+                // 6 most recent messages so the next request definitely fits.
+                setApiMessages((prev) => prev.slice(-6));
               } else {
                 // Preserve compaction blocks alongside the text so Anthropic can
                 // reconstruct compressed history on the next turn.

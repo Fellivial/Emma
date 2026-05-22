@@ -28,6 +28,12 @@ export interface StreamDoneEvent {
    * so the refused turn is not replayed to Anthropic on the next request.
    */
   refused?: boolean;
+  /**
+   * True when the input exceeded the model's context window
+   * (stop_reason === "model_context_window_exceeded").
+   * The client should hard-truncate apiMessages so the next turn fits.
+   */
+  contextWindowExceeded?: boolean;
 }
 
 interface StreamCallbacks {
@@ -111,6 +117,7 @@ export async function streamEmmaResponse(
                 compactionBlocks: event.compactionBlocks || undefined,
                 messageId: event.messageId || undefined,
                 refused: event.refused || undefined,
+                contextWindowExceeded: event.contextWindowExceeded || undefined,
               });
               break;
 

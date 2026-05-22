@@ -741,6 +741,17 @@ export async function POST(req: NextRequest) {
                 ? "Mmm. That one I'm going to skip, baby. Ask me something else? [emotion: concerned]"
                 : "I'm not able to help with that. What else can I do for you?";
           }
+
+          // model_context_window_exceeded fires when the input itself overflows
+          // the 1M token context window (distinct from max_tokens). Signal the
+          // client to hard-truncate apiMessages so the next turn fits.
+          const contextWindowExceeded = stopReason === "model_context_window_exceeded";
+          if (contextWindowExceeded && !fullText) {
+            fullText =
+              persona === "mommy"
+                ? "Mmm. My memory's a little full, baby — I've cleared some history so we can keep going. [emotion: concerned]"
+                : "Our conversation got too long for me to process. I've trimmed the history — try again.";
+          }
           const { text, commands, routineId, expression } = parseEmmaResponse(fullText);
 
           // Note: commands array is no longer dispatched to physical devices.
@@ -756,6 +767,7 @@ export async function POST(req: NextRequest) {
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
             messageId: messageId || undefined,
             refused: refused || undefined,
+            contextWindowExceeded: contextWindowExceeded || undefined,
             citations: citations.length > 0 ? citations : undefined,
             generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
