@@ -435,6 +435,8 @@ export interface EmmaApiRequest {
   emotionState?: EmotionState;
   /** Files already uploaded to Anthropic Files API to attach to this turn. */
   attachedFiles?: AttachedFile[];
+  /** Direct PDF (or other document) URLs to attach as document blocks this turn. */
+  pdfUrls?: string[];
 }
 
 export interface EmmaApiResponse {

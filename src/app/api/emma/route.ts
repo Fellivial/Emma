@@ -40,7 +40,9 @@ function getLastMessageText(msgs: ApiMessage[]): string {
   return "";
 }
 
-function detectMaxTokens(msgs: ApiMessage[]): number {
+function detectMaxTokens(msgs: ApiMessage[], hasDocuments = false): number {
+  // Documents (PDFs) produce verbose responses — tables, summaries, extracted text.
+  if (hasDocuments) return 2000;
   const text = getLastMessageText(msgs);
   if (DEEP_PATTERN.test(text)) return 1200;
   if (text.length < 80) return 350;
@@ -49,7 +51,8 @@ function detectMaxTokens(msgs: ApiMessage[]): number {
 
 // "high" for analytical/generative tasks; "medium" for everything else.
 // Avoids burning full effort budget on "what's on my calendar today".
-function detectEffort(msgs: ApiMessage[]): "high" | "medium" {
+function detectEffort(msgs: ApiMessage[], hasDocuments = false): "high" | "medium" {
+  if (hasDocuments) return "high";
   return DEEP_PATTERN.test(getLastMessageText(msgs)) ? "high" : "medium";
 }
 
@@ -124,6 +127,7 @@ export async function POST(req: NextRequest) {
       activeUser,
       emotionState,
       attachedFiles,
+      pdfUrls,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -250,16 +254,25 @@ export async function POST(req: NextRequest) {
           if (block.type === "image" && block.source) {
             return { type: "image", source: block.source };
           }
+          // Preserve document blocks (PDFs, files) from history verbatim
+          if (block.type === "document" && block.source) {
+            return { type: "document", source: block.source };
+          }
           return { type: "text", text: block.text || "" };
         }),
       };
     });
 
-    // ── Attach uploaded files to the last user message ───────────────────────
-    // Files already uploaded to Anthropic via /api/emma/files are referenced
-    // by file_id. Images become "image" blocks; everything else becomes
-    // "document" blocks (PDFs, plain text, etc.).
-    if (attachedFiles && attachedFiles.length > 0) {
+    // ── Attach uploaded files and URL-based PDFs to the last user message ──────
+    // Files uploaded via /api/emma/files are referenced by file_id.
+    // Images become "image" blocks; everything else (PDFs, docs) becomes
+    // "document" blocks. Direct PDF URLs are also injected as document blocks
+    // without requiring a prior upload.
+    const hasDocuments =
+      (attachedFiles?.some((f) => !f.media_type.startsWith("image/")) ?? false) ||
+      (pdfUrls?.length ?? 0) > 0;
+
+    if ((attachedFiles && attachedFiles.length > 0) || (pdfUrls && pdfUrls.length > 0)) {
       const last = apiMessages[apiMessages.length - 1];
       if (last?.role === "user") {
         const textContent = typeof last.content === "string" ? last.content : "";
@@ -267,15 +280,20 @@ export async function POST(req: NextRequest) {
           type: "text",
           text: textContent,
         };
-        const fileBlocks: import("@/types/emma").ApiMessageContent[] = attachedFiles.map((f) => {
-          if (f.media_type.startsWith("image/")) {
-            return { type: "image", source: { type: "file", file_id: f.file_id } };
+        const fileBlocks: import("@/types/emma").ApiMessageContent[] = (attachedFiles ?? []).map(
+          (f) => {
+            if (f.media_type.startsWith("image/")) {
+              return { type: "image", source: { type: "file", file_id: f.file_id } };
+            }
+            return { type: "document", source: { type: "file", file_id: f.file_id } };
           }
-          return { type: "document", source: { type: "file", file_id: f.file_id } };
-        });
+        );
+        const urlBlocks: import("@/types/emma").ApiMessageContent[] = (pdfUrls ?? []).map(
+          (url) => ({ type: "document", source: { type: "url", url } })
+        );
         apiMessages[apiMessages.length - 1] = {
           ...last,
-          content: [textBlock, ...fileBlocks] as unknown as import("@/types/emma").ApiMessageContent[],
+          content: [textBlock, ...fileBlocks, ...urlBlocks] as unknown as import("@/types/emma").ApiMessageContent[],
         };
       }
     }
@@ -326,11 +344,11 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           model: MODEL_BRAIN,
-          max_tokens: detectMaxTokens(messages),
+          max_tokens: detectMaxTokens(messages, hasDocuments),
           system: systemBlocks,
           messages: apiMessages,
           stream: true,
-          output_config: { effort: detectEffort(messages) },
+          output_config: { effort: detectEffort(messages, hasDocuments) },
           context_management: {
             edits: [
               {
