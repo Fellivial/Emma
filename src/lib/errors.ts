@@ -120,6 +120,8 @@ export async function fetchWithRetry(
 
 export function getPersonaErrorMessage(status: number): string {
   switch (status) {
+    case 400:
+      return "Mmm. Something's misconfigured on my end. Check the server logs?";
     case 401:
       return "Mmm. Looks like your session expired, baby. Sign in again for me?";
     case 429:

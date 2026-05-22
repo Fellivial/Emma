@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
 
     // Use session-verified ID for data operations; fall back to body for dev mode
     const userId = sessionUserId ?? activeUser?.id;
-    let memories: any[] = [];
+    let memories: import("@/types/emma").MemoryEntry[] = [];
     if (userId) {
       try {
         memories = await getMemoriesForUser(userId);
@@ -230,7 +230,6 @@ export async function POST(req: NextRequest) {
         }).catch(() => {});
 
         const rejection = getInjectionRejectionMessage();
-        const encoder = new TextEncoder();
         const body = `data: ${JSON.stringify({ type: "done", text: rejection, raw: rejection, commands: [], routineId: null, expression: "skeptical" })}\n\n`;
         return new Response(body, {
           headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
@@ -260,8 +259,8 @@ export async function POST(req: NextRequest) {
       try {
         const clientConfig = clientConfigForPrompt ?? (await loadClientConfigForUser(userId));
         const planId = clientConfig.planId || "free";
-        const userTimezone = (body as any).userTimezone || "UTC";
-        const billingAnchorDay = (body as any).billingAnchorDay || 1;
+        const userTimezone = body.userTimezone ?? "UTC";
+        const billingAnchorDay = body.billingAnchorDay ?? 1;
 
         enforcementResult = await checkUsage(userId, planId, userTimezone, billingAnchorDay);
 
@@ -475,8 +474,7 @@ export async function POST(req: NextRequest) {
           name: "code_execution",
         }
       : null;
-    // Skills container disabled: container API changed from object to string (new format TBD).
-    const container: null = null;
+    // Skills container disabled: Anthropic changed container from object to string format (TBD).
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
     const effort = detectEffort(messages, hasDocuments);
@@ -533,6 +531,8 @@ export async function POST(req: NextRequest) {
 
     if (!anthropicRes.ok) {
       const status = anthropicRes.status;
+      const upstreamBody = await anthropicRes.text().catch(() => "");
+      console.error(`[EMMA] Anthropic API error ${status}:`, upstreamBody.slice(0, 500));
       const errMsg = getPersonaErrorMessage(status);
       return new Response(JSON.stringify({ error: errMsg, status }), {
         status: 502,
@@ -600,7 +600,7 @@ export async function POST(req: NextRequest) {
                   cacheCreationTokens = u.cache_creation_input_tokens || 0;
                   if (event.message.id) messageId = event.message.id as string;
                   if (event.message.diagnostics) {
-                    console.info("[EMMA Cache Diagnostics]", JSON.stringify(event.message.diagnostics));
+                    console.warn("[EMMA Cache Diagnostics]", JSON.stringify(event.message.diagnostics));
                   }
                 }
                 if (event.type === "message_delta" && event.usage) {
@@ -802,8 +802,8 @@ export async function POST(req: NextRequest) {
               inputTokens,
               outputTokens,
               planId,
-              (body as any).userTimezone || "UTC",
-              (body as any).billingAnchorDay || 1
+              body.userTimezone ?? "UTC",
+              body.billingAnchorDay ?? 1
             ).catch(() => {});
 
             // Mark warning sent if surfaced this request

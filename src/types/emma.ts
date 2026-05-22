@@ -494,6 +494,10 @@ export interface EmmaApiRequest {
    * returns cache diagnostics so the server can log where the prefix diverged.
    */
   lastResponseId?: string;
+  /** IANA timezone string for usage window boundary calculations (e.g. "America/New_York"). */
+  userTimezone?: string;
+  /** Day of month (1-31) the billing cycle resets on. Defaults to 1. */
+  billingAnchorDay?: number;
 }
 
 export interface GeneratedFile {
