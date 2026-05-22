@@ -429,14 +429,7 @@ export async function POST(req: NextRequest) {
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
       "cache-diagnosis-2026-04-07",
-      ...(skills?.length
-        ? [
-            // code_execution_20260120 supports programmatic tool calling;
-            // code_execution_20250825 is used otherwise (skills/document gen only).
-            programmaticTools ? "code-execution-2026-01-20" : "code-execution-2025-08-25",
-            "skills-2025-10-02",
-          ]
-        : []),
+      ...(skills?.length ? ["code-execution-2025-08-25"] : []),
     ];
 
     // ── Build tools array ────────────────────────────────────────────────────
@@ -475,22 +468,15 @@ export async function POST(req: NextRequest) {
     // sandboxed container. Only included when the client requests skills.
     // code_execution_20260120 is used when programmatic tool calling is enabled
     // (allows Python code to invoke integration tools in one pass).
+    // programmaticTools flag kept for future use when code-execution-2026-01-20 is re-released.
     const codeExecutionTool: Record<string, unknown> | null = skills?.length
       ? {
-          type: programmaticTools ? "code_execution_20260120" : "code_execution_20250825",
+          type: "code_execution_20250825",
           name: "code_execution",
         }
       : null;
-    // Skills container — pre-built Anthropic skill sets for document generation.
-    const container: Record<string, unknown> | null = skills?.length
-      ? {
-          skills: skills.map((skill_id) => ({
-            type: "anthropic",
-            skill_id,
-            version: "latest",
-          })),
-        }
-      : null;
+    // Skills container disabled: container API changed from object to string (new format TBD).
+    const container: null = null;
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
     const effort = detectEffort(messages, hasDocuments);
@@ -517,7 +503,6 @@ export async function POST(req: NextRequest) {
             ...(codeExecutionTool ? [codeExecutionTool] : []),
             ...deferredIntegrationTools,
           ],
-          ...(container && { container }),
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           stream: true,
           output_config: { effort },

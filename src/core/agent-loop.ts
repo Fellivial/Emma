@@ -241,7 +241,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
-            "anthropic-beta": "memory-2025-08-18",
+            "anthropic-beta": "mcp-client-2025-11-20",
           },
           body: JSON.stringify({
             model: step < task.maxSteps ? MODEL_UTILITY : MODEL_BRAIN,
