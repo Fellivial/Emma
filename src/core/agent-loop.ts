@@ -80,6 +80,64 @@ Rules:
 - If you can't complete the goal, call complete_task explaining why.
 - Never loop endlessly — if stuck after 2 attempts, complete with an error summary.`;
 
+// ─── Memory Tool Handler ─────────────────────────────────────────────────────
+
+// Executes memory_20250818 file operations against an in-session Map.
+// Scoped to the agent task lifetime — not persisted after the task ends.
+function handleMemoryOp(files: Map<string, string>, input: Record<string, unknown>): string {
+  const command = input.command as string;
+  const path = input.path as string;
+  if (!command || !path) return "Error: command and path required";
+
+  switch (command) {
+    case "view": {
+      const content = files.get(path);
+      if (content !== undefined) return content;
+      const prefix = path.endsWith("/") ? path : path + "/";
+      const entries = [...files.keys()].filter((k) => k.startsWith(prefix));
+      return entries.length > 0 ? entries.join("\n") : `No file found at ${path}`;
+    }
+    case "create": {
+      if (files.has(path)) return `Error: ${path} already exists`;
+      files.set(path, (input.content as string) || "");
+      return `Created ${path}`;
+    }
+    case "str_replace": {
+      const text = files.get(path);
+      if (text === undefined) return `Error: ${path} not found`;
+      const oldStr = input.old_str as string;
+      if (!oldStr || !text.includes(oldStr)) return `Error: old_str not found in ${path}`;
+      files.set(path, text.replace(oldStr, (input.new_str as string) || ""));
+      return `Updated ${path}`;
+    }
+    case "insert": {
+      const text = files.get(path);
+      if (text === undefined) return `Error: ${path} not found`;
+      const lines = text.split("\n");
+      const at = Math.min(((input.insert_line as number) ?? lines.length), lines.length);
+      lines.splice(at, 0, (input.content as string) || "");
+      files.set(path, lines.join("\n"));
+      return `Inserted at line ${at} in ${path}`;
+    }
+    case "delete": {
+      if (!files.has(path)) return `Error: ${path} not found`;
+      files.delete(path);
+      return `Deleted ${path}`;
+    }
+    case "rename": {
+      const text = files.get(path);
+      if (text === undefined) return `Error: ${path} not found`;
+      const newPath = input.new_path as string;
+      if (!newPath) return "Error: new_path required for rename";
+      files.set(newPath, text);
+      files.delete(path);
+      return `Renamed ${path} to ${newPath}`;
+    }
+    default:
+      return `Unknown memory command: ${command}`;
+  }
+}
+
 function buildStateSummary(completedSteps: AgentStepResult[]): string {
   if (completedSteps.length === 0) return "No steps completed yet.";
   return completedSteps
@@ -154,6 +212,10 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       .eq("id", task.id);
   }
 
+  // In-session scratchpad for the memory_20250818 tool.
+  // Files exist only for the duration of this task — not persisted to DB.
+  const memoryFiles = new Map<string, string>();
+
   // Build conversation — seed from persisted transcript if resuming after approval
   const messages: Array<{ role: string; content: any }> = task.resumeMessages
     ? [...task.resumeMessages]
@@ -179,13 +241,17 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "memory-2025-08-18",
           },
           body: JSON.stringify({
             model: step < task.maxSteps ? MODEL_UTILITY : MODEL_BRAIN,
             max_tokens: step < task.maxSteps ? 512 : 1024,
             system: AGENT_SYSTEM,
             messages,
-            tools,
+            tools: [
+              { type: "memory_20250818", name: "memory" } as unknown as (typeof tools)[number],
+              ...tools,
+            ],
             ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
           }),
         },
@@ -227,6 +293,28 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           const toolName = block.name;
           const toolInput = block.input || {};
           const toolId = block.id;
+
+          // Handle the native memory tool before the registry lookup.
+          // Operations run against the in-session scratchpad Map.
+          if (toolName === "memory") {
+            const memOut = handleMemoryOp(memoryFiles, toolInput);
+            messages.push({ role: "assistant", content: contentBlocks });
+            messages.push({
+              role: "user",
+              content: [{ type: "tool_result", tool_use_id: toolId, content: memOut }],
+            });
+            steps.push({
+              step,
+              toolName: "memory",
+              input: toolInput,
+              output: memOut,
+              riskLevel: "safe",
+              status: "completed",
+              tokenCost: inputTokens + outputTokens,
+              durationMs: Date.now() - stepStart,
+            });
+            continue;
+          }
 
           const toolDef = getTool(toolName);
           if (!toolDef) {
