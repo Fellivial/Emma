@@ -110,6 +110,7 @@ export function getToolsForClaude(
   input_schema: Record<string, unknown>;
   strict: true;
   defer_loading?: true;
+  eager_input_streaming?: true;
 }> {
   return getAllTools()
     .filter((t) => {
@@ -126,11 +127,13 @@ export function getToolsForClaude(
         input_schema: Record<string, unknown>;
         strict: true;
         defer_loading?: true;
+        eager_input_streaming?: true;
       } = {
         name: t.name,
         description: `${t.description} [Risk: ${t.riskLevel}]`,
         input_schema: t.inputSchema,
         strict: true as const,
+        eager_input_streaming: true as const,
       };
       if (options?.deferIntegrations && isIntegration) {
         entry.defer_loading = true;

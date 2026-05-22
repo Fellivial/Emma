@@ -526,6 +526,9 @@ export async function POST(req: NextRequest) {
         const citations: Record<string, unknown>[] = [];
         // Accumulate file_ids produced by code_execution tool invocations.
         const generatedFiles: { file_id: string; name?: string }[] = [];
+        // Accumulate partial JSON inputs from eager_input_streaming tool_use blocks.
+        // Key = Anthropic block index, value = { arrayIdx in nonTextBlocks, accumulated JSON }
+        const toolInputPartials = new Map<number, { arrayIdx: number; json: string }>();
 
         try {
           while (true) {
@@ -564,6 +567,17 @@ export async function POST(req: NextRequest) {
                   event.content_block.type !== "text"
                 ) {
                   nonTextBlocks.push(event.content_block as Record<string, unknown>);
+                  // Track user-defined tool_use blocks for eager_input_streaming.
+                  // Their input starts as {} and arrives via input_json_delta deltas.
+                  if (
+                    event.content_block.type === "tool_use" &&
+                    typeof event.index === "number"
+                  ) {
+                    toolInputPartials.set(event.index, {
+                      arrayIdx: nonTextBlocks.length - 1,
+                      json: "",
+                    });
+                  }
                   if (
                     event.content_block.type === "server_tool_use" ||
                     event.content_block.type === "mcp_tool_use"
@@ -576,6 +590,30 @@ export async function POST(req: NextRequest) {
                       }),
                     });
                     controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
+                  }
+                }
+
+                // Accumulate partial tool input JSON (eager_input_streaming).
+                if (
+                  event.type === "content_block_delta" &&
+                  event.delta?.type === "input_json_delta" &&
+                  typeof event.index === "number"
+                ) {
+                  const partial = toolInputPartials.get(event.index);
+                  if (partial) partial.json += event.delta.partial_json || "";
+                }
+
+                // Finalize accumulated tool input when the block closes.
+                if (event.type === "content_block_stop" && typeof event.index === "number") {
+                  const partial = toolInputPartials.get(event.index);
+                  if (partial) {
+                    try {
+                      const block = nonTextBlocks[partial.arrayIdx] as Record<string, unknown>;
+                      if (block && partial.json) block.input = JSON.parse(partial.json);
+                    } catch {
+                      // Leave input as {} if partial JSON never completed
+                    }
+                    toolInputPartials.delete(event.index);
                   }
                 }
 
