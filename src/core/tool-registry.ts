@@ -94,6 +94,12 @@ export interface GetToolsOptions {
    * until Claude searches for and selects them (saves ~85% baseline token cost).
    */
   deferIntegrations?: boolean;
+  /**
+   * When true, integration tools receive allowed_callers: ["code_execution_20260120"]
+   * so Emma's Python code can invoke them programmatically in one pass.
+   * Incompatible with strict: true — integration tools will omit that field.
+   */
+  allowProgrammaticCalling?: boolean;
 }
 
 /**
@@ -108,9 +114,10 @@ export function getToolsForClaude(
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
-  strict: true;
+  strict?: true;
   defer_loading?: true;
   eager_input_streaming?: true;
+  allowed_callers?: string[];
 }> {
   return getAllTools()
     .filter((t) => {
@@ -121,19 +128,24 @@ export function getToolsForClaude(
     })
     .map((t) => {
       const isIntegration = Boolean(TOOL_INTEGRATION_MAP[t.name]);
+      // Programmatic calling and strict:true are mutually exclusive on integration tools.
+      const useProgrammatic = options?.allowProgrammaticCalling && isIntegration;
       const entry: {
         name: string;
         description: string;
         input_schema: Record<string, unknown>;
-        strict: true;
+        strict?: true;
         defer_loading?: true;
         eager_input_streaming?: true;
+        allowed_callers?: string[];
       } = {
         name: t.name,
         description: `${t.description} [Risk: ${t.riskLevel}]`,
         input_schema: t.inputSchema,
-        strict: true as const,
         eager_input_streaming: true as const,
+        ...(useProgrammatic
+          ? { allowed_callers: ["code_execution_20260120"] }
+          : { strict: true as const }),
       };
       if (options?.deferIntegrations && isIntegration) {
         entry.defer_loading = true;

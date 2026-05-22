@@ -168,6 +168,7 @@ export async function POST(req: NextRequest) {
       userLocation,
       searchResults,
       skills,
+      programmaticTools,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -403,7 +404,14 @@ export async function POST(req: NextRequest) {
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
       "message-edits-2025-11-15",
-      ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
+      ...(skills?.length
+        ? [
+            // code_execution_20260120 supports programmatic tool calling;
+            // code_execution_20250825 is used otherwise (skills/document gen only).
+            programmaticTools ? "code-execution-2026-01-20" : "code-execution-2025-08-25",
+            "skills-2025-10-02",
+          ]
+        : []),
     ];
 
     // ── Build tools array ────────────────────────────────────────────────────
@@ -415,7 +423,10 @@ export async function POST(req: NextRequest) {
       type: "tool_search_tool_bm25_20251119",
       name: "tool_search",
     };
-    const deferredIntegrationTools = getToolsForClaude(undefined, { deferIntegrations: true });
+    const deferredIntegrationTools = getToolsForClaude(undefined, {
+      deferIntegrations: true,
+      allowProgrammaticCalling: Boolean(programmaticTools && skills?.length),
+    });
 
     // web_search_20260209 and web_fetch_20260209 are Anthropic-hosted (GA).
     // No beta header needed. Code execution inside these tools is free.
@@ -437,8 +448,13 @@ export async function POST(req: NextRequest) {
     };
     // code_execution is a server-side tool — Anthropic runs the code in a
     // sandboxed container. Only included when the client requests skills.
+    // code_execution_20260120 is used when programmatic tool calling is enabled
+    // (allows Python code to invoke integration tools in one pass).
     const codeExecutionTool: Record<string, unknown> | null = skills?.length
-      ? { type: "code_execution_20250825", name: "code_execution" }
+      ? {
+          type: programmaticTools ? "code_execution_20260120" : "code_execution_20250825",
+          name: "code_execution",
+        }
       : null;
     // Skills container — pre-built Anthropic skill sets for document generation.
     const container: Record<string, unknown> | null = skills?.length
@@ -592,6 +608,20 @@ export async function POST(req: NextRequest) {
                       ...(event.content_block.server_name && {
                         server: event.content_block.server_name,
                       }),
+                    });
+                    controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
+                  }
+                  // Programmatic tool call: user-defined tool invoked by the
+                  // code_execution sandbox. Emit tool_start for UI feedback.
+                  if (
+                    event.content_block.type === "tool_use" &&
+                    (event.content_block.caller as Record<string, unknown> | undefined)?.type ===
+                      "code_execution_20260120"
+                  ) {
+                    const toolEvent = JSON.stringify({
+                      type: "tool_start",
+                      tool: event.content_block.name ?? "unknown",
+                      caller: "code_execution",
                     });
                     controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
                   }

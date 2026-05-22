@@ -482,6 +482,12 @@ export interface EmmaApiRequest {
    * included in the request so Emma can produce real downloadable files.
    */
   skills?: string[];
+  /**
+   * Enable programmatic tool calling via code_execution_20260120.
+   * Emma can write Python that calls multiple integration tools in one pass.
+   * Requires skills to be enabled. Incompatible with strict: true on tools.
+   */
+  programmaticTools?: boolean;
 }
 
 export interface GeneratedFile {
