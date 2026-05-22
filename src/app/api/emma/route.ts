@@ -465,9 +465,6 @@ export async function POST(req: NextRequest) {
     };
     // code_execution is a server-side tool — Anthropic runs the code in a
     // sandboxed container. Only included when the client requests skills.
-    // code_execution_20260120 is used when programmatic tool calling is enabled
-    // (allows Python code to invoke integration tools in one pass).
-    // programmaticTools flag kept for future use when code-execution-2026-01-20 is re-released.
     const codeExecutionTool: Record<string, unknown> | null = skills?.length
       ? {
           type: "code_execution_20250825",
