@@ -1,4 +1,4 @@
-import type { EmmaCommand, AvatarExpression } from "@/types/emma";
+import type { EmmaCommand, AvatarExpression, CitationBlock } from "@/types/emma";
 
 export interface StreamEnforcement {
   status: string;
@@ -14,6 +14,8 @@ export interface StreamDoneEvent {
   routineId: string | null;
   expression: AvatarExpression | null;
   enforcement: StreamEnforcement | null;
+  /** Citation blocks collected from citations_delta stream events. */
+  citations?: CitationBlock[];
   /** Non-text content blocks (e.g. compaction blocks) to preserve in history. */
   compactionBlocks?: Record<string, unknown>[];
 }
@@ -94,6 +96,7 @@ export async function streamEmmaResponse(
                 routineId: event.routineId || null,
                 expression: event.expression || null,
                 enforcement: event.enforcement || null,
+                citations: event.citations || undefined,
                 compactionBlocks: event.compactionBlocks || undefined,
               });
               break;

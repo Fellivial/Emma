@@ -431,6 +431,22 @@ export interface UserLocation {
   timezone?: string;
 }
 
+export interface CitationBlock {
+  type: "char_location" | "page_location" | "content_block_location" | "web_search_result_location";
+  cited_text: string;
+  document_index?: number;
+  document_title?: string | null;
+  /** Present on web_search_result_location citations. */
+  url?: string;
+  title?: string | null;
+  start_char_index?: number;
+  end_char_index?: number;
+  start_page_number?: number;
+  end_page_number?: number;
+  start_block_index?: number;
+  end_block_index?: number;
+}
+
 export interface EmmaApiRequest {
   messages: ApiMessage[];
   deviceGraph: DeviceGraph;

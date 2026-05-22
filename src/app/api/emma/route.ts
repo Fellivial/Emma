@@ -415,6 +415,8 @@ export async function POST(req: NextRequest) {
         // Accumulate non-text content blocks (compaction blocks) so the client
         // can preserve them in the next request's assistant message.
         const nonTextBlocks: Record<string, unknown>[] = [];
+        // Accumulate citation blocks delivered via citations_delta stream events.
+        const citations: Record<string, unknown>[] = [];
 
         try {
           while (true) {
@@ -462,6 +464,15 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
+                // Capture citations delivered as citations_delta events.
+                if (
+                  event.type === "content_block_delta" &&
+                  event.delta?.type === "citations_delta" &&
+                  event.delta.citation
+                ) {
+                  citations.push(event.delta.citation as Record<string, unknown>);
+                }
+
                 // Content block delta — stream text to client
                 if (event.type === "content_block_delta" && event.delta?.text) {
                   const text = event.delta.text;
@@ -497,6 +508,7 @@ export async function POST(req: NextRequest) {
             routineId: routineId || null,
             expression: expression || null,
             usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+            citations: citations.length > 0 ? citations : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
             enforcement: enforcementResult
               ? {
