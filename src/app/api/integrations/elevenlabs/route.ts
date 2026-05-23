@@ -26,16 +26,15 @@ export async function POST(req: NextRequest) {
 
     const { apiKey, voiceId } = (await req.json()) as { apiKey: string; voiceId?: string };
 
-    // Validate key format
-    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim().startsWith("sk_")) {
-      return NextResponse.json({ error: "Invalid ElevenLabs API key format" }, { status: 400 });
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      return NextResponse.json({ error: "API key is required" }, { status: 400 });
     }
 
     const trimmedKey = apiKey.trim();
 
     // Validate voice ID format if provided
     if (voiceId !== undefined && voiceId !== null && voiceId !== "") {
-      if (!/^[a-zA-Z0-9]{15,30}$/.test(voiceId)) {
+      if (!/^[a-zA-Z0-9_-]{10,40}$/.test(voiceId)) {
         return NextResponse.json({ error: "Invalid Voice ID format" }, { status: 400 });
       }
     }
@@ -46,12 +45,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (userRes.status === 401) {
+      console.error("[elevenlabs] key rejected by ElevenLabs API (401)");
       return NextResponse.json(
         { error: "API key is invalid — check your ElevenLabs dashboard" },
         { status: 400 }
       );
     }
     if (!userRes.ok) {
+      const errBody = await userRes.text().catch(() => "");
+      console.error(`[elevenlabs] ElevenLabs /user returned ${userRes.status}:`, errBody);
       return NextResponse.json({ error: "Could not verify key — try again" }, { status: 400 });
     }
 
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
         headers: { "xi-api-key": trimmedKey },
       });
       if (voiceRes.status === 401) {
+        console.error("[elevenlabs] voice check: key rejected (401)");
         return NextResponse.json({ error: "API key is invalid" }, { status: 400 });
       }
       if (voiceRes.status === 404) {
@@ -74,6 +77,8 @@ export async function POST(req: NextRequest) {
         );
       }
       if (!voiceRes.ok) {
+        const errBody = await voiceRes.text().catch(() => "");
+        console.error(`[elevenlabs] voice check returned ${voiceRes.status}:`, errBody);
         return NextResponse.json({ error: "Could not verify Voice ID" }, { status: 400 });
       }
       const voiceInfo = await voiceRes.json();
