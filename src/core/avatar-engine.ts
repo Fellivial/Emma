@@ -109,6 +109,7 @@ export function useAvatar(): UseAvatarReturn {
   const appRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const modelRef = useRef<any>(null);
+  const hitListenerRef = useRef<((e: PointerEvent) => void) | null>(null);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sighTimerRef = useRef<NodeJS.Timeout | null>(null);
   const neutralTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -289,9 +290,10 @@ export function useAvatar(): UseAvatarReturn {
       // Skip Live2D init entirely if model files aren't present — avoids the
       // "Cannot find Cubism 2 runtime" console error from pixi-live2d-display.
       try {
-        const probe = await fetch("/live2d/emma/Design_genius_White/Design_genius(1).model3.json", {
-          method: "HEAD",
-        });
+        const probe = await fetch(
+          `${window.location.origin}/live2d/emma/Design_genius_White/Design_genius(1).model3.json`,
+          { method: "HEAD" }
+        );
         if (!probe.ok) {
           setState((s) => ({ ...s, loaded: false }));
           resetIdleTimer();
@@ -310,6 +312,41 @@ export function useAvatar(): UseAvatarReturn {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).PIXI = PIXI;
 
+      // pixi-live2d-display uses top-level @pixi/display (a separate module instance
+      // from pixi.js's nested @pixi/display). PixiJS v7's EventBoundary calls
+      // isInteractive() on every display object, but the top-level @pixi/display
+      // never has FederatedEventTarget mixin applied to it. Patch it here so
+      // Live2DModel instances satisfy the EventBoundary contract.
+      const pixiDisplay = await import("@pixi/display");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proto = pixiDisplay.Container.prototype as any;
+      if (typeof proto.isInteractive !== "function") {
+        proto.isInteractive = function (this: { eventMode?: string }) {
+          return this.eventMode === "static" || this.eventMode === "dynamic";
+        };
+      }
+
+      // pixi-live2d-display's resolveURL calls @pixi/core's utils.url.resolve,
+      // which wraps Node.js's url.resolve. Turbopack does not polyfill the Node.js
+      // `url` module, so url.resolve is undefined in browser bundles. Patch it to
+      // use the native URL constructor before the model is created.
+      // pixi-live2d-display calls utils.url.resolve (deprecated in PixiJS v7.3+).
+      // Overwrite it as a plain data property so PixiJS's deprecated getter is
+      // shadowed and never fires its console.warn. Also fixes Turbopack builds
+      // where the underlying Node url.resolve is not polyfilled.
+      const { utils: pixiUtils } = await import("@pixi/core");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const urlShim = (pixiUtils as any)?.url;
+      if (urlShim) {
+        try {
+          Object.defineProperty(urlShim, "resolve", {
+            value: (base: string, path: string) => new URL(path, base).href,
+            writable: true,
+            configurable: true,
+          });
+        } catch {}
+      }
+
       const app = new PIXI.Application({
         view: canvasRef.current,
         backgroundAlpha: 0,
@@ -319,10 +356,16 @@ export function useAvatar(): UseAvatarReturn {
       appRef.current = app;
 
       try {
+        // autoHitTest disabled: the Automator sets model.eventMode = "static" which
+        // triggers PixiJS v7 EventBoundary hit-walking before our @pixi/display
+        // prototype patch can run. We replicate hit detection via canvas pointerdown.
+        // autoFocus kept: head-tracking uses pointermove, not hit test events.
+        const modelURL =
+          `${window.location.origin}/live2d/emma/Design_genius_White/Design_genius(1).model3.json`;
         const model = (await Live2DModel.from(
-          "/live2d/emma/Design_genius_White/Design_genius(1).model3.json",
+          modelURL,
           {
-            autoHitTest: true,
+            autoHitTest: false,
             autoFocus: true,
             autoUpdate: true,
           }
@@ -338,27 +381,31 @@ export function useAvatar(): UseAvatarReturn {
         app.stage.addChild(model as any);
         modelRef.current = model;
 
-        // Hit area interactions
-        model.on("hit", (hitAreas: string[]) => {
+        // Manual hit detection — avoids PixiJS v7 EventBoundary incompatibility
+        const canvas = canvasRef.current;
+        const onPointerDown = (e: PointerEvent) => {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+          const x = (e.clientX - rect.left) * scaleX;
+          const y = (e.clientY - rect.top) * scaleY;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const hitAreas: string[] = (model as any).hitTest(x, y) ?? [];
           if (hitAreas.includes("Head")) {
-            try {
-              model.motion("Tap_Head");
-            } catch {}
+            try { model.motion("Tap_Head"); } catch {}
             setState((s) => ({ ...s, expression: "amused" }));
           }
           if (hitAreas.includes("Body")) {
-            try {
-              model.motion("Tap_Body");
-            } catch {}
+            try { model.motion("Tap_Body"); } catch {}
             setState((s) => ({ ...s, expression: "skeptical" }));
             setTimeout(() => {
-              try {
-                model.expression("flirty");
-              } catch {}
+              try { model.expression("flirty"); } catch {}
               setState((s) => ({ ...s, expression: "flirty" }));
             }, 800);
           }
-        });
+        };
+        canvas.addEventListener("pointerdown", onPointerDown);
+        hitListenerRef.current = onPointerDown;
 
         // Start idle behaviors
         startBreathing(model);
@@ -587,6 +634,10 @@ export function useAvatar(): UseAvatarReturn {
     if (sighTimerRef.current) clearTimeout(sighTimerRef.current);
     if (neutralTimerRef.current) clearTimeout(neutralTimerRef.current);
     if (idleBehaviorRef.current) clearTimeout(idleBehaviorRef.current);
+    if (hitListenerRef.current && canvasRef.current) {
+      canvasRef.current.removeEventListener("pointerdown", hitListenerRef.current);
+      hitListenerRef.current = null;
+    }
     if (audioCtxRef.current) {
       try {
         audioCtxRef.current.close();

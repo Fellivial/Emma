@@ -521,12 +521,10 @@ export async function POST(req: NextRequest) {
           ...(lastResponseId && {
             diagnostics: { previous_message_id: lastResponseId },
           }),
-          citations: { enabled: true },
           context_management: {
             edits: [
-              // Clear accumulated tool results and thinking blocks before full compaction.
-              { type: "clear_tool_results" },
-              { type: "clear_thinking_blocks" },
+              // Clear accumulated tool uses/results before full compaction.
+              { type: "clear_tool_uses_20250919" },
               {
                 type: "compact_20260112",
                 trigger: { type: "input_tokens", value: 600_000 },
@@ -577,8 +575,6 @@ export async function POST(req: NextRequest) {
         // Accumulate non-text content blocks (compaction blocks) so the client
         // can preserve them in the next request's assistant message.
         const nonTextBlocks: Record<string, unknown>[] = [];
-        // Accumulate citation blocks delivered via citations_delta stream events.
-        const citations: Record<string, unknown>[] = [];
         // Accumulate file_ids produced by code_execution tool invocations.
         const generatedFiles: { file_id: string; name?: string }[] = [];
         // Accumulate partial JSON inputs from eager_input_streaming tool_use blocks.
@@ -724,14 +720,6 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
-                // Capture citations delivered as citations_delta events.
-                if (
-                  event.type === "content_block_delta" &&
-                  event.delta?.type === "citations_delta" &&
-                  event.delta.citation
-                ) {
-                  citations.push(event.delta.citation as Record<string, unknown>);
-                }
 
                 // Content block delta — stream text to client
                 if (event.type === "content_block_delta" && event.delta?.text) {
@@ -792,7 +780,6 @@ export async function POST(req: NextRequest) {
             messageId: messageId || undefined,
             refused: refused || undefined,
             contextWindowExceeded: contextWindowExceeded || undefined,
-            citations: citations.length > 0 ? citations : undefined,
             generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
             compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
             enforcement: enforcementResult

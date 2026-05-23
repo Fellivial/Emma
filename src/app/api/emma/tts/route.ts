@@ -52,12 +52,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // No key available — signal client to use Web Speech
+    // No key available — signal client to use Web Speech (204 = silent, not an error)
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "No ElevenLabs key configured — use Web Speech" },
-        { status: 501 }
-      );
+      return new NextResponse(null, { status: 204 });
     }
 
     // ── Call ElevenLabs ─────────────────────────────────────────────────
@@ -100,10 +97,7 @@ export async function POST(req: NextRequest) {
             .eq("service", "elevenlabs");
         }
       }
-      return NextResponse.json(
-        { error: "ElevenLabs key invalid — reconnect in Settings" },
-        { status: 501 }
-      );
+      return new NextResponse(null, { status: 204 });
     }
 
     if (!res.ok) {

@@ -91,16 +91,18 @@ function processForEmma(text: string): string {
 
 export function useVoice(): UseVoiceReturn {
   const [mode, setMode] = useState<VoiceMode>("idle");
-  const [supported] = useState(() => {
-    if (typeof window === "undefined") return false;
+  const [supported, setSupported] = useState(false);
+  useEffect(() => {
     const w = window as Window & { webkitSpeechRecognition?: unknown };
-    return !!(window.SpeechRecognition || w.webkitSpeechRecognition);
-  });
+    setSupported(!!(window.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // After a 501 (ElevenLabs not configured), skip all future TTS requests this session.
+  const elevenLabsUnavailableRef = useRef(false);
 
   // Derived booleans for backward compat
   const listening = mode === "listening";
@@ -188,13 +190,15 @@ export function useVoice(): UseVoiceReturn {
 
   const fetchAudioBlob = useCallback(
     async (text: string, clientId?: string): Promise<Blob | null> => {
+      if (elevenLabsUnavailableRef.current) return null;
       try {
         const res = await fetch("/api/emma/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, clientId }),
         });
-        if (res.status === 501) {
+        if (res.status === 204 || res.status === 501) {
+          elevenLabsUnavailableRef.current = true;
           return null;
         }
         if (!res.ok) return null;

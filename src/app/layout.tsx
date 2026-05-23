@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 // Import global styles
 import "./globals.css";
@@ -13,7 +12,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <head>
-        <Script src="/live2d/live2dcubismcore.min.js" strategy="beforeInteractive" />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/live2d/live2dcubismcore.min.js" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

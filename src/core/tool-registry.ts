@@ -119,7 +119,6 @@ export function getToolsForClaude(
   description: string;
   input_schema: Record<string, unknown>;
   input_examples?: Record<string, unknown>[];
-  strict?: true;
   defer_loading?: true;
   eager_input_streaming?: true;
   allowed_callers?: string[];
@@ -140,7 +139,6 @@ export function getToolsForClaude(
         description: string;
         input_schema: Record<string, unknown>;
         input_examples?: Record<string, unknown>[];
-        strict?: true;
         defer_loading?: true;
         eager_input_streaming?: true;
         allowed_callers?: string[];
@@ -150,9 +148,7 @@ export function getToolsForClaude(
         input_schema: t.inputSchema,
         ...(t.inputExamples && { input_examples: t.inputExamples }),
         eager_input_streaming: true as const,
-        ...(useProgrammatic
-          ? { allowed_callers: ["code_execution_20260120"] }
-          : { strict: true as const }),
+        ...(useProgrammatic && { allowed_callers: ["code_execution_20260120"] }),
       };
       if (options?.deferIntegrations && isIntegration) {
         entry.defer_loading = true;
@@ -173,8 +169,10 @@ registerTool({
     properties: {
       topic: { type: "string", description: "What to summarize" },
       style: {
-        type: ["string", "null"],
-        enum: ["brief", "detailed", "bullet_points", null],
+        anyOf: [
+          { type: "string", enum: ["brief", "detailed", "bullet_points"] },
+          { type: "null" },
+        ],
         description: "Summary style (null for default brief)",
       },
     },
@@ -257,8 +255,10 @@ registerTool({
       title: { type: "string" },
       message: { type: "string" },
       priority: {
-        type: ["string", "null"],
-        enum: ["low", "medium", "high", null],
+        anyOf: [
+          { type: "string", enum: ["low", "medium", "high"] },
+          { type: "null" },
+        ],
         description: "Notification priority (null for default medium)",
       },
     },
