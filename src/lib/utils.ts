@@ -1,7 +1,5 @@
-let counter = 0;
-
 export function uid(): string {
-  return `${Date.now()}-${++counter}`;
+  return crypto.randomUUID();
 }
 
 export function formatTime(ts: number): string {

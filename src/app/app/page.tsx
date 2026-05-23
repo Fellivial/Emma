@@ -741,7 +741,9 @@ export default function EmmaPage() {
 
   // ── Mobile immersive render ────────────────────────────────────────────────
   if (isMobile) {
-    const visibleMessages = messages.slice(-4);
+    const visibleMessages = messages
+      .filter((msg) => msg.role === "user" || !!msg.display)
+      .slice(-4);
     return (
       <div className="h-[100dvh] w-screen bg-emma-950 overflow-hidden relative font-sans">
         <NotificationToast
@@ -796,7 +798,9 @@ export default function EmmaPage() {
           {visibleMessages.map((msg) => (
             <MobileChatBubble key={msg.id} message={msg} />
           ))}
-          {loading && <MobileTypingBubble />}
+          {loading && !visibleMessages.some((m) => m.role === "assistant" && !!m.display) && (
+            <MobileTypingBubble />
+          )}
         </div>
 
         {/* Pinned input bar */}
@@ -990,15 +994,23 @@ export default function EmmaPage() {
 // ── Mobile chat bubble ────────────────────────────────────────────────────────
 function MobileChatBubble({ message }: { message: ChatMessageType }) {
   const isUser = message.role === "user";
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] px-4 py-2.5 bg-[#1e1824] rounded-2xl rounded-tr-sm text-sm leading-relaxed text-white/85">
+          {message.display}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm font-light leading-relaxed backdrop-blur-md ${
-          isUser
-            ? "bg-emma-300/15 border border-emma-300/20 text-emma-100 rounded-br-sm"
-            : "bg-black/50 border border-white/8 text-white/80 rounded-bl-sm"
-        }`}
-      >
+    <div className="flex justify-start gap-2">
+      <div className="w-6 h-6 rounded-full shrink-0 mt-0.5 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+        <span className="font-display text-xs italic text-emma-950">E</span>
+      </div>
+      <div className="flex-1 text-sm leading-relaxed text-white/80 pt-0.5">
         {message.display}
       </div>
     </div>
