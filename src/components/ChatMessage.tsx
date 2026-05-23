@@ -23,7 +23,7 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
   };
 
   return (
-    <div className="flex items-center gap-1 mt-1 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="flex items-center gap-1 mt-1.5 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
       <button
         onClick={() => give("up")}
         className={`p-1 rounded transition-colors ${
@@ -55,42 +55,42 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
 
-  return (
-    <div
-      className={`flex flex-col animate-fade-in ${isUser ? "items-end" : "items-start"} group`}
-    >
-      <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-        {/* Emma avatar */}
-        {!isUser && (
-          <div className="w-7 h-7 rounded-full shrink-0 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
-            <span className="font-display text-sm italic text-emma-950">E</span>
-          </div>
-        )}
+  if (isUser) {
+    return (
+      <div className="flex justify-end animate-fade-in group">
+        <div className="max-w-[80%] px-4 py-2.5 bg-[#1e1824] rounded-2xl rounded-tr-sm text-sm leading-relaxed text-white/85">
+          {message.display}
+        </div>
+      </div>
+    );
+  }
 
-        {/* Bubble */}
-        <div
-          className={`max-w-[75%] px-3.5 py-2.5 text-sm font-light leading-relaxed ${
-            isUser
-              ? "bg-emerald-500/10 border border-emerald-500/15 rounded-2xl rounded-br-sm text-emerald-200/80"
-              : "bg-surface border border-surface-border rounded-2xl rounded-bl-sm text-emma-200/80"
-          }`}
-        >
+  return (
+    <div className="flex flex-col animate-fade-in group">
+      <div className="flex items-start gap-2.5">
+        {/* Emma avatar */}
+        <div className="w-7 h-7 rounded-full shrink-0 mt-0.5 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+          <span className="font-display text-sm italic text-emma-950">E</span>
+        </div>
+
+        {/* Plain text — no bubble background */}
+        <div className="flex-1 text-sm leading-relaxed text-emma-100/80 pt-1">
           {message.display}
         </div>
       </div>
 
-      {!isUser && <FeedbackButtons messageId={message.id} />}
+      <FeedbackButtons messageId={message.id} />
     </div>
   );
 }
 
 export function TypingIndicator() {
   return (
-    <div className="flex items-end gap-2">
-      <div className="w-7 h-7 rounded-full shrink-0 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
+    <div className="flex items-start gap-2.5">
+      <div className="w-7 h-7 rounded-full shrink-0 mt-0.5 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
         <span className="font-display text-sm italic text-emma-950">E</span>
       </div>
-      <div className="bg-surface border border-surface-border rounded-2xl rounded-bl-sm px-4 py-3">
+      <div className="flex-1 pt-1.5">
         <ShiningText text="Emma is thinking…" />
       </div>
     </div>

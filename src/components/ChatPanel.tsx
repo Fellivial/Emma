@@ -84,9 +84,11 @@ export function ChatPanel({
         ref={scrollContainerRef}
         className="emma-chat-scroll flex-1 overflow-auto px-5 py-4 flex flex-col gap-3"
       >
-        {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
-        ))}
+        {messages
+          .filter((msg) => msg.role === "user" || !!msg.display)
+          .map((msg) => (
+            <ChatMessage key={msg.id} message={msg} />
+          ))}
         {pendingApprovals &&
           pendingApprovals.map((approval) => (
             <ApprovalBubble
@@ -110,7 +112,10 @@ export function ChatPanel({
             </div>
           </div>
         )}
-        {loading && (!agentPlan || agentPlan.length === 0) && <TypingIndicator />}
+        {loading && (!agentPlan || agentPlan.length === 0) && (() => {
+          const last = messages[messages.length - 1];
+          return !last || last.role === "user" || !last.display;
+        })() && <TypingIndicator />}
 
         {/* Usage warning — amber left-border annotation below last bubble */}
         {usageWarning && !usageBlocked && (
