@@ -5,6 +5,8 @@
  *   1. Dangerous tool pauses execution → awaiting_approval
  *   2. Safe tool executes immediately → completed
  *   3. Loop terminates at maxSteps → max_steps_reached
+ *
+ * All fetch calls are mocked with OpenRouter/OpenAI response format.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -64,14 +66,37 @@ vi.mock("@/core/task-summarizer", () => ({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeAnthropicResponse(content: any[], stopReason = "tool_use") {
+type ToolCall = { name: string; input: Record<string, unknown> };
+
+function makeOpenRouterResponse(
+  toolCalls: ToolCall[] = [],
+  finishReason: "tool_calls" | "stop" = "tool_calls",
+  textContent: string | null = null
+) {
   return {
     ok: true,
     json: () =>
       Promise.resolve({
-        content,
-        stop_reason: stopReason,
-        usage: { input_tokens: 10, output_tokens: 5 },
+        choices: [
+          {
+            message: {
+              content: textContent,
+              tool_calls:
+                toolCalls.length > 0
+                  ? toolCalls.map((tc, i) => ({
+                      id: `call_${i}`,
+                      type: "function",
+                      function: {
+                        name: tc.name,
+                        arguments: JSON.stringify(tc.input),
+                      },
+                    }))
+                  : undefined,
+            },
+            finish_reason: finishReason,
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
       }),
   } as any;
 }
@@ -91,7 +116,7 @@ const BASE_TASK: AgentTask = {
 };
 
 beforeEach(() => {
-  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.OPENROUTER_API_KEY = "test-key";
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -101,10 +126,8 @@ describe("runAgentLoop — approval gate", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        makeAnthropicResponse([
+        makeOpenRouterResponse([
           {
-            type: "tool_use",
-            id: "toolu_01",
             name: "send_email",
             input: { to: "test@example.com", subject: "Hi", body: "Hello" },
           },
@@ -121,27 +144,12 @@ describe("runAgentLoop — approval gate", () => {
     expect(result.steps[0].riskLevel).toBe("dangerous");
   });
 
-  it("executes safe tool immediately and completes when Claude signals end_turn", async () => {
+  it("executes safe tool immediately and completes when complete_task is called", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          makeAnthropicResponse(
-            [
-              {
-                type: "tool_use",
-                id: "toolu_02",
-                name: "complete_task",
-                input: { summary: "Done" },
-              },
-            ],
-            "tool_use"
-          )
-        )
-        .mockResolvedValueOnce(
-          makeAnthropicResponse([{ type: "text", text: "All done." }], "end_turn")
-        )
+      vi.fn().mockResolvedValue(
+        makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
+      )
     );
 
     const result = await runAgentLoop(BASE_TASK);
@@ -156,9 +164,7 @@ describe("runAgentLoop — approval gate", () => {
       vi
         .fn()
         .mockResolvedValue(
-          makeAnthropicResponse([
-            { type: "tool_use", id: "toolu_03", name: "query_memories", input: { query: "test" } },
-          ])
+          makeOpenRouterResponse([{ name: "query_memories", input: { query: "test" } }])
         )
     );
 
@@ -172,10 +178,8 @@ describe("runAgentLoop — approval gate", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        makeAnthropicResponse([
+        makeOpenRouterResponse([
           {
-            type: "tool_use",
-            id: "toolu_04",
             name: "trigger_webhook",
             input: { url: "https://example.com", method: "POST", payload: {} },
           },
@@ -191,12 +195,19 @@ describe("runAgentLoop — approval gate", () => {
     expect(step?.riskLevel).toBe("dangerous");
   });
 
-  it("fails gracefully when ANTHROPIC_API_KEY is missing", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  it("fails gracefully when OpenRouter returns an API error (e.g. no valid key)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve("Unauthorized"),
+      })
+    );
 
     const result = await runAgentLoop(BASE_TASK);
 
     expect(result.status).toBe("failed");
-    expect(result.summary).toMatch(/API key/i);
+    expect(result.steps[0]?.output).toMatch(/API error: 401/i);
   });
 });

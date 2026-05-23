@@ -14,6 +14,7 @@
 import { MODEL_UTILITY } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
+import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,26 +43,21 @@ const SUGGESTION_SYSTEM = `You are Emma, an AI personal assistant. Write a singl
 Given a pattern of recurring tasks, suggest automating it. Be specific about timing. No markdown.`;
 
 async function generateSuggestion(
-  apiKey: string,
   patternType: string,
   description: string,
   exampleGoals: string[]
 ): Promise<string> {
   try {
     const res = await fetchWithRetry(
-      "https://api.anthropic.com/v1/messages",
+      OPENROUTER_URL,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: openRouterHeaders(),
         body: JSON.stringify({
           model: MODEL_UTILITY,
           max_tokens: 80,
-          system: SUGGESTION_SYSTEM,
           messages: [
+            { role: "system", content: SUGGESTION_SYSTEM },
             {
               role: "user",
               content: `Pattern type: ${patternType}\nDescription: ${description}\nExample tasks: ${exampleGoals.slice(0, 3).join("; ")}`,
@@ -75,7 +71,9 @@ async function generateSuggestion(
     if (!res.ok)
       return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
     const data = await res.json();
-    return data.content?.[0]?.text?.trim() || "";
+    return (
+      (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content?.trim() ?? ""
+    );
   } catch {
     return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
   }
@@ -142,23 +140,15 @@ function clusterGoals(
   return clusters;
 }
 
-// ─── Batch Suggestion Generator ──────────────────────────────────────────────
-
-const BATCH_BASE_URL = "https://api.anthropic.com/v1/messages/batches";
-const BATCH_POLL_MS = 15_000;
-const BATCH_TIMEOUT_MS = 5 * 60_000;
+// ─── Sequential Suggestion Generator ─────────────────────────────────────────
 
 /**
- * Submits all suggestion requests as a single Messages Batch (50% cost vs
- * serial calls). Polls until the batch ends or the 5-minute timeout is reached.
- * Degrades silently to an empty Map — callers persist patterns without
- * suggestions rather than blocking.
- *
- * @param patterns  Each entry gets a custom_id "p<index>" in the batch.
- * @returns         Map from custom_id to suggestion text.
+ * Generates suggestions for all patterns sequentially.
+ * Degrades silently on errors — callers persist patterns without suggestions
+ * rather than blocking.
  */
 export async function generateSuggestionsViaBatch(
-  apiKey: string,
+  _apiKey: string,
   patterns: Array<{
     id: string;
     patternType: string;
@@ -167,75 +157,14 @@ export async function generateSuggestionsViaBatch(
   }>
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  if (!patterns.length) return out;
-
-  const requests = patterns.map((p) => ({
-    custom_id: p.id,
-    params: {
-      model: MODEL_UTILITY,
-      max_tokens: 80,
-      system: SUGGESTION_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Pattern type: ${p.patternType}\nDescription: ${p.description}\nExample tasks: ${p.exampleGoals.slice(0, 3).join("; ")}`,
-        },
-      ],
-    },
-  }));
-
-  let batchId: string;
-  try {
-    const res = await fetch(BATCH_BASE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({ requests }),
-    });
-    if (!res.ok) return out;
-    const data = await res.json();
-    batchId = data.id as string;
-  } catch {
-    return out;
-  }
-
-  const deadline = Date.now() + BATCH_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, BATCH_POLL_MS));
+  for (const p of patterns) {
     try {
-      const statusRes = await fetch(`${BATCH_BASE_URL}/${batchId}`, {
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      });
-      if (!statusRes.ok) break;
-      const status = await statusRes.json();
-      if (status.processing_status !== "ended") continue;
-
-      const resultsRes = await fetch(`${BATCH_BASE_URL}/${batchId}/results`, {
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      });
-      if (!resultsRes.ok) break;
-
-      const jsonl = await resultsRes.text();
-      for (const line of jsonl.split("\n").filter(Boolean)) {
-        try {
-          const row = JSON.parse(line);
-          if (row.result?.type === "succeeded") {
-            const text = (row.result.message?.content?.[0]?.text as string | undefined)?.trim();
-            if (text) out.set(row.custom_id as string, text);
-          }
-        } catch {
-          // skip malformed lines
-        }
-      }
-      break;
+      const text = await generateSuggestion(p.patternType, p.description, p.exampleGoals);
+      if (text) out.set(p.id, text);
     } catch {
-      break;
+      // continue generating for other patterns
     }
   }
-
   return out;
 }
 
@@ -253,9 +182,7 @@ export async function detectPatterns(
   skipSuggestions = false
 ): Promise<DetectedPattern[]> {
   const supabase = getSupabase();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!supabase) return [];
-  if (!skipSuggestions && !apiKey) return [];
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -273,7 +200,7 @@ export async function detectPatterns(
 
   const goalItems = tasks.map((t: Record<string, unknown>) => ({
     goal: t.goal as string,
-    createdAt: new Date(t.created_at),
+    createdAt: new Date(t.created_at as string),
   }));
 
   const clusters = clusterGoals(goalItems);
@@ -290,7 +217,7 @@ export async function detectPatterns(
     if (recentDays.size >= 5) {
       const suggestion = skipSuggestions
         ? undefined
-        : await generateSuggestion(apiKey!, "daily", rep, items.map((i) => i.goal));
+        : await generateSuggestion("daily", rep, items.map((i) => i.goal));
       patterns.push({
         userId,
         patternType: "daily",
@@ -316,7 +243,7 @@ export async function detectPatterns(
     if (weeksWithActivity >= 3) {
       const suggestion = skipSuggestions
         ? undefined
-        : await generateSuggestion(apiKey!, "weekly", rep, items.map((i) => i.goal));
+        : await generateSuggestion("weekly", rep, items.map((i) => i.goal));
       patterns.push({
         userId,
         patternType: "weekly",
@@ -342,9 +269,9 @@ export async function detectPatterns(
     const existing = sequences.get(seq);
     if (existing) {
       existing.count++;
-      if (existing.exampleGoals.length < 3) existing.exampleGoals.push(task.goal);
+      if (existing.exampleGoals.length < 3) existing.exampleGoals.push(task.goal as string);
     } else {
-      sequences.set(seq, { count: 1, exampleGoals: [task.goal] });
+      sequences.set(seq, { count: 1, exampleGoals: [task.goal as string] });
     }
   }
 
@@ -352,7 +279,7 @@ export async function detectPatterns(
     if (count < 4) continue;
     const suggestion = skipSuggestions
       ? undefined
-      : await generateSuggestion(apiKey!, "tool_sequence", seq, exampleGoals);
+      : await generateSuggestion("tool_sequence", seq, exampleGoals);
     patterns.push({
       userId,
       patternType: "tool_sequence",

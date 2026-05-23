@@ -1,6 +1,7 @@
 import { MODEL_UTILITY } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 const EMOTION_VISION_PROMPT = `Analyze the facial expression in the webcam frame for an emotion detection system.
 
@@ -32,12 +33,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key not set" }, { status: 500 });
-  }
-
   try {
     const { frame } = await req.json();
 
@@ -45,38 +40,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No frame provided" }, { status: 400 });
     }
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: openRouterHeaders(),
       body: JSON.stringify({
         model: MODEL_UTILITY,
         max_tokens: 256,
-        system: EMOTION_VISION_PROMPT,
         messages: [
+          { role: "system", content: EMOTION_VISION_PROMPT },
           {
             role: "user",
             content: [
               {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/jpeg",
-                  data: frame,
-                },
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${frame}` },
               },
               { type: "text", text: "Analyze the facial expression." },
             ],
           },
         ],
-        output_config: {
-          format: {
-            type: "json_schema",
-            json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
-          },
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
         },
       }),
     });
@@ -86,10 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    const rawText =
-      data.content
-        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-        .join("") || "";
+    const rawText = extractText(data);
 
     try {
       // With structured outputs the response is guaranteed-valid JSON — no cleanup needed.

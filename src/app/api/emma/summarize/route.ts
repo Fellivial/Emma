@@ -1,6 +1,7 @@
 import { MODEL_UTILITY } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a conversation summarizer for a smart home AI agent called Emma. Your job is to compress conversation history into a compact summary that preserves all important context.
 
@@ -22,12 +23,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key not set" }, { status: 500 });
-  }
-
   try {
     const { text } = await req.json();
 
@@ -35,18 +30,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ summary: "" });
     }
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: openRouterHeaders(),
       body: JSON.stringify({
         model: MODEL_UTILITY,
         max_tokens: 1024,
-        system: SUMMARIZE_SYSTEM_PROMPT,
         messages: [
+          { role: "system", content: SUMMARIZE_SYSTEM_PROMPT },
           {
             role: "user",
             content: `Summarize this conversation history:\n\n${text}`,
@@ -62,10 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    const summary =
-      data.content
-        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-        .join("") || "";
+    const summary = extractText(data);
 
     return NextResponse.json({ summary: summary.trim() });
   } catch (err) {

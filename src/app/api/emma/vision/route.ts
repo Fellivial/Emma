@@ -2,8 +2,7 @@ import { MODEL_VISION } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { VisionApiRequest, VisionApiResponse, VisionAnalysis } from "@/types/emma";
 import { getUser } from "@/lib/supabase/server";
-
-const ANTHROPIC_FILES_URL = "https://api.anthropic.com/v1/files";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 const VISION_SYSTEM_PROMPT = `You are EMMA's vision subsystem. You analyze screenshots of the user's screen.
 
@@ -34,40 +33,6 @@ const VISION_OUTPUT_SCHEMA = {
   },
 };
 
-/**
- * Upload a base64-encoded image to the Anthropic Files API.
- * Returns the file_id on success, or null on failure (callers fall back to base64).
- */
-async function uploadFrameToFilesApi(
-  apiKey: string,
-  base64Data: string,
-  mediaType: string
-): Promise<string | null> {
-  try {
-    const buffer = Buffer.from(base64Data, "base64");
-    const ext = mediaType.split("/")[1]?.split(";")[0] || "jpg";
-    const blob = new Blob([buffer], { type: mediaType });
-    const form = new FormData();
-    form.append("file", blob, `vision-frame.${ext}`);
-
-    const res = await fetch(ANTHROPIC_FILES_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "files-api-2025-04-14",
-      },
-      body: form,
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    return typeof data.id === "string" ? data.id : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) {
@@ -76,78 +41,58 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { analysis: null, error: "ANTHROPIC_API_KEY not set" } as VisionApiResponse,
-      { status: 500 }
-    );
-  }
-
   try {
     const body = (await req.json()) as VisionApiRequest;
     const { frame, mediaType, context } = body;
-    let { fileId } = body;
 
-    if (!frame && !fileId) {
+    if (!frame) {
       return NextResponse.json(
         { analysis: null, error: "No frame provided" } as VisionApiResponse,
         { status: 400 }
       );
     }
 
-    // Upload frame to Files API if no cached file_id was provided.
-    // On upload failure, falls back to inline base64 so vision always works.
-    if (!fileId && frame) {
-      fileId = (await uploadFrameToFilesApi(apiKey, frame, mediaType || "image/jpeg")) ?? undefined;
-    }
+    const mimeType = mediaType || "image/jpeg";
 
-    const imageSource: Record<string, unknown> = fileId
-      ? { type: "file", file_id: fileId }
-      : { type: "base64", media_type: mediaType || "image/jpeg", data: frame };
-
-    const userContent: Array<Record<string, unknown>> = [
-      { type: "image", source: imageSource },
-      {
-        type: "text",
-        text: context
-          ? `Analyze this scene. Additional context: ${context}`
-          : "Analyze this scene.",
-      },
-    ];
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "files-api-2025-04-14",
-      },
+      headers: openRouterHeaders(),
       body: JSON.stringify({
         model: MODEL_VISION,
         max_tokens: 512,
-        system: VISION_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userContent }],
-        output_config: { format: { type: "json_schema", json_schema: VISION_OUTPUT_SCHEMA } },
+        messages: [
+          { role: "system", content: VISION_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${frame}` },
+              },
+              {
+                type: "text",
+                text: context
+                  ? `Analyze this scene. Additional context: ${context}`
+                  : "Analyze this scene.",
+              },
+            ],
+          },
+        ],
+        response_format: { type: "json_schema", json_schema: VISION_OUTPUT_SCHEMA },
       }),
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error("[EMMA Vision API] Anthropic error:", res.status, errText);
+      console.error("[EMMA Vision API] OpenRouter error:", res.status, errText);
       return NextResponse.json(
-        { analysis: null, error: `Anthropic API ${res.status}` } as VisionApiResponse,
+        { analysis: null, error: `API ${res.status}` } as VisionApiResponse,
         { status: 502 }
       );
     }
 
     const data = await res.json();
-    const rawText =
-      data.content
-        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-        .join("") || "";
+    const rawText = extractText(data);
 
     let parsed: {
       description: string;
@@ -171,7 +116,7 @@ export async function POST(req: NextRequest) {
       anomalies: parsed.anomalies || [],
     };
 
-    return NextResponse.json({ analysis, fileId } as VisionApiResponse);
+    return NextResponse.json({ analysis } as VisionApiResponse);
   } catch (err) {
     console.error("[EMMA Vision API] Unexpected error:", err);
     return NextResponse.json({ analysis: null, error: String(err) } as VisionApiResponse, {

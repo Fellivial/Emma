@@ -7,6 +7,7 @@ import { MODEL_UTILITY } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import type { TaskContext } from "@/core/task-context";
 import { fetchWithRetry } from "@/lib/errors";
+import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,9 +31,6 @@ export async function summarizeTask(
   ctx: TaskContext,
   finalStatus: string
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return "";
-
   try {
     const stepsText = ctx.stepLog
       .map(
@@ -55,19 +53,17 @@ export async function summarizeTask(
       .join("\n");
 
     const res = await fetchWithRetry(
-      "https://api.anthropic.com/v1/messages",
+      OPENROUTER_URL,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: openRouterHeaders(),
         body: JSON.stringify({
           model: MODEL_UTILITY,
           max_tokens: 256,
-          system: SUMMARIZER_SYSTEM,
-          messages: [{ role: "user", content: prompt }],
+          messages: [
+            { role: "system", content: SUMMARIZER_SYSTEM },
+            { role: "user", content: prompt },
+          ],
         }),
       },
       { maxRetries: 1 }
@@ -76,7 +72,8 @@ export async function summarizeTask(
     if (!res.ok) return "";
 
     const data = await res.json();
-    const summary: string = data.content?.[0]?.text?.trim() || "";
+    const summary: string =
+      (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content?.trim() ?? "";
 
     if (summary) {
       await persistSummary(taskId, summary, ctx);

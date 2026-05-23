@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { MODEL_BRAIN } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
-import { buildSystemPromptBlocks } from "@/core/personas";
+import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
 import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
@@ -17,10 +17,7 @@ import {
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
-import { createClient } from "@supabase/supabase-js";
-import { decrypt } from "@/core/security/encryption";
-import { getToolsForClaude } from "@/core/tool-registry";
-import { LIMIT_BLOCK_MESSAGE } from "@/core/pricing";
+import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -54,71 +51,6 @@ function detectMaxTokens(msgs: ApiMessage[], hasDocuments = false): number {
 
 // "high" for analytical/generative tasks; "medium" for everything else.
 // Avoids burning full effort budget on "what's on my calendar today".
-function detectEffort(msgs: ApiMessage[], hasDocuments = false): "high" | "medium" {
-  if (hasDocuments) return "high";
-  return DEEP_PATTERN.test(getLastMessageText(msgs)) ? "high" : "medium";
-}
-
-// Calls /v1/messages/count_tokens to estimate input token cost before streaming.
-// Returns 0 on any error so callers always fail open.
-async function countRequestTokens(
-  apiKey: string,
-  model: string,
-  system: unknown[],
-  messages: unknown[]
-): Promise<number> {
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages/count_tokens", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({ model, system, messages }),
-    });
-    if (!res.ok) return 0;
-    const data = await res.json();
-    return typeof data.input_tokens === "number" ? data.input_tokens : 0;
-  } catch {
-    return 0;
-  }
-}
-
-// Loads the user's enabled MCP server configs from Supabase, decrypts tokens,
-// and returns the mcp_servers array for the Anthropic request. Fails open.
-async function loadMcpServers(userId: string): Promise<Record<string, unknown>[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return [];
-  try {
-    const supabase = createClient(url, key);
-    const { data } = await supabase
-      .from("user_mcp_servers")
-      .select("name, url, auth_token, allowed_tools, blocked_tools")
-      .eq("user_id", userId)
-      .eq("enabled", true);
-    if (!data || data.length === 0) return [];
-    return data.map((row) => {
-      const entry: Record<string, unknown> = {
-        type: "url",
-        url: row.url,
-        name: row.name,
-      };
-      if (row.auth_token) {
-        entry.authorization_token = decrypt(row.auth_token);
-      }
-      const toolConfig: Record<string, unknown> = { enabled: true };
-      if (row.allowed_tools?.length) toolConfig.allowed_tools = row.allowed_tools;
-      if (row.blocked_tools?.length) toolConfig.blocked_tools = row.blocked_tools;
-      entry.tool_configuration = toolConfig;
-      return entry;
-    });
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Streaming brain route.
  *
@@ -132,15 +64,6 @@ async function loadMcpServers(userId: string): Promise<Record<string, unknown>[]
  *   data: {"type":"done","text":"full text","raw":"raw","commands":[...],"expression":"smirk","routineId":null}
  */
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not set" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
   try {
     // ── Auth ─────────────────────────────────────────────────────────────────
     // Require authentication in production; dev mode (no Supabase) falls through
@@ -163,13 +86,8 @@ export async function POST(req: NextRequest) {
       persona = "mommy",
       activeUser,
       emotionState,
-      attachedFiles,
       pdfUrls,
-      userLocation,
       searchResults,
-      skills,
-      programmaticTools,
-      lastResponseId,
     } = body;
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
@@ -185,12 +103,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Load user's MCP server configs (fail-open)
-    let mcpServers: Record<string, unknown>[] = [];
-    if (userId) {
-      mcpServers = await loadMcpServers(userId);
-    }
-
     // Load per-client config and resolve vertical (fail-open)
     let clientConfigForPrompt = null;
     if (userId) {
@@ -204,7 +116,7 @@ export async function POST(req: NextRequest) {
       ? getVertical(clientConfigForPrompt.verticalId)
       : undefined;
 
-    const systemBlocks = buildSystemPromptBlocks({
+    const systemPromptText = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
       memories,
@@ -289,248 +201,73 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build API messages (truncate to last 20 to control input token cost)
+    // Build API messages (truncate to last 20 to control token cost)
     const truncatedMessages = truncateHistory(messages);
-    const apiMessages: ApiMessage[] = truncatedMessages.map((m: ApiMessage) => {
+    const hasDocuments = (pdfUrls?.length ?? 0) > 0 || (searchResults?.length ?? 0) > 0;
+
+    // Build OpenAI-format messages — images become image_url blocks.
+    // PDFs and search results are injected as text into the last user message.
+    const apiMessages = truncatedMessages.map((m: ApiMessage) => {
       if (typeof m.content === "string") {
         return { role: m.role, content: m.content };
       }
-      return {
-        role: m.role,
-        content: (m.content as ApiMessageContent[]).map((block) => {
-          if (block.type === "image" && block.source) {
-            return { type: "image", source: block.source };
-          }
-          // Preserve document blocks (PDFs, files) from history verbatim
-          if (block.type === "document" && block.source) {
-            return { type: "document", source: block.source };
-          }
-          return { type: "text", text: block.text || "" };
-        }),
-      };
+      // Map Anthropic content blocks → OpenAI content parts
+      type OAIPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+      const parts: OAIPart[] = [];
+      for (const block of m.content as ApiMessageContent[]) {
+        const src = block.source as Record<string, unknown> | undefined;
+        if (block.type === "image" && src?.type === "base64") {
+          parts.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${String(src.media_type || "image/jpeg")};base64,${String(src.data || "")}`,
+            },
+          });
+        } else if (block.type === "document" || (src && src.type === "file")) {
+          // Drop document/file blocks — Files API is Anthropic-only
+        } else {
+          parts.push({ type: "text", text: block.text || "" });
+        }
+      }
+      return { role: m.role, content: parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts };
     });
 
-    // ── Attach uploaded files and URL-based PDFs to the last user message ──────
-    // Files uploaded via /api/emma/files are referenced by file_id.
-    // Images become "image" blocks; everything else (PDFs, docs) becomes
-    // "document" blocks. Direct PDF URLs are also injected as document blocks
-    // without requiring a prior upload.
-    const hasDocuments =
-      (attachedFiles?.some((f) => !f.media_type.startsWith("image/")) ?? false) ||
-      (pdfUrls?.length ?? 0) > 0 ||
-      (searchResults?.length ?? 0) > 0;
-
-    if (
-      (attachedFiles && attachedFiles.length > 0) ||
-      (pdfUrls && pdfUrls.length > 0) ||
-      (searchResults && searchResults.length > 0)
-    ) {
+    // Inject PDF URLs and search results as text into the last user message
+    if (hasDocuments) {
       const last = apiMessages[apiMessages.length - 1];
       if (last?.role === "user") {
-        const textContent = typeof last.content === "string" ? last.content : "";
-        const textBlock: import("@/types/emma").ApiMessageContent = {
-          type: "text",
-          text: textContent,
-        };
-        const fileBlocks: import("@/types/emma").ApiMessageContent[] = (attachedFiles ?? []).map(
-          (f) => {
-            if (f.media_type.startsWith("image/")) {
-              return { type: "image", source: { type: "file", file_id: f.file_id } };
-            }
-            return { type: "document", source: { type: "file", file_id: f.file_id } };
-          }
-        );
-        const urlBlocks: import("@/types/emma").ApiMessageContent[] = (pdfUrls ?? []).map(
-          (url) => ({ type: "document", source: { type: "url", url } })
-        );
-        // search_results block: native RAG content for citation-quality source attribution.
-        // Each result becomes a search_result entry with source URL, optional title, and text.
-        const searchBlock =
-          searchResults && searchResults.length > 0
-            ? [
-                {
-                  type: "search_results",
-                  results: searchResults.map((r) => ({
-                    type: "search_result",
-                    source: r.source,
-                    ...(r.title && { title: r.title }),
-                    content: [{ type: "text", text: r.content }],
-                  })),
-                } as unknown as import("@/types/emma").ApiMessageContent,
-              ]
-            : [];
+        const baseText = typeof last.content === "string" ? last.content : "";
+        const extras: string[] = [];
+        if (pdfUrls?.length) extras.push(`[Attached PDFs: ${pdfUrls.join(", ")}]`);
+        if (searchResults?.length) {
+          extras.push(
+            "[Search results]\n" +
+              searchResults
+                .map((r) => `Source: ${r.source}\n${r.content}`)
+                .join("\n\n")
+          );
+        }
         apiMessages[apiMessages.length - 1] = {
           ...last,
-          content: [textBlock, ...fileBlocks, ...urlBlocks, ...searchBlock] as unknown as import("@/types/emma").ApiMessageContent[],
+          content: [baseText, ...extras].filter(Boolean).join("\n\n"),
         };
       }
     }
 
-    // ── Proactive token pre-count ─────────────────────────────────────────────
-    // Estimate this request's input cost before streaming. If the estimate
-    // would push any metering window over its limit, block now rather than
-    // mid-response. Fails open: if countRequestTokens errors it returns 0.
-    if (enforcementResult && enforcementResult.allWindows.length > 0) {
-      const estimated = await countRequestTokens(apiKey, MODEL_BRAIN, systemBlocks, apiMessages);
-      if (estimated > 0) {
-        const overflowWindow = enforcementResult.allWindows.find(
-          (w) => w.tokensLimit > 0 && w.tokensUsed + estimated >= w.tokensLimit
-        );
-        if (overflowWindow) {
-          const blockMsg = LIMIT_BLOCK_MESSAGE;
-          const preCountBlock = `data: ${JSON.stringify({
-            type: "done",
-            text: blockMsg,
-            raw: blockMsg,
-            commands: [],
-            routineId: null,
-            expression: "warm",
-            enforcement: {
-              status: "blocked",
-              upgradeUrl: "/settings/billing?addon=extra_pack",
-              window: overflowWindow.windowType,
-            },
-          })}\n\n`;
-          return new Response(preCountBlock, {
-            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
-          });
-        }
-      }
-    }
-
-    // ── Prompt cache: conversation history ───────────────────────────────────
-    // Mark the last assistant message with cache_control so the stable
-    // conversation prefix is cached after the first turn. Combined with the
-    // system-prompt cache in personas.ts, this saves ~90% of input token cost
-    // once both caches are warm.
-    const lastAssistantIdx = apiMessages.reduceRight(
-      (found, m, i) => (found === -1 && m.role === "assistant" ? i : found),
-      -1
-    );
-    if (lastAssistantIdx !== -1) {
-      const msg = apiMessages[lastAssistantIdx];
-      if (typeof msg.content === "string") {
-        apiMessages[lastAssistantIdx] = {
-          ...msg,
-          content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }],
-        };
-      } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-        const blocks = [...(msg.content as ApiMessageContent[])];
-        const last = blocks[blocks.length - 1];
-        blocks[blocks.length - 1] = { ...last, cache_control: { type: "ephemeral" } };
-        apiMessages[lastAssistantIdx] = { ...msg, content: blocks };
-      }
-    }
-
-    // ── Build beta header (dynamic — grows when optional features are enabled) ──
-    const betaHeaderParts = [
-      "compact-2026-01-12",
-      "files-api-2025-04-14",
-      "mcp-client-2025-11-20",
-      "cache-diagnosis-2026-04-07",
-      ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
-    ];
-
-    // ── Build tools array ────────────────────────────────────────────────────
-    // tool_search (BM25) must be non-deferred so Claude can always invoke it.
-    // Integration tools are deferred — their full JSON schemas don't load into
-    // context until Claude calls tool_search and selects one, saving ~85% of
-    // baseline token cost from tool definitions.
-    const toolSearchTool: Record<string, unknown> = {
-      type: "tool_search_tool_bm25_20251119",
-      name: "tool_search_tool_bm25",
-    };
-    const deferredIntegrationTools = getToolsForClaude(undefined, {
-      deferIntegrations: true,
-      allowProgrammaticCalling: Boolean(programmaticTools && skills?.length),
-    });
-
-    // web_search_20260209 and web_fetch_20260209 are Anthropic-hosted (GA).
-    // No beta header needed. Code execution inside these tools is free.
-    const webSearchTool: Record<string, unknown> = {
-      type: "web_search_20260209",
-      name: "web_search",
-      ...(userLocation && {
-        user_location: {
-          ...(userLocation.city && { city: userLocation.city }),
-          ...(userLocation.country && { country: userLocation.country }),
-          ...(userLocation.timezone && { timezone: userLocation.timezone }),
-        },
-      }),
-    };
-    const webFetchTool: Record<string, unknown> = {
-      type: "web_fetch_20260209",
-      name: "web_fetch",
-      max_content_tokens: 5000,
-    };
-    // code_execution is a server-side tool — Anthropic runs the code in a
-    // sandboxed container. Only included when the client requests skills.
-    const codeExecutionTool: Record<string, unknown> | null = skills?.length
-      ? {
-          type: "code_execution_20250825",
-          name: "code_execution",
-        }
-      : null;
-    const skillsContainer =
-      skills?.length
-        ? {
-            container: {
-              skills: skills.map((skill_id: string) => ({
-                type: "anthropic",
-                skill_id,
-                version: "latest",
-              })),
-            },
-          }
-        : {};
-
-    // ── Streaming request to Anthropic ───────────────────────────────────────
-    const effort = detectEffort(messages, hasDocuments);
-
+    // ── Streaming request to OpenRouter ──────────────────────────────────────
     const anthropicRes = await fetchWithRetry(
-      "https://api.anthropic.com/v1/messages",
+      OPENROUTER_URL,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": betaHeaderParts.join(","),
-        },
+        headers: openRouterHeaders(),
         body: JSON.stringify({
           model: MODEL_BRAIN,
           max_tokens: detectMaxTokens(messages, hasDocuments),
-          system: systemBlocks,
-          messages: apiMessages,
-          tools: [
-            toolSearchTool,
-            webSearchTool,
-            webFetchTool,
-            ...(codeExecutionTool ? [codeExecutionTool] : []),
-            ...deferredIntegrationTools,
-          ],
-          ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
-          ...skillsContainer,
           stream: true,
-          output_config: { effort },
-          // Adaptive thinking: enabled for analytical/deep tasks (effort=high).
-          // Pairs with the effort parameter rather than a manual budget_tokens.
-          // clear_thinking_blocks in context_management strips these from history
-          // so they don't accumulate across turns.
-          ...(effort === "high" && { thinking: { type: "adaptive" } }),
-          ...(lastResponseId && {
-            diagnostics: { previous_message_id: lastResponseId },
-          }),
-          context_management: {
-            edits: [
-              // Clear accumulated tool uses/results before full compaction.
-              { type: "clear_tool_uses_20250919" },
-              {
-                type: "compact_20260112",
-                trigger: { type: "input_tokens", value: 600_000 },
-              },
-            ],
-          },
+          messages: [
+            { role: "system", content: systemPromptText },
+            ...apiMessages,
+          ],
         }),
       },
       { maxRetries: 2, connectionTimeoutMs: 30_000 }
@@ -539,7 +276,7 @@ export async function POST(req: NextRequest) {
     if (!anthropicRes.ok) {
       const status = anthropicRes.status;
       const upstreamBody = await anthropicRes.text().catch(() => "");
-      console.error(`[EMMA] Anthropic API error ${status}:`, upstreamBody.slice(0, 500));
+      console.error(`[EMMA] OpenRouter API error ${status}:`, upstreamBody.slice(0, 500));
       const errMsg = getPersonaErrorMessage(status);
       const code =
         status === 400 ? "BAD_REQUEST" :
@@ -570,21 +307,6 @@ export async function POST(req: NextRequest) {
         let buffer = "";
         let inputTokens = 0;
         let outputTokens = 0;
-        let cacheReadTokens = 0;
-        let cacheCreationTokens = 0;
-        // Accumulate non-text content blocks (compaction blocks) so the client
-        // can preserve them in the next request's assistant message.
-        const nonTextBlocks: Record<string, unknown>[] = [];
-        // Accumulate file_ids produced by code_execution tool invocations.
-        const generatedFiles: { file_id: string; name?: string }[] = [];
-        // Accumulate partial JSON inputs from eager_input_streaming tool_use blocks.
-        // Key = Anthropic block index, value = { arrayIdx in nonTextBlocks, accumulated JSON }
-        const toolInputPartials = new Map<number, { arrayIdx: number; json: string }>();
-        // Anthropic message ID captured from message_start — returned to client
-        // so it can be passed back as lastResponseId for cache diagnostics.
-        let messageId: string | undefined;
-        // stop_reason from message_delta — "refusal" requires a synthetic fallback.
-        let stopReason = "";
 
         try {
           while (true) {
@@ -597,142 +319,30 @@ export async function POST(req: NextRequest) {
 
             for (const line of lines) {
               if (!line.startsWith("data: ")) continue;
-              const data = line.slice(6).trim();
-              if (data === "[DONE]") continue;
+              const raw = line.slice(6).trim();
+              if (raw === "[DONE]") continue;
 
               try {
-                const event = JSON.parse(data);
+                const chunk = JSON.parse(raw);
 
-                // Capture token usage and message ID from Anthropic stream events.
-                // Diagnostics (cache miss details) are logged when present.
-                if (event.type === "message_start" && event.message) {
-                  const u = event.message.usage || {};
-                  inputTokens = u.input_tokens || 0;
-                  cacheReadTokens = u.cache_read_input_tokens || 0;
-                  cacheCreationTokens = u.cache_creation_input_tokens || 0;
-                  if (event.message.id) messageId = event.message.id as string;
-                  if (event.message.diagnostics) {
-                    console.warn("[EMMA Cache Diagnostics]", JSON.stringify(event.message.diagnostics));
-                  }
-                }
-                if (event.type === "message_delta" && event.usage) {
-                  outputTokens = event.usage.output_tokens || 0;
-                  if (event.delta?.stop_reason) stopReason = event.delta.stop_reason as string;
+                // Capture usage from the last chunk (OpenRouter appends usage to the final chunk)
+                if (chunk.usage) {
+                  inputTokens = chunk.usage.prompt_tokens || 0;
+                  outputTokens = chunk.usage.completion_tokens || 0;
                 }
 
-                // Capture non-text content blocks (compaction, server_tool_use,
-                // server_tool_result) so the client can preserve them in history.
-                // Also emit a tool_start event so the UI can show a "Searching…" indicator.
-                if (
-                  event.type === "content_block_start" &&
-                  event.content_block?.type &&
-                  event.content_block.type !== "text"
-                ) {
-                  nonTextBlocks.push(event.content_block as Record<string, unknown>);
-                  // Track user-defined tool_use blocks for eager_input_streaming.
-                  // Their input starts as {} and arrives via input_json_delta deltas.
+                // Stream text delta to client
+                const delta = chunk.choices?.[0]?.delta?.content;
+                if (typeof delta === "string" && delta) {
+                  fullText += delta;
+
+                  // Don't stream internal tags
                   if (
-                    event.content_block.type === "tool_use" &&
-                    typeof event.index === "number"
+                    !delta.includes("[EMMA_CMD]") &&
+                    !delta.includes("[EMMA_ROUTINE]") &&
+                    !delta.includes("[emotion:")
                   ) {
-                    toolInputPartials.set(event.index, {
-                      arrayIdx: nonTextBlocks.length - 1,
-                      json: "",
-                    });
-                  }
-                  if (
-                    event.content_block.type === "server_tool_use" ||
-                    event.content_block.type === "mcp_tool_use"
-                  ) {
-                    const toolEvent = JSON.stringify({
-                      type: "tool_start",
-                      tool: event.content_block.name ?? "unknown",
-                      ...(event.content_block.server_name && {
-                        server: event.content_block.server_name,
-                      }),
-                    });
-                    controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
-                  }
-                  // Programmatic tool call: user-defined tool invoked by the
-                  // code_execution sandbox. Emit tool_start for UI feedback.
-                  if (
-                    event.content_block.type === "tool_use" &&
-                    (event.content_block.caller as Record<string, unknown> | undefined)?.type ===
-                      "code_execution_20260120"
-                  ) {
-                    const toolEvent = JSON.stringify({
-                      type: "tool_start",
-                      tool: event.content_block.name ?? "unknown",
-                      caller: "code_execution",
-                    });
-                    controller.enqueue(encoder.encode(`data: ${toolEvent}\n\n`));
-                  }
-                }
-
-                // Accumulate partial tool input JSON (eager_input_streaming).
-                if (
-                  event.type === "content_block_delta" &&
-                  event.delta?.type === "input_json_delta" &&
-                  typeof event.index === "number"
-                ) {
-                  const partial = toolInputPartials.get(event.index);
-                  if (partial) partial.json += event.delta.partial_json || "";
-                }
-
-                // Finalize accumulated tool input when the block closes.
-                if (event.type === "content_block_stop" && typeof event.index === "number") {
-                  const partial = toolInputPartials.get(event.index);
-                  if (partial) {
-                    try {
-                      const block = nonTextBlocks[partial.arrayIdx] as Record<string, unknown>;
-                      if (block && partial.json) block.input = JSON.parse(partial.json);
-                    } catch {
-                      // Leave input as {} if partial JSON never completed
-                    }
-                    toolInputPartials.delete(event.index);
-                  }
-                }
-
-                // Extract file_ids from code_execution tool results.
-                // server_tool_result blocks produced by code_execution may contain
-                // document blocks or direct file references in their content array.
-                if (
-                  event.type === "content_block_start" &&
-                  event.content_block?.type === "server_tool_result" &&
-                  Array.isArray(event.content_block.content)
-                ) {
-                  for (const item of event.content_block.content as Record<string, unknown>[]) {
-                    // Direct file reference: { file_id, filename? }
-                    if (typeof item.file_id === "string") {
-                      generatedFiles.push({
-                        file_id: item.file_id,
-                        name: typeof item.filename === "string" ? item.filename : undefined,
-                      });
-                    }
-                    // Document block with file source: { type:"document", source:{ type:"file", file_id }, title? }
-                    const src = item.source as Record<string, unknown> | undefined;
-                    if (item.type === "document" && src?.type === "file" && typeof src.file_id === "string") {
-                      generatedFiles.push({
-                        file_id: src.file_id,
-                        name: typeof item.title === "string" ? item.title : undefined,
-                      });
-                    }
-                  }
-                }
-
-
-                // Content block delta — stream text to client
-                if (event.type === "content_block_delta" && event.delta?.text) {
-                  const text = event.delta.text;
-                  fullText += text;
-
-                  // Don't stream [EMMA_CMD], [EMMA_ROUTINE], or [emotion:] tags
-                  if (
-                    !text.includes("[EMMA_CMD]") &&
-                    !text.includes("[EMMA_ROUTINE]") &&
-                    !text.includes("[emotion:")
-                  ) {
-                    const sseData = JSON.stringify({ type: "delta", text });
+                    const sseData = JSON.stringify({ type: "delta", text: delta });
                     controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
                   }
                 }
@@ -742,32 +352,8 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // ── Final event with parsed response ────────────────────────────────
-          // Claude 4+ signals a refusal via stop_reason="refusal" with no text.
-          // Inject a persona-appropriate fallback so the UI never shows a blank
-          // response, and signal the client to drop this exchange from API history.
-          const refused = stopReason === "refusal";
-          if (refused && !fullText) {
-            fullText =
-              persona === "mommy"
-                ? "Mmm. That one I'm going to skip, baby. Ask me something else? [emotion: concerned]"
-                : "I'm not able to help with that. What else can I do for you?";
-          }
-
-          // model_context_window_exceeded fires when the input itself overflows
-          // the 1M token context window (distinct from max_tokens). Signal the
-          // client to hard-truncate apiMessages so the next turn fits.
-          const contextWindowExceeded = stopReason === "model_context_window_exceeded";
-          if (contextWindowExceeded && !fullText) {
-            fullText =
-              persona === "mommy"
-                ? "Mmm. My memory's a little full, baby — I've cleared some history so we can keep going. [emotion: concerned]"
-                : "Our conversation got too long for me to process. I've trimmed the history — try again.";
-          }
+          // ── Final event with parsed response ─────────────────────────────
           const { text, commands, routineId, expression } = parseEmmaResponse(fullText);
-
-          // Note: commands array is no longer dispatched to physical devices.
-          // Emma is a digital workspace agent — see workflow-routines for equivalent.
 
           const doneEvent = JSON.stringify({
             type: "done",
@@ -776,12 +362,7 @@ export async function POST(req: NextRequest) {
             commands,
             routineId: routineId || null,
             expression: expression || null,
-            usage: { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
-            messageId: messageId || undefined,
-            refused: refused || undefined,
-            contextWindowExceeded: contextWindowExceeded || undefined,
-            generatedFiles: generatedFiles.length > 0 ? generatedFiles : undefined,
-            compactionBlocks: nonTextBlocks.length > 0 ? nonTextBlocks : undefined,
+            usage: { inputTokens, outputTokens, cacheReadTokens: 0, cacheCreationTokens: 0 },
             enforcement: enforcementResult
               ? {
                   status: enforcementResult.status,

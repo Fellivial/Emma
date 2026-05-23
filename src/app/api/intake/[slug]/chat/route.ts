@@ -7,6 +7,7 @@ import { loadClientConfigOrNull } from "@/core/client-config";
 import { Resend } from "resend";
 import { syncLeadToHubSpot } from "@/lib/hubspot";
 import { appendLeadToSheet } from "@/lib/sheets";
+import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -142,50 +143,41 @@ export async function POST(
     );
   }
 
-  // ── A3: Hardcoded neutral persona + intake system prompt ─────────────────
-  // Never use config.personaPrompt — mommy persona is inappropriate for SMB demos.
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
-  }
-
-  // ── Call Anthropic (non-streaming JSON) ───────────────────────────────────
-  let anthropicData: {
-    content: Array<{ type: string; text?: string }>;
-    usage?: { input_tokens: number; output_tokens: number };
+  // ── Call OpenRouter (non-streaming JSON) ─────────────────────────────────
+  let orData: {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: openRouterHeaders(),
       body: JSON.stringify({
         model: MODEL_BRAIN,
         max_tokens: 512,
-        system: INTAKE_SYSTEM_PROMPT,
-        messages: safeMessages,
+        messages: [
+          { role: "system", content: INTAKE_SYSTEM_PROMPT },
+          ...safeMessages,
+        ],
       }),
     });
 
     if (!res.ok) {
-      console.error("[intake/chat] Anthropic error", res.status);
+      console.error("[intake/chat] OpenRouter error", res.status);
       return NextResponse.json({ error: "AI unavailable" }, { status: 502 });
     }
 
-    anthropicData = await res.json();
+    orData = await res.json();
   } catch (err) {
     console.error("[intake/chat] fetch error", err);
     return NextResponse.json({ error: "AI unavailable" }, { status: 502 });
   }
 
-  const rawReply = anthropicData.content?.find((b) => b.type === "text")?.text ?? "";
+  const rawReply = orData.choices?.[0]?.message?.content ?? "";
 
   // ── Record usage ──────────────────────────────────────────────────────────
-  const inputTokens = anthropicData.usage?.input_tokens ?? 0;
-  const outputTokens = anthropicData.usage?.output_tokens ?? 0;
+  const inputTokens = orData.usage?.prompt_tokens ?? 0;
+  const outputTokens = orData.usage?.completion_tokens ?? 0;
   await recordUsage(null, inputTokens, outputTokens, config.planId, "UTC", 1, slug);
 
   // ── A6: Server-side extraction of completion tag ──────────────────────────

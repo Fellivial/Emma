@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { MODEL_UTILITY } from "@/core/models";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -91,37 +92,19 @@ const TOOL_INTEGRATION_MAP: Record<string, string> = {
   speak_text: "elevenlabs",
 };
 
-export interface GetToolsOptions {
-  /**
-   * When true, tools that require an integration are marked with
-   * defer_loading: true so their full JSON schemas are not loaded into context
-   * until Claude searches for and selects them (saves ~85% baseline token cost).
-   */
-  deferIntegrations?: boolean;
-  /**
-   * When true, integration tools receive allowed_callers: ["code_execution_20260120"]
-   * so Emma's Python code can invoke them programmatically in one pass.
-   * Incompatible with strict: true — integration tools will omit that field.
-   */
-  allowProgrammaticCalling?: boolean;
-}
-
 /**
- * Get tool definitions formatted for Claude's tool_use API.
+ * Get tool definitions formatted for OpenAI-compatible function calling.
  * Pass connectedIntegrations to exclude tools whose integration isn't active.
- * Pass options.deferIntegrations to mark integration tools as deferred.
  */
 export function getToolsForClaude(
-  connectedIntegrations?: Set<string>,
-  options?: GetToolsOptions
+  connectedIntegrations?: Set<string>
 ): Array<{
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-  input_examples?: Record<string, unknown>[];
-  defer_loading?: true;
-  eager_input_streaming?: true;
-  allowed_callers?: string[];
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }> {
   return getAllTools()
     .filter((t) => {
@@ -130,31 +113,14 @@ export function getToolsForClaude(
       if (!connectedIntegrations) return true;
       return connectedIntegrations.has(required);
     })
-    .map((t) => {
-      const isIntegration = Boolean(TOOL_INTEGRATION_MAP[t.name]);
-      // Programmatic calling and strict:true are mutually exclusive on integration tools.
-      const useProgrammatic = options?.allowProgrammaticCalling && isIntegration;
-      const entry: {
-        name: string;
-        description: string;
-        input_schema: Record<string, unknown>;
-        input_examples?: Record<string, unknown>[];
-        defer_loading?: true;
-        eager_input_streaming?: true;
-        allowed_callers?: string[];
-      } = {
+    .map((t) => ({
+      type: "function" as const,
+      function: {
         name: t.name,
         description: `${t.description} [Risk: ${t.riskLevel}]`,
-        input_schema: t.inputSchema,
-        ...(t.inputExamples && { input_examples: t.inputExamples }),
-        eager_input_streaming: true as const,
-        ...(useProgrammatic && { allowed_callers: ["code_execution_20260120"] }),
-      };
-      if (options?.deferIntegrations && isIntegration) {
-        entry.defer_loading = true;
-      }
-      return entry;
-    });
+        parameters: t.inputSchema,
+      },
+    }));
 }
 
 // ─── Built-in Tools ──────────────────────────────────────────────────────────
@@ -181,9 +147,6 @@ registerTool({
   },
   riskLevel: "safe",
   handler: async (input) => {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return { success: false, output: "API key not configured." };
-
     const styleGuide =
       input.style === "bullet_points"
         ? "Respond with a bullet-point list."
@@ -191,13 +154,9 @@ registerTool({
           ? "Respond with a detailed paragraph summary."
           : "Respond with a brief 2-3 sentence summary.";
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: openRouterHeaders(),
       body: JSON.stringify({
         model: MODEL_UTILITY,
         max_tokens: 512,
@@ -213,12 +172,7 @@ registerTool({
     if (!res.ok) return { success: false, output: `Summary API error: ${res.status}` };
 
     const data = await res.json();
-    const text =
-      data.content
-        ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-        .join("") || "";
-
-    return { success: true, output: text, data: { topic: input.topic } };
+    return { success: true, output: extractText(data), data: { topic: input.topic } };
   },
 });
 

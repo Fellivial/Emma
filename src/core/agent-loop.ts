@@ -13,12 +13,11 @@
 
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ContentBlock, MessageParam } from "@anthropic-ai/sdk/resources";
 import { MODEL_BRAIN, MODEL_UTILITY } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
-import { getMcpServersForClient } from "@/core/integrations/mcp";
+import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import {
   startChain,
@@ -47,7 +46,7 @@ export interface AgentTask {
   maxSteps: number;
   triggerType: "cron" | "webhook" | "manual" | "event";
   triggerSource: string;
-  resumeMessages?: MessageParam[];
+  resumeMessages?: Array<Record<string, unknown>>;
 }
 
 export interface AgentStepResult {
@@ -153,17 +152,6 @@ function buildStateSummary(completedSteps: AgentStepResult[]): string {
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 
 export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return {
-      taskId: task.id,
-      status: "failed",
-      steps: [],
-      summary: "API key not set",
-      totalTokens: 0,
-    };
-  }
-
   // ── Per-client rate limit check ──────────────────────────────────────────
   const rateLimitKey = task.clientId || task.userId;
   const rateLimit = await checkRateLimit(rateLimitKey);
@@ -193,7 +181,6 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   }
 
   const tools = getToolsForClaude(connectedIntegrations);
-  const mcpServers = await getMcpServersForClient(task.clientId);
   let provChain: ProvenanceChain = startChain(task.id, task.goal);
   const steps: AgentStepResult[] = [];
   let totalTokens = 0;
@@ -219,7 +206,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   const memoryFiles = new Map<string, string>();
 
   // Build conversation — seed from persisted transcript if resuming after approval
-  const messages: MessageParam[] = task.resumeMessages
+  const messages: Array<Record<string, unknown>> = task.resumeMessages
     ? [...task.resumeMessages]
     : [
         {
@@ -234,29 +221,20 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     const stepStart = Date.now();
 
     try {
-      // ── Call Claude with tools ───────────────────────────────────────
+      // ── Call OpenRouter with tools ───────────────────────────────────
       const res = await fetchWithRetry(
-        "https://api.anthropic.com/v1/messages",
+        OPENROUTER_URL,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "mcp-client-2025-11-20",
-          },
+          headers: openRouterHeaders(),
           body: JSON.stringify({
             model: step < task.maxSteps ? MODEL_UTILITY : MODEL_BRAIN,
             max_tokens: step < task.maxSteps ? 512 : 1024,
-            system: AGENT_SYSTEM,
-            messages,
-            tools: [
-              { type: "memory_20250818", name: "memory" } as unknown as (typeof tools)[number],
-              { type: "web_search_20260209", name: "web_search" } as unknown as (typeof tools)[number],
-              { type: "web_fetch_20260209", name: "web_fetch", max_content_tokens: 5000 } as unknown as (typeof tools)[number],
-              ...tools,
+            messages: [
+              { role: "system", content: AGENT_SYSTEM },
+              ...messages,
             ],
-            ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
+            tools,
           }),
         },
         { maxRetries: 2 }
@@ -278,40 +256,51 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         break;
       }
 
-      const data = await res.json() as {
-        content: ContentBlock[];
-        stop_reason: string | null;
-        usage?: { input_tokens: number; output_tokens: number };
+      type OpenRouterData = {
+        choices: Array<{
+          message: {
+            content?: string | null;
+            tool_calls?: Array<{
+              id: string;
+              type: "function";
+              function: { name: string; arguments: string };
+            }>;
+          };
+          finish_reason: string;
+        }>;
+        usage?: { prompt_tokens: number; completion_tokens: number };
       };
-      const inputTokens = data.usage?.input_tokens || 0;
-      const outputTokens = data.usage?.output_tokens || 0;
+      const data = await res.json() as OpenRouterData;
+      const inputTokens = data.usage?.prompt_tokens || 0;
+      const outputTokens = data.usage?.completion_tokens || 0;
       totalTokens += inputTokens + outputTokens;
 
-      // ── Process response blocks ──────────────────────────────────────
-      const contentBlocks: ContentBlock[] = data.content || [];
+      const choice = data.choices?.[0];
+      const assistantMessage = choice?.message;
+      const toolCalls = assistantMessage?.tool_calls ?? [];
+      const finishReason = choice?.finish_reason;
       let hasToolUse = false;
 
-      for (const block of contentBlocks) {
-        if (block.type === "text") {
-          // Text block — Claude is thinking/explaining
-          continue;
-        }
-
-        if (block.type === "tool_use") {
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === "function") {
           hasToolUse = true;
-          const toolName = block.name;
-          const toolInput = (block.input as Record<string, unknown>) || {};
-          const toolId = block.id;
+          const toolName = toolCall.function.name;
+          let toolInput: Record<string, unknown> = {};
+          try {
+            toolInput = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+          } catch { /* leave empty */ }
+          const toolId = toolCall.id;
 
           // Handle the native memory tool before the registry lookup.
           // Operations run against the in-session scratchpad Map.
           if (toolName === "memory") {
             const memOut = handleMemoryOp(memoryFiles, toolInput);
-            messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
             messages.push({
-              role: "user",
-              content: [{ type: "tool_result", tool_use_id: toolId, content: memOut }],
+              role: "assistant",
+              content: assistantMessage?.content ?? null,
+              tool_calls: toolCalls,
             });
+            messages.push({ role: "tool", tool_call_id: toolId, content: memOut });
             steps.push({
               step,
               toolName: "memory",
@@ -340,16 +329,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             };
             steps.push(stepResult);
 
-            messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
             messages.push({
-              role: "user",
-              content: [
-                {
-                  type: "tool_result",
-                  tool_use_id: toolId,
-                  content: `Error: Tool "${toolName}" not found`,
-                },
-              ],
+              role: "assistant",
+              content: assistantMessage?.content ?? null,
+              tool_calls: toolCalls,
+            });
+            messages.push({
+              role: "tool",
+              tool_call_id: toolId,
+              content: `Error: Tool "${toolName}" not found`,
             });
             continue;
           }
@@ -498,18 +486,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             break;
           }
 
-          // Feed result back to Claude for next iteration
-          messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
+          // Feed result back for next iteration
           messages.push({
-            role: "user",
-            content: [
-              {
-                type: "tool_result",
-                tool_use_id: toolId,
-                content: toolResult.output,
-              },
-            ],
+            role: "assistant",
+            content: assistantMessage?.content ?? null,
+            tool_calls: toolCalls,
           });
+          messages.push({ role: "tool", tool_call_id: toolId, content: toolResult.output });
 
           // Compress history: replace everything except the last exchange with a
           // state summary so input tokens stay bounded across steps.
@@ -528,22 +511,10 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         }
       }
 
-      // pause_turn: server-side tool loop (web_search etc.) hit the 10-iteration
-      // limit — append the partial response and resend to let it continue.
-      if (data.stop_reason === "pause_turn") {
-        messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
-        continue;
-      }
-
-      // If Claude returned only text (no tool use), it's done thinking
-      if (!hasToolUse && data.stop_reason === "end_turn") {
-        const textOutput = contentBlocks
-          .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
-          .map((b) => b.text)
-          .join("");
-
+      // If model returned only text (no tool calls), it's done thinking
+      if (!hasToolUse && finishReason === "stop") {
         taskCompleted = true;
-        taskSummary = textOutput || "Task completed (no tool calls needed)";
+        taskSummary = assistantMessage?.content || "Task completed (no tool calls needed)";
       }
     } catch (err) {
       Sentry.captureException(err, { extra: { taskId: task.id, step } });
