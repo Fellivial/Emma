@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { NAV_LINKS } from "@/lib/constants/landing";
 
@@ -138,7 +139,40 @@ function FadeUp({
 // ── Hero ──────────────────────────────────────────────────────────────────────
 
 export default function Hero() {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [step, setStep] = useState<"cta" | "form" | "sent">("cta");
+  const [accessName, setAccessName] = useState("");
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  const handleQuickAccess = async () => {
+    if (!accessEmail.trim() || !accessName.trim() || accessLoading) return;
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      const res = await fetch("/api/waitlist/quick-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: accessEmail.trim(), name: accessName.trim() }),
+      });
+      const data = await res.json();
+      if (data.result === "invited") {
+        setStep("sent");
+      } else if (data.result === "already_registered") {
+        router.push("/login");
+      } else {
+        // No spots — redirect to full waitlist form
+        router.push(
+          `/waitlist?email=${encodeURIComponent(accessEmail.trim())}&name=${encodeURIComponent(accessName.trim())}`
+        );
+      }
+    } catch {
+      setAccessError("Connection failed — please try again");
+    }
+    setAccessLoading(false);
+  };
 
   return (
     <section
@@ -246,7 +280,32 @@ export default function Hero() {
               </a>
             ))}
             <Link
-              href="/register"
+              href="/login"
+              className="l-interactive"
+              style={{
+                fontFamily: "var(--font-l-body)",
+                fontSize: "13px",
+                color: "var(--l-muted)",
+                textDecoration: "none",
+                padding: "10px 18px",
+                border: "1px solid var(--l-border)",
+                display: "inline-flex",
+                alignItems: "center",
+                transition: "color 150ms, border-color 150ms",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.color = "var(--l-text)";
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--l-muted2)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.color = "var(--l-muted)";
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--l-border)";
+              }}
+            >
+              Log in
+            </Link>
+            <button
+              onClick={() => setStep("form")}
               className="l-interactive"
               style={{
                 fontFamily: "var(--font-l-body)",
@@ -255,7 +314,8 @@ export default function Hero() {
                 color: "#111113",
                 background: "var(--l-accent)",
                 padding: "12px 22px",
-                textDecoration: "none",
+                border: "none",
+                cursor: "pointer",
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
                 display: "inline-flex",
@@ -263,7 +323,7 @@ export default function Hero() {
               }}
             >
               Get Early Access
-            </Link>
+            </button>
           </div>
 
           {/* Mobile hamburger */}
@@ -339,8 +399,19 @@ export default function Hero() {
               </a>
             ))}
             <Link
-              href="/register"
+              href="/login"
               onClick={() => setMenuOpen(false)}
+              style={{
+                fontFamily: "var(--font-l-body)",
+                fontSize: "14px",
+                color: "var(--l-muted)",
+                textDecoration: "none",
+              }}
+            >
+              Log in
+            </Link>
+            <button
+              onClick={() => { setMenuOpen(false); setStep("form"); }}
               style={{
                 fontFamily: "var(--font-l-body)",
                 fontWeight: 700,
@@ -348,12 +419,14 @@ export default function Hero() {
                 color: "#111113",
                 background: "var(--l-accent)",
                 padding: "12px 20px",
-                textDecoration: "none",
+                border: "none",
+                cursor: "pointer",
                 textAlign: "center",
+                width: "100%",
               }}
             >
               Get Early Access
-            </Link>
+            </button>
           </div>
         </div>
       </nav>
@@ -432,49 +505,154 @@ export default function Hero() {
 
         {/* CTAs */}
         <FadeUp delay={0.86}>
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
-              <Link
-                href="/register"
-                className="l-interactive"
-                style={{
-                  fontFamily: "var(--font-l-body)",
-                  fontWeight: 700,
-                  fontSize: "13px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "#111113",
-                  background: "var(--l-accent)",
-                  padding: "14px 36px",
-                  textDecoration: "none",
-                  display: "inline-block",
-                }}
-              >
-                Request Access
-              </Link>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
-              <a
-                href="#approach"
-                className="l-interactive"
-                style={{
-                  fontFamily: "var(--font-l-body)",
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--l-text)",
-                  background: "transparent",
-                  border: "1px solid var(--l-border)",
-                  padding: "14px 36px",
-                  textDecoration: "none",
-                  display: "inline-block",
-                }}
-              >
-                Our Approach
-              </a>
-            </motion.div>
-          </div>
+          {step === "sent" ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "12px",
+                border: "1px solid rgba(255,255,255,0.12)",
+                padding: "14px 24px",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              <span style={{ color: "var(--l-accent)", fontSize: "18px" }}>✓</span>
+              <div>
+                <div style={{ fontFamily: "var(--font-l-body)", fontSize: "14px", color: "var(--l-text)" }}>
+                  Check your inbox
+                </div>
+                <div style={{ fontFamily: "var(--font-l-mono)", fontSize: "11px", color: "var(--l-muted2)", marginTop: "2px" }}>
+                  Your access link is on its way to {accessEmail}
+                </div>
+              </div>
+            </div>
+          ) : step === "form" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "420px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Your name"
+                  value={accessName}
+                  onChange={(e) => setAccessName(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid var(--l-border)",
+                    padding: "13px 16px",
+                    fontFamily: "var(--font-l-body)",
+                    fontSize: "14px",
+                    color: "var(--l-text)",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={accessEmail}
+                  onChange={(e) => setAccessEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleQuickAccess()}
+                  style={{
+                    flex: 1.4,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid var(--l-border)",
+                    padding: "13px 16px",
+                    fontFamily: "var(--font-l-body)",
+                    fontSize: "14px",
+                    color: "var(--l-text)",
+                    outline: "none",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={handleQuickAccess}
+                  disabled={!accessEmail.trim() || !accessName.trim() || accessLoading}
+                  style={{
+                    flex: 1,
+                    fontFamily: "var(--font-l-body)",
+                    fontWeight: 700,
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "#111113",
+                    background: accessLoading ? "rgba(232,84,122,0.5)" : "var(--l-accent)",
+                    border: "none",
+                    padding: "14px 24px",
+                    cursor: accessLoading ? "default" : "pointer",
+                    opacity: (!accessEmail.trim() || !accessName.trim()) ? 0.4 : 1,
+                    transition: "opacity 150ms",
+                  }}
+                >
+                  {accessLoading ? "Checking…" : "Get Access"}
+                </button>
+                <button
+                  onClick={() => setStep("cta")}
+                  style={{
+                    fontFamily: "var(--font-l-body)",
+                    fontSize: "12px",
+                    color: "var(--l-muted2)",
+                    background: "transparent",
+                    border: "1px solid var(--l-border)",
+                    padding: "14px 18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              {accessError && (
+                <p style={{ fontFamily: "var(--font-l-body)", fontSize: "12px", color: "#ef4444" }}>
+                  {accessError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
+                <button
+                  onClick={() => setStep("form")}
+                  className="l-interactive"
+                  style={{
+                    fontFamily: "var(--font-l-body)",
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "#111113",
+                    background: "var(--l-accent)",
+                    border: "none",
+                    padding: "14px 36px",
+                    cursor: "pointer",
+                    display: "inline-block",
+                  }}
+                >
+                  Request Access
+                </button>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.025 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/login"
+                  className="l-interactive"
+                  style={{
+                    fontFamily: "var(--font-l-body)",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "var(--l-text)",
+                    background: "transparent",
+                    border: "1px solid var(--l-border)",
+                    padding: "14px 36px",
+                    textDecoration: "none",
+                    display: "inline-block",
+                  }}
+                >
+                  Log In
+                </Link>
+              </motion.div>
+            </div>
+          )}
         </FadeUp>
 
         {/* Stats */}

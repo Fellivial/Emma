@@ -316,7 +316,7 @@ export default function AdminPage() {
                               disabled={inviting === entry.id}
                               className="text-[10px] px-3 py-1 rounded-full bg-emma-300/10 text-emma-300/60 hover:bg-emma-300/20 disabled:opacity-40 transition-colors"
                             >
-                              {inviting === entry.id ? "Inviting…" : "Invite"}
+                              {inviting === entry.id ? "Approving…" : "Approve"}
                             </button>
                           )}
                         </td>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, ArrowRight } from "lucide-react";
 
 interface SpotData {
@@ -26,14 +27,15 @@ const INDUSTRIES = [
   { value: "other", label: "Other" },
 ];
 
-export default function WaitlistPage() {
+function WaitlistForm() {
+  const searchParams = useSearchParams();
   const [spots, setSpots] = useState<SpotData>({
     spotsRemaining: 10,
     totalSpots: 10,
     waitlistCount: 0,
   });
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(searchParams.get("name") ?? "");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [industry, setIndustry] = useState("");
   const [message, setMessage] = useState("");
   const [referralSource, setReferralSource] = useState("");
@@ -320,5 +322,13 @@ export default function WaitlistPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function WaitlistPage() {
+  return (
+    <Suspense fallback={null}>
+      <WaitlistForm />
+    </Suspense>
   );
 }
