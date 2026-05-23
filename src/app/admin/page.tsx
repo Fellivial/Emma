@@ -53,6 +53,12 @@ interface WaitlistEntry {
   invited_at?: string;
 }
 
+interface FeedbackStats {
+  total: number;
+  up: number;
+  down: number;
+}
+
 interface WaitlistStats {
   maxSpots: number;
   activeUsers: number;
@@ -72,6 +78,7 @@ export default function AdminPage() {
     totalCommissions: 0,
   });
   const [planDist, setPlanDist] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState<FeedbackStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"clients" | "waitlist">("clients");
@@ -97,6 +104,7 @@ export default function AdminPage() {
         setReferrals(d.referrals || { total: 0, converted: 0 });
         setAffiliates(d.affiliates || { active: 0, totalReferrals: 0, totalCommissions: 0 });
         setPlanDist(d.planDistribution || {});
+        setFeedback(d.feedback || null);
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
@@ -452,7 +460,52 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* ── Row 4: Client Table ───────────────────────────────────────── */}
+          {/* ── Row 4: Response Quality ──────────────────────────────────── */}
+          <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
+            <h3 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">
+              Response Quality
+            </h3>
+            {feedback && feedback.total > 0 ? (
+              <div className="flex items-center gap-6">
+                <div>
+                  <div className="text-2xl font-light text-emma-200/60">{feedback.total}</div>
+                  <div className="text-[10px] text-emma-200/20 mt-0.5">total ratings</div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[11px] text-emerald-300/50 w-16">👍 Helpful</span>
+                    <div className="flex-1 h-2 rounded-full bg-emma-200/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-400/40"
+                        style={{ width: `${(feedback.up / feedback.total) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-emma-200/30 w-10 text-right">
+                      {feedback.up} ({Math.round((feedback.up / feedback.total) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-red-300/40 w-16">👎 Not helpful</span>
+                    <div className="flex-1 h-2 rounded-full bg-emma-200/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-red-400/30"
+                        style={{ width: `${(feedback.down / feedback.total) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-emma-200/30 w-10 text-right">
+                      {feedback.down} ({Math.round((feedback.down / feedback.total) * 100)}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-[11px] text-emma-200/15 py-4 text-center">
+                No feedback yet — thumbs up/down appear on Emma messages
+              </div>
+            )}
+          </div>
+
+          {/* ── Row 5: Client Table ───────────────────────────────────────── */}
           <h3 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">
             All Clients
           </h3>

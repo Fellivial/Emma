@@ -4,6 +4,16 @@ Vertically-integrated AI companion with animated avatar, voice, vision, memory, 
 
 ## Quick Start
 
+**Minimal (1 key, ~2 min)** — chat works; auth and memory persistence are disabled:
+
+```bash
+npm install
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
+npm run dev  # localhost:3000
+```
+
+**Full (accounts required, ~8 min)** — auth, memory, billing, integrations:
+
 ```bash
 npm install
 cp .env.local.example .env.local

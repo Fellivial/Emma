@@ -166,6 +166,16 @@ export async function GET() {
       planDist[c.plan] = (planDist[c.plan] || 0) + 1;
     }
 
+    // ── Message Feedback ──────────────────────────────────────────────────
+    const { data: feedbackRows } = await supabase
+      .from("message_feedback")
+      .select("rating");
+    const feedbackStats = {
+      total: feedbackRows?.length || 0,
+      up: (feedbackRows || []).filter((r) => r.rating === "up").length,
+      down: (feedbackRows || []).filter((r) => r.rating === "down").length,
+    };
+
     return NextResponse.json({
       clients: enrichedClients,
       overview: {
@@ -185,6 +195,7 @@ export async function GET() {
       affiliates: affiliateStats,
       channels,
       planDistribution: planDist,
+      feedback: feedbackStats,
     });
   } catch (err) {
     console.error("[/api/admin]", err);

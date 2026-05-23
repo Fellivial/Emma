@@ -13,7 +13,7 @@ npm run dev
 ## Before submitting a PR
 
 ```bash
-npm run lint      # 0 errors required; warnings are pre-existing and can be ignored
+npm run lint      # 0 warnings required
 npx tsc --noEmit  # 0 TypeScript errors required
 npm test          # all 136 tests must pass
 ```
