@@ -242,15 +242,15 @@ export async function saveMessage(
 
 function rowToMemoryEntry(row: Record<string, unknown>): MemoryEntry {
   return {
-    id: row.id,
-    timestamp: new Date(row.created_at).getTime(),
-    category: row.category,
-    key: row.key,
-    value: decrypt(row.value),
-    confidence: row.confidence,
-    source: row.source,
-    lastAccessed: row.last_accessed ? new Date(row.last_accessed).getTime() : undefined,
-    userId: row.user_id,
+    id: row.id as string,
+    timestamp: new Date(row.created_at as string).getTime(),
+    category: row.category as MemoryCategory,
+    key: row.key as string,
+    value: decrypt(row.value as string),
+    confidence: row.confidence as number,
+    source: row.source as "extracted" | "explicit" | "observed",
+    lastAccessed: row.last_accessed ? new Date(row.last_accessed as string).getTime() : undefined,
+    userId: row.user_id as string,
   };
 }
 

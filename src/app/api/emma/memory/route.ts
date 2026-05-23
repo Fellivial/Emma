@@ -9,6 +9,7 @@ import {
 } from "@/core/memory-db";
 import { MEMORY_EXTRACTION_PROMPT } from "@/core/memory-shared";
 import { getUser } from "@/lib/supabase/server";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,11 +60,6 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ extracted: [] } satisfies MemoryApiResponse);
         }
 
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (!apiKey) {
-          return NextResponse.json({ error: "API key not set" }, { status: 500 });
-        }
-
         const memorySchema = {
           type: "object",
           properties: {
@@ -89,28 +85,22 @@ export async function POST(req: NextRequest) {
           additionalProperties: false,
         };
 
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch(OPENROUTER_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
+          headers: openRouterHeaders(),
           body: JSON.stringify({
             model: MODEL_UTILITY,
             max_tokens: 512,
-            system: MEMORY_EXTRACTION_PROMPT,
             messages: [
+              { role: "system", content: MEMORY_EXTRACTION_PROMPT },
               {
                 role: "user",
                 content: `Extract memories from this conversation:\n\n${body.conversationText}`,
               },
             ],
-            output_config: {
-              format: {
-                type: "json_schema",
-                json_schema: { name: "memory_extraction", schema: memorySchema },
-              },
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: "memory_extraction", schema: memorySchema },
             },
           }),
         });
@@ -120,10 +110,7 @@ export async function POST(req: NextRequest) {
         }
 
         const data = await res.json();
-        const rawText =
-          data.content
-            ?.map((b: { type: string; text?: string }) => (b.type === "text" ? b.text : ""))
-            .join("") || '{"memories":[]}';
+        const rawText = extractText(data) || '{"memories":[]}';
 
         // Structured output guarantees valid JSON — no cleanup needed.
         let parsed: Array<{ category: string; key: string; value: string; confidence: number }>;

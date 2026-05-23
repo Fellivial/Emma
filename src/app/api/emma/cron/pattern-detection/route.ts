@@ -59,9 +59,8 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userIds = [...new Set(userRows.map((r: any) => r.user_id as string))];
-  const apiKey = process.env.ANTHROPIC_API_KEY;
 
-  // ── Phase 1: Detect patterns (no Anthropic API calls) ─────────────────────
+  // ── Phase 1: Detect patterns (no API calls) ───────────────────────────────
   const allPatterns: DetectedPattern[] = [];
   for (const userId of userIds) {
     try {
@@ -81,27 +80,22 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // ── Phase 2: Batch-generate all suggestions in a single API call ──────────
-  // All requests are submitted at once — 50% cost vs serial calls.
-  // Batch times out after 5 minutes; patterns without suggestions are still
-  // persisted so the frontend shows the pattern even without a suggestion text.
+  // ── Phase 2: Generate suggestions sequentially ───────────────────────────
   let suggestionsGenerated = 0;
-  if (apiKey) {
-    const batchInputs = allPatterns.map((p, i) => ({
-      id: `p${i}`,
-      patternType: p.patternType,
-      description: p.description,
-      exampleGoals: p.exampleGoals,
-    }));
+  const batchInputs = allPatterns.map((p, i) => ({
+    id: `p${i}`,
+    patternType: p.patternType,
+    description: p.description,
+    exampleGoals: p.exampleGoals,
+  }));
 
-    const suggestions = await generateSuggestionsViaBatch(apiKey, batchInputs);
+  const suggestions = await generateSuggestionsViaBatch("", batchInputs);
 
-    for (let i = 0; i < allPatterns.length; i++) {
-      const text = suggestions.get(`p${i}`);
-      if (text) {
-        allPatterns[i].suggestion = text;
-        suggestionsGenerated++;
-      }
+  for (let i = 0; i < allPatterns.length; i++) {
+    const text = suggestions.get(`p${i}`);
+    if (text) {
+      allPatterns[i].suggestion = text;
+      suggestionsGenerated++;
     }
   }
 

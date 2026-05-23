@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     pool: "threads",
+    setupFiles: ["tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
     exclude: ["node_modules", ".next"],
     coverage: {
