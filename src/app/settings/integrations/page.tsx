@@ -640,7 +640,7 @@ function ElevenLabsConnect({
                 setError(null);
               }}
               onKeyDown={(e) => e.key === "Enter" && handleConnectKey()}
-              placeholder="sk_..."
+              placeholder="Paste API key…"
               className="flex-1 bg-emma-200/3 border border-emma-200/8 rounded-lg px-3 py-2 text-xs text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/20"
             />
             <button
@@ -682,6 +682,10 @@ function ElevenLabsConnect({
               setStep("connected");
               onConnected();
             }}
+            onAuthExpired={() => {
+              setStep("idle");
+              onConnected();
+            }}
           />
         </div>
       )}
@@ -721,6 +725,10 @@ function ElevenLabsConnect({
                   void voiceName;
                 }}
                 onSkip={() => setShowVoiceSelector(false)}
+                onAuthExpired={() => {
+                  setShowVoiceSelector(false);
+                  onConnected();
+                }}
               />
             </div>
           )}
@@ -736,10 +744,12 @@ function VoiceSelector({
   initialVoiceId,
   onSaved,
   onSkip,
+  onAuthExpired,
 }: {
   initialVoiceId?: string;
   onSaved: (voiceName: string) => void;
   onSkip: () => void;
+  onAuthExpired?: () => void;
 }) {
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
@@ -754,14 +764,22 @@ function VoiceSelector({
 
   useEffect(() => {
     fetch("/api/integrations/elevenlabs/voices")
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) {
+          if (r.status === 401 && onAuthExpired) {
+            onAuthExpired();
+          } else {
+            setError(d.error || "Could not load voices");
+          }
+          return;
+        }
         if (d.voices) {
           setVoices(d.voices);
           if (!selectedVoiceId && d.voices.length > 0) setSelectedVoiceId(d.voices[0].voiceId);
         }
       })
-      .catch(() => {})
+      .catch(() => setError("Could not load voices — try again"))
       .finally(() => setLoadingVoices(false));
     return () => {
       audioPreviewRef.current?.pause();

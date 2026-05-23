@@ -32,25 +32,35 @@ export async function GET() {
       .select("client_id")
       .eq("user_id", user.id)
       .single();
-    if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
+    if (!membership) {
+      console.error("[elevenlabs/voices] no client_members row for user", user.id);
+      return NextResponse.json({ error: "No client" }, { status: 404 });
+    }
 
-    const { data: integration } = await supabase
+    const { data: integration, error: intErr } = await supabase
       .from("client_integrations")
-      .select("access_token, status, voice_id")
+      .select("access_token, status, metadata")
       .eq("client_id", membership.client_id)
       .eq("service", "elevenlabs")
-      .eq("status", "connected")
       .single();
 
-    if (!integration) {
+    if (intErr || !integration) {
+      console.error("[elevenlabs/voices] no integration row:", intErr?.message);
       return NextResponse.json({ error: "ElevenLabs not connected" }, { status: 404 });
     }
 
-    let apiKey: string;
-    try {
-      apiKey = decrypt(integration.access_token);
-    } catch {
-      return NextResponse.json({ error: "Could not load stored key" }, { status: 500 });
+    if (integration.status !== "connected") {
+      console.error("[elevenlabs/voices] integration status is", integration.status, "(not connected)");
+      return NextResponse.json(
+        { error: `ElevenLabs integration status: ${integration.status}` },
+        { status: 400 }
+      );
+    }
+
+    const apiKey = decrypt(integration.access_token);
+    if (!apiKey || apiKey.startsWith("[")) {
+      console.error("[elevenlabs/voices] decryption failed:", apiKey);
+      return NextResponse.json({ error: "Could not decrypt stored key — reconnect ElevenLabs" }, { status: 500 });
     }
 
     const voicesRes = await fetch(`${ELEVENLABS_API}/voices`, {
@@ -58,7 +68,13 @@ export async function GET() {
     });
 
     if (voicesRes.status === 401) {
-      return NextResponse.json({ error: "API key invalid" }, { status: 401 });
+      // Mark integration as expired so UI shows the re-connect prompt
+      await supabase
+        .from("client_integrations")
+        .update({ status: "auth_expired", updated_at: new Date().toISOString() })
+        .eq("client_id", membership.client_id)
+        .eq("service", "elevenlabs");
+      return NextResponse.json({ error: "API key expired — reconnect ElevenLabs in Settings" }, { status: 401 });
     }
     if (!voicesRes.ok) {
       return NextResponse.json({ error: "ElevenLabs API error" }, { status: 502 });
@@ -84,7 +100,7 @@ export async function GET() {
 
     return NextResponse.json({
       voices,
-      currentVoiceId: integration.voice_id || null,
+      currentVoiceId: integration.metadata?.voiceId || null,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
