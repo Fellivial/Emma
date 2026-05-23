@@ -252,6 +252,8 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             messages,
             tools: [
               { type: "memory_20250818", name: "memory" } as unknown as (typeof tools)[number],
+              { type: "web_search_20260209", name: "web_search" } as unknown as (typeof tools)[number],
+              { type: "web_fetch_20260209", name: "web_fetch", max_content_tokens: 5000 } as unknown as (typeof tools)[number],
               ...tools,
             ],
             ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),

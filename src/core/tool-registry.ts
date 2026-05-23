@@ -224,67 +224,6 @@ registerTool({
   },
 });
 
-// Tool: web_search — Search the web via Brave Search API (safe)
-registerTool({
-  name: "web_search",
-  description: "Search the web for current information on behalf of the user",
-  inputSchema: {
-    type: "object",
-    properties: {
-      query: { type: "string", description: "Search query" },
-    },
-    required: ["query"],
-    additionalProperties: false,
-  },
-  riskLevel: "safe",
-  handler: async (input) => {
-    const apiKey = process.env.BRAVE_SEARCH_API_KEY;
-    if (!apiKey) {
-      return {
-        success: false,
-        output: "Web search unavailable: BRAVE_SEARCH_API_KEY environment variable is not set.",
-      };
-    }
-
-    try {
-      const url = new URL("https://api.search.brave.com/res/v1/web/search");
-      url.searchParams.set("q", input.query as string);
-      url.searchParams.set("count", "5");
-
-      const res = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json",
-          "X-Subscription-Token": apiKey,
-        },
-      });
-
-      if (!res.ok) {
-        return { success: false, output: `Search API error: ${res.status}` };
-      }
-
-      const data = await res.json();
-      const results: Array<{ title: string; url: string; description?: string }> =
-        data.web?.results || [];
-
-      if (results.length === 0) {
-        return { success: true, output: "No results found.", data: { results: [] } };
-      }
-
-      const formatted = results
-        .slice(0, 5)
-        .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description || ""}`)
-        .join("\n\n");
-
-      return {
-        success: true,
-        output: `Search results for "${input.query}":\n\n${formatted}`,
-        data: { results: results.slice(0, 5) },
-      };
-    } catch (err) {
-      return { success: false, output: `Search failed: ${String(err)}` };
-    }
-  },
-});
 
 // Tool: run_workflow — Execute a predefined workflow routine (moderate)
 registerTool({
