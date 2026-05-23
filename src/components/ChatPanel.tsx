@@ -112,9 +112,10 @@ export function ChatPanel({
             </div>
           </div>
         )}
-        {loading &&
-          (!agentPlan || agentPlan.length === 0) &&
-          !messages.some((m) => m.role === "assistant" && !!m.display) && <TypingIndicator />}
+        {loading && (!agentPlan || agentPlan.length === 0) && (() => {
+          const last = messages[messages.length - 1];
+          return !last || last.role === "user" || !last.display;
+        })() && <TypingIndicator />}
 
         {/* Usage warning — amber left-border annotation below last bubble */}
         {usageWarning && !usageBlocked && (

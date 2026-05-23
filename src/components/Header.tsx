@@ -106,24 +106,16 @@ export function Header(props: HeaderProps) {
           )}
         </div>
 
-        {/* Active user pill */}
-        <div
-          className="flex items-center gap-1 text-[11px] font-light text-emma-200/40 bg-emma-300/4 border border-emma-300/8 rounded-full px-2.5 py-1"
-          style={{ borderColor: `${props.activeUser.color}18` }}
-        >
-          <span className="text-xs leading-none">{props.activeUser.avatar}</span>
-          <span>{props.activeUser.name}</span>
-        </div>
-
-        {/* Settings dropdown */}
+        {/* Active user pill — opens settings dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-1.5 text-[11px] font-light text-emma-200/35 bg-emma-300/4 border border-emma-300/8 rounded-full px-3 py-1.5 hover:text-emma-200/70 hover:border-emma-300/20 hover:bg-emma-300/8 transition-all"
+              className="flex items-center gap-1.5 text-[11px] font-light text-emma-200/40 bg-emma-300/4 border border-emma-300/8 rounded-full px-2.5 py-1 hover:text-emma-200/70 hover:border-emma-300/20 hover:bg-emma-300/8 transition-all"
+              style={{ borderColor: `${props.activeUser.color}18` }}
               aria-label="Settings"
             >
-              <Settings size={12} />
-              <span>Settings</span>
+              <span className="text-xs leading-none">{props.activeUser.avatar}</span>
+              <span>{props.activeUser.name}</span>
             </button>
           </DropdownMenuTrigger>
 

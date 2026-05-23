@@ -798,9 +798,10 @@ export default function EmmaPage() {
           {visibleMessages.map((msg) => (
             <MobileChatBubble key={msg.id} message={msg} />
           ))}
-          {loading && !visibleMessages.some((m) => m.role === "assistant" && !!m.display) && (
-            <MobileTypingBubble />
-          )}
+          {loading && (() => {
+            const last = messages[messages.length - 1];
+            return !last || last.role === "user" || !last.display;
+          })() && <MobileTypingBubble />}
         </div>
 
         {/* Pinned input bar */}
