@@ -60,6 +60,7 @@ export default function EmmaPage() {
   const [loading, setLoading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [historyReady, setHistoryReady] = useState<ChatMessageType[] | null>(null);
   const [usageWarning, setUsageWarning] = useState<{
     message: string;
     window: string | null;
@@ -175,6 +176,31 @@ export default function EmmaPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMemories();
+    fetch("/api/emma/history")
+      .then((r) => (r.ok ? r.json() : { messages: [] }))
+      .then((d) => {
+        const loaded: ChatMessageType[] = (
+          d.messages as Array<{
+            id: string;
+            role: string;
+            content: string;
+            display: string;
+            expression?: string;
+            created_at: string;
+          }>
+        ).map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          display: m.display,
+          expression: m.expression as AvatarExpression | undefined,
+          timestamp: new Date(m.created_at).getTime(),
+        }));
+        setHistoryReady(loaded);
+      })
+      .catch(() => {
+        setHistoryReady([]);
+      });
     timeline.log({
       type: "system_event",
       source: "system",
@@ -184,11 +210,18 @@ export default function EmmaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Context-Aware Greeting ──────────────────────────────────────────────────
+  // ── Context-Aware Greeting (or history restore) ────────────────────────────
   useEffect(() => {
     if (initialized) return;
+    if (historyReady === null) return; // wait for history check
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
+
+    if (historyReady.length > 0) {
+      setMessages(historyReady);
+      setApiMessages(historyReady.map((m) => ({ role: m.role, content: m.content })));
+      return;
+    }
 
     const greeting = generateGreeting(persona, memories);
     const greetingExpression = getGreetingExpression(persona);
@@ -208,7 +241,7 @@ export default function EmmaPage() {
     setTimeout(() => {
       avatar.setExpression(greetingExpression as AvatarExpression);
     }, 500);
-  }, [initialized, persona, memories, avatar]);
+  }, [initialized, persona, memories, avatar, historyReady]);
 
   // ── Memory extraction ──────────────────────────────────────────────────────
   const extractMemories = useCallback(async () => {
@@ -523,6 +556,25 @@ export default function EmmaPage() {
                         : event.raw || event.text,
                   },
                 ]);
+              }
+
+              // Persist exchange to chat history (fire-and-forget)
+              if (!event.refused && !event.contextWindowExceeded) {
+                fetch("/api/emma/history", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify([
+                    userMsg,
+                    {
+                      id: assistantId,
+                      role: "assistant",
+                      content: event.raw || event.text,
+                      display: event.text,
+                      expression: event.expression || undefined,
+                      timestamp: Date.now(),
+                    },
+                  ]),
+                }).catch(() => {});
               }
 
               // Handle enforcement metadata
