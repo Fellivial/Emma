@@ -1,0 +1,170 @@
+# How to Connect Integrations
+
+Connect external services so Emma can take real actions — send email, check your calendar, post to Slack, create Notion pages, manage HubSpot deals.
+
+## Prerequisites
+
+- Emma running with Supabase auth configured (see [Getting Started](tutorial-getting-started.md))
+- A Supabase project with the schema applied
+- The service's OAuth app credentials (or API key for HubSpot)
+
+---
+
+## Overview
+
+Integrations use OAuth 2.0. Emma never sees your credentials — it gets a short-lived access token stored encrypted (AES-256-GCM) in the `client_integrations` Supabase table. Each token is decrypted only at call time and never logged.
+
+The OAuth flow:
+
+```
+Settings UI → /api/integrations/[service]/oauth/start
+           → Service OAuth consent screen
+           → /api/integrations/[service]/oauth/callback
+           → token stored encrypted in client_integrations
+```
+
+---
+
+## Gmail
+
+### 1. Create a Google OAuth app
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create an OAuth 2.0 Client ID (Web application)
+3. Add authorized redirect URI: `https://yourdomain.com/api/integrations/gmail/oauth/callback`
+4. Copy the Client ID and Client Secret
+
+### 2. Add to .env.local
+
+```
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+```
+
+### 3. Enable the Gmail API
+
+In Google Cloud Console → APIs & Services → Library → search "Gmail API" → Enable.
+
+### 4. Connect in Emma
+
+Go to `/settings/integrations` → Gmail → Connect. Approve the consent screen.
+
+### 5. Verify
+
+Ask Emma: "Send an email to test@example.com saying hello." Emma will call `send_email` and confirm. If the integration isn't connected, Emma will say so rather than silently failing.
+
+---
+
+## Google Calendar
+
+Same OAuth app as Gmail. Enable the Calendar API additionally:
+
+1. Google Cloud Console → APIs & Services → Library → "Google Calendar API" → Enable
+2. The `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are shared with Gmail — no new credentials needed.
+3. Connect at `/settings/integrations` → Google Calendar → Connect.
+
+Ask Emma: "What's on my calendar today?" to verify.
+
+---
+
+## Slack
+
+### 1. Create a Slack app
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch
+2. Under OAuth & Permissions, add redirect URL: `https://yourdomain.com/api/integrations/slack/oauth/callback`
+3. Add Bot Token Scopes: `chat:write`, `files:write`, `channels:read`
+4. Under Basic Information, copy the Client ID and Client Secret
+
+### 2. Add to .env.local
+
+```
+SLACK_CLIENT_ID=your-client-id
+SLACK_CLIENT_SECRET=your-client-secret
+```
+
+### 3. Connect in Emma
+
+`/settings/integrations` → Slack → Connect. Authorize the workspace.
+
+Ask Emma: "Post 'hello world' to #general" to verify.
+
+---
+
+## Notion
+
+### 1. Create a Notion OAuth integration
+
+1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) → New integration
+2. Set type to **Public** (required for OAuth)
+3. Add redirect URI: `https://yourdomain.com/api/integrations/notion/oauth/callback`
+4. Copy Client ID and Client Secret
+
+### 2. Add to .env.local
+
+```
+NOTION_CLIENT_ID=your-client-id
+NOTION_CLIENT_SECRET=your-client-secret
+```
+
+### 3. Connect in Emma
+
+`/settings/integrations` → Notion → Connect.
+
+Ask Emma: "Create a Notion page titled 'Meeting notes'" to verify.
+
+---
+
+## HubSpot
+
+HubSpot uses a private app token (not OAuth). There's no user-facing consent screen.
+
+### 1. Create a HubSpot private app
+
+1. HubSpot portal → Settings (gear icon) → Integrations → Private Apps
+2. Create app, name it "Emma"
+3. Scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.deals.read`, `crm.objects.deals.write`, `crm.objects.notes.write`
+4. Copy the access token
+
+### 2. Add to .env.local
+
+```
+HUBSPOT_API_KEY=pat-na1-...
+```
+
+HubSpot doesn't require a user-specific OAuth flow — the token is server-side only.
+
+Ask Emma: "Get my HubSpot contacts" to verify.
+
+---
+
+## Custom MCP Servers
+
+Emma supports any remote MCP server via the `user_mcp_servers` Supabase table. Add servers at `/settings/mcp`.
+
+Requirements:
+- Must be HTTP (SSE or Streamable HTTP transport)
+- Must have a public HTTPS URL
+- For authenticated servers, provide a Bearer token — it's encrypted at rest
+
+Enterprise customers with internal tools behind a firewall can use [MCP Tunnels](https://claude.com/form/claude-managed-agents) (Cloudflare-based, outbound-only).
+
+---
+
+## Troubleshooting
+
+**"Integration not configured"** — the OAuth flow didn't complete, or the token was revoked. Reconnect at `/settings/integrations`.
+
+**"Auth expired"** — the access token expired and can't auto-refresh. Reconnect.
+
+**Tool calls silently doing nothing** — check that the right API scopes were granted during OAuth. Gmail `send_email` requires `https://www.googleapis.com/auth/gmail.send`.
+
+**Local dev** — OAuth redirect URIs must match exactly. For local dev use `http://localhost:3000/api/integrations/[service]/oauth/callback` and add it to your OAuth app's authorized URIs.
+
+---
+
+## Related
+
+- [Reference: API routes](reference-api.md) — OAuth start/callback endpoint spec
+- [Reference: Environment variables](reference-env-vars.md) — full list of integration vars
+- [Explanation: Security model](explanation-security.md) — how tokens are encrypted

@@ -219,6 +219,22 @@ ANTHROPIC_API_KEY=sk-ant-... npx vitest run tests/integration/anthropic-beta-hea
 | Document generation (pptx/xlsx/docx) | **Unavailable** | Anthropic changed the `container` API format; re-enabling pending documentation of new format |
 | ElevenLabs TTS | Available | BYOK — users connect their own key via Settings → Integrations |
 
+## Documentation
+
+| Doc | Type | What it covers |
+|-----|------|----------------|
+| [Getting Started](docs/tutorial-getting-started.md) | Tutorial | From zero to working chat in 2 minutes; full setup with Supabase |
+| [Connect Integrations](docs/howto-connect-integrations.md) | How-to | Gmail, Google Calendar, Slack, Notion, HubSpot OAuth setup |
+| [SMB Intake Widget](docs/howto-smb-intake.md) | How-to | Deploy a public lead-capture chat widget for a business client |
+| [Add Billing](docs/howto-add-billing.md) | How-to | LemonSqueezy setup, webhooks, plan feature gating |
+| [Chat History](docs/howto-chat-history.md) | How-to | Enable persistent conversation history across page reloads |
+| [API Reference](docs/reference-api.md) | Reference | Every API route — auth, request body, response shape |
+| [Environment Variables](docs/reference-env-vars.md) | Reference | Full env var table with how-to-get instructions |
+| [Plans & Limits](docs/reference-plans.md) | Reference | Token budgets, feature flags, multi-window enforcement |
+| [Architecture](docs/explanation-architecture.md) | Explanation | Chat pipeline, two-block system prompt, prompt caching design |
+| [Security](docs/explanation-security.md) | Explanation | Prompt injection defense, AES-256-GCM field encryption |
+| [Autonomous Agent](docs/explanation-agent.md) | Explanation | Agent loop, autonomy tiers, tool risk levels |
+
 ## Getting Help
 
 - **Bugs / unexpected behavior** → [open an issue](https://github.com/Fellivial/Emma/issues/new?template=bug_report.md)
