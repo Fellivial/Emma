@@ -48,7 +48,7 @@ export async function GET() {
     if (membership) {
       const { data: rows } = await supabase
         .from("client_integrations")
-        .select("service, status, account_identifier, last_used_at, last_error, voice_id, metadata")
+        .select("service, status, account_identifier, last_used_at, last_error, metadata")
         .eq("client_id", membership.client_id);
 
       for (const row of rows || []) {
@@ -61,7 +61,7 @@ export async function GET() {
         };
         // ElevenLabs: include voice info
         if (row.service === "elevenlabs") {
-          entry.voiceId = row.voice_id || null;
+          entry.voiceId = row.metadata?.voiceId || null;
           entry.voiceName = row.metadata?.voiceName || "Rachel (default)";
         }
         integrations[row.service] = entry;

@@ -26,37 +26,39 @@ export async function POST(req: NextRequest) {
 
     const { apiKey, voiceId } = (await req.json()) as { apiKey: string; voiceId?: string };
 
-    // Validate key format
-    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim().startsWith("sk_")) {
-      return NextResponse.json({ error: "Invalid ElevenLabs API key format" }, { status: 400 });
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      return NextResponse.json({ error: "API key is required" }, { status: 400 });
     }
 
     const trimmedKey = apiKey.trim();
 
     // Validate voice ID format if provided
     if (voiceId !== undefined && voiceId !== null && voiceId !== "") {
-      if (!/^[a-zA-Z0-9]{15,30}$/.test(voiceId)) {
+      if (!/^[a-zA-Z0-9_-]{10,40}$/.test(voiceId)) {
         return NextResponse.json({ error: "Invalid Voice ID format" }, { status: 400 });
       }
     }
 
-    // Test key against ElevenLabs /user endpoint
-    const userRes = await fetch(`${ELEVENLABS_API}/user`, {
+    // Validate key by fetching voices (works on all ElevenLabs plans)
+    const validationRes = await fetch(`${ELEVENLABS_API}/voices`, {
       headers: { "xi-api-key": trimmedKey },
     });
 
-    if (userRes.status === 401) {
+    if (validationRes.status === 401) {
+      const body = await validationRes.text().catch(() => "");
+      console.error("[elevenlabs] key rejected by ElevenLabs (401):", body);
       return NextResponse.json(
         { error: "API key is invalid — check your ElevenLabs dashboard" },
         { status: 400 }
       );
     }
-    if (!userRes.ok) {
+    if (!validationRes.ok) {
+      const errBody = await validationRes.text().catch(() => "");
+      console.error(`[elevenlabs] ElevenLabs /voices returned ${validationRes.status}:`, errBody);
       return NextResponse.json({ error: "Could not verify key — try again" }, { status: 400 });
     }
 
-    const userInfo = await userRes.json();
-    const accountName: string = userInfo.first_name || "ElevenLabs Account";
+    const accountName = "ElevenLabs Account";
 
     // Verify voice ID if provided
     let verifiedVoiceName: string | null = null;
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
         headers: { "xi-api-key": trimmedKey },
       });
       if (voiceRes.status === 401) {
+        console.error("[elevenlabs] voice check: key rejected (401)");
         return NextResponse.json({ error: "API key is invalid" }, { status: 400 });
       }
       if (voiceRes.status === 404) {
@@ -74,6 +77,8 @@ export async function POST(req: NextRequest) {
         );
       }
       if (!voiceRes.ok) {
+        const errBody = await voiceRes.text().catch(() => "");
+        console.error(`[elevenlabs] voice check returned ${voiceRes.status}:`, errBody);
         return NextResponse.json({ error: "Could not verify Voice ID" }, { status: 400 });
       }
       const voiceInfo = await voiceRes.json();
@@ -87,21 +92,25 @@ export async function POST(req: NextRequest) {
       .single();
     if (!membership) return NextResponse.json({ error: "No client" }, { status: 404 });
 
-    await supabase.from("client_integrations").upsert(
+    const { error: upsertErr } = await supabase.from("client_integrations").upsert(
       {
         client_id: membership.client_id,
         service: "elevenlabs",
         status: "connected",
         access_token: encrypt(trimmedKey),
-        voice_id: voiceId || null,
         account_identifier: accountName,
         metadata: {
+          voiceId: voiceId || null,
           voiceName: verifiedVoiceName || (voiceId ? null : "Rachel (default)"),
         },
         updated_at: new Date().toISOString(),
       },
       { onConflict: "client_id,service" }
     );
+    if (upsertErr) {
+      console.error("[elevenlabs] upsert failed:", upsertErr.message);
+      return NextResponse.json({ error: "Failed to save integration" }, { status: 500 });
+    }
 
     audit({
       userId: user.id,
@@ -152,7 +161,12 @@ export async function PATCH(req: NextRequest) {
       .eq("service", "elevenlabs")
       .single();
 
-    if (!integration || integration.status !== "connected") {
+    if (!integration) {
+      console.error("[elevenlabs PATCH] no integration row for client", membership.client_id);
+      return NextResponse.json({ error: "ElevenLabs not connected" }, { status: 400 });
+    }
+    if (integration.status !== "connected") {
+      console.error("[elevenlabs PATCH] integration status is", integration.status);
       return NextResponse.json({ error: "ElevenLabs not connected" }, { status: 400 });
     }
 
@@ -182,12 +196,11 @@ export async function PATCH(req: NextRequest) {
     const voiceInfo = await voiceRes.json();
     const verifiedVoiceName: string = voiceInfo.name || voiceId;
 
-    const updatedMetadata = { ...(integration.metadata || {}), voiceName: verifiedVoiceName };
+    const updatedMetadata = { ...(integration.metadata || {}), voiceId, voiceName: verifiedVoiceName };
 
     await supabase
       .from("client_integrations")
       .update({
-        voice_id: voiceId,
         metadata: updatedMetadata,
         updated_at: new Date().toISOString(),
       })

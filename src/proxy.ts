@@ -71,10 +71,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Authenticated user hitting /login → redirect to app
-  if (user && request.nextUrl.pathname === "/login") {
+  // Authenticated user hitting public UI routes → redirect to app
+  const isPublicUiRoute =
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname === "/" ||
+    request.nextUrl.pathname === "/landing" ||
+    request.nextUrl.pathname === "/register";
+
+  if (user && isPublicUiRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
+    redirectUrl.pathname = "/app";
     return NextResponse.redirect(redirectUrl);
   }
 
