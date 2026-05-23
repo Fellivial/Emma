@@ -13,6 +13,7 @@ const BETA_HEADERS = [
   "mcp-client-2025-11-20",
   "cache-diagnosis-2026-04-07",
   "code-execution-2025-08-25",
+  "skills-2025-10-02",
 ];
 
 const TOOL_TYPES = [

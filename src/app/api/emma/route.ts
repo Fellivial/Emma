@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
       "files-api-2025-04-14",
       "mcp-client-2025-11-20",
       "cache-diagnosis-2026-04-07",
-      ...(skills?.length ? ["code-execution-2025-08-25"] : []),
+      ...(skills?.length ? ["code-execution-2025-08-25", "skills-2025-10-02"] : []),
     ];
 
     // ── Build tools array ────────────────────────────────────────────────────
@@ -471,7 +471,18 @@ export async function POST(req: NextRequest) {
           name: "code_execution",
         }
       : null;
-    // Skills container disabled: Anthropic changed container from object to string format (TBD).
+    const skillsContainer =
+      skills?.length
+        ? {
+            container: {
+              skills: skills.map((skill_id: string) => ({
+                type: "anthropic",
+                skill_id,
+                version: "latest",
+              })),
+            },
+          }
+        : {};
 
     // ── Streaming request to Anthropic ───────────────────────────────────────
     const effort = detectEffort(messages, hasDocuments);
@@ -499,6 +510,7 @@ export async function POST(req: NextRequest) {
             ...deferredIntegrationTools,
           ],
           ...(mcpServers.length > 0 && { mcp_servers: mcpServers }),
+          ...skillsContainer,
           stream: true,
           output_config: { effort },
           // Adaptive thinking: enabled for analytical/deep tasks (effort=high).

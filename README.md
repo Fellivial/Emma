@@ -209,6 +209,12 @@ ANTHROPIC_API_KEY=sk-ant-... npx vitest run tests/integration/anthropic-beta-hea
 | Document generation (pptx/xlsx/docx) | **Unavailable** | Anthropic changed the `container` API format; re-enabling pending documentation of new format |
 | ElevenLabs TTS | Available | BYOK — users connect their own key via Settings → Integrations |
 
+## Getting Help
+
+- **Bugs / unexpected behavior** → [open an issue](https://github.com/Fellivial/Emma/issues/new?template=bug_report.md)
+- **Feature requests** → [open an issue](https://github.com/Fellivial/Emma/issues/new?template=feature_request.md)
+- **Questions / ideas** → [GitHub Discussions](https://github.com/Fellivial/Emma/discussions)
+
 ## Avatar
 
 Live2D controller with 10 expressions (`neutral`, `smirk`, `warm`, `concerned`, `amused`, `skeptical`, `listening`, `flirty`, `sad`, `idle_bored`) and 3 layout modes (side, overlay, PiP).
