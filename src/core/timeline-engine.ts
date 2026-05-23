@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { TimelineEntry, TimelineEventType, TimelineSource } from "@/types/emma";
-import { uid, formatTime } from "@/lib/utils";
+import { uid } from "@/lib/utils";
 
 interface UseTimelineReturn {
   entries: TimelineEntry[];

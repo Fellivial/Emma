@@ -7,6 +7,7 @@ export function createClient() {
   if (!url || !key) {
     // Return a mock client for build/dev without Supabase configured
     console.warn("[EMMA] Supabase not configured — auth disabled");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return null as any;
   }
 

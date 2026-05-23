@@ -58,18 +58,15 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     let text = "";
-    let pageCount: number | undefined;
     let ocrRequired = false;
 
     if (mimeType === "application/pdf") {
       const parsed = await parseDocument(buffer, mimeType);
       text = parsed.text;
-      pageCount = parsed.pageCount;
       if (text.length < 100) {
         ocrRequired = true;
         const ocr = await extractTextFromScannedPdf(buffer);
         text = ocr.text;
-        pageCount = ocr.pageCount;
       }
     } else if (
       mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -122,6 +119,7 @@ export async function POST(req: NextRequest) {
       characterCount: text.length,
       preview: text.slice(0, 500),
     });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

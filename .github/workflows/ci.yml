@@ -26,6 +26,10 @@ jobs:
 
       - name: Run unit tests
         run: npm test
+        env:
+          # Integration tests (tests/integration/) skip automatically when absent.
+          # Add this secret to run them: GitHub → Settings → Secrets → Actions → ANTHROPIC_API_KEY
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Lint
         run: npm run lint

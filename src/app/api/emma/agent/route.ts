@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
+import type { MessageParam } from "@anthropic-ai/sdk/resources";
 import { getUser } from "@/lib/supabase/server";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { getTool } from "@/core/tool-registry";
@@ -134,13 +135,13 @@ export async function POST(req: NextRequest) {
           const task = approval.tasks;
           if (task && task.status === "awaiting_approval") {
             // Build resume messages: load persisted transcript and append the tool result
-            const priorMessages: Array<{ role: string; content: any }> = task.step_transcript || [];
+            const priorMessages = (task.step_transcript || []) as MessageParam[];
             const resumeMessages =
               priorMessages.length > 0
                 ? [
                     ...priorMessages,
                     {
-                      role: "user",
+                      role: "user" as const,
                       content: `The tool "${approval.action}" was approved and executed. Result: ${result.output}. Continue from where you left off.`,
                     },
                   ]

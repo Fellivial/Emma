@@ -50,8 +50,8 @@ export class WhatsAppAdapter {
         output: `WhatsApp message sent (ID: ${msgId})`,
         data: { messageId: msgId },
       };
-    } catch (err: any) {
-      return { success: false, output: `WhatsApp send failed: ${err.message}` };
+    } catch (err) {
+      return { success: false, output: `WhatsApp send failed: ${(err as Error).message}` };
     }
   }
 
@@ -99,8 +99,8 @@ export class WhatsAppAdapter {
         output: `WhatsApp template sent (ID: ${msgId})`,
         data: { messageId: msgId },
       };
-    } catch (err: any) {
-      return { success: false, output: `WhatsApp template send failed: ${err.message}` };
+    } catch (err) {
+      return { success: false, output: `WhatsApp template send failed: ${(err as Error).message}` };
     }
   }
 
@@ -111,6 +111,7 @@ export class WhatsAppAdapter {
     timestamp: string;
   } | null {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const p = payload as any;
       const message = p?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
       if (!message) return null;

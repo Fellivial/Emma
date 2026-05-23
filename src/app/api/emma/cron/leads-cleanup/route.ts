@@ -48,6 +48,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  console.log(`[leads-cleanup] Deleted ${count ?? 0} leads older than 90 days`);
+  console.warn(`[leads-cleanup] Deleted ${count ?? 0} leads older than 90 days`);
   return NextResponse.json({ deleted: count ?? 0, cutoff: cutoff.toISOString() });
 }

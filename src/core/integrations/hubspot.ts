@@ -12,6 +12,7 @@ import {
   markIntegrationError,
 } from "./adapter";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatDeal(d: any): string {
   const p = d.properties || {};
   return `Deal: ${p.dealname || "(unnamed)"}\nAmount: ${p.amount || "N/A"}\nStage: ${p.dealstage || "N/A"}`;
@@ -79,6 +80,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
         output: `Deal "${dealname}" created (ID: ${data.id})`,
         data: { dealId: data.id, dealname },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot create deal failed: ${err.message}` };
@@ -123,6 +125,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
         output: `Deal ${deal_id} stage updated to "${dealstage}"`,
         data: { dealId: deal_id, dealstage },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot update deal failed: ${err.message}` };
@@ -165,6 +168,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const contacts: any[] = data.results || [];
 
       if (contacts.length === 0) {
@@ -180,6 +184,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
 
       await markIntegrationUsed(clientId, "hubspot");
       return { success: true, output: formatted, data: { count: contacts.length, contacts } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot get contacts failed: ${err.message}` };
@@ -224,6 +229,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const deals: any[] = data.results || [];
 
       if (deals.length === 0) {
@@ -233,6 +239,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
       const formatted = deals.map(formatDeal).join("\n\n");
       await markIntegrationUsed(clientId, "hubspot");
       return { success: true, output: formatted, data: { count: deals.length, deals } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot get deals failed: ${err.message}` };
@@ -271,6 +278,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
         output: formatted,
         data: { contactId: data.id, properties: data.properties },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot get contact failed: ${err.message}` };
@@ -286,6 +294,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
     try {
       const { accessToken } = await getIntegrationTokens(clientId, "hubspot");
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         properties: {
           hs_note_body: note,
@@ -323,6 +332,7 @@ export class HubSpotAdapter implements IntegrationAdapter {
 
       await markIntegrationUsed(clientId, "hubspot");
       return { success: true, output: "CRM note logged" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await markIntegrationError(clientId, "hubspot", err);
       return { success: false, output: `HubSpot failed: ${err.message}` };

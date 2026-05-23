@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
 
@@ -64,16 +64,12 @@ export async function GET(req: NextRequest) {
 
   // Cancel all pending/sending emails for this user
   const supabase = getSupabase();
-  let cancelled = 0;
-
   if (supabase) {
-    const { count } = await supabase
+    await supabase
       .from("email_sequences")
       .update({ status: "skipped", error_detail: "User unsubscribed" }, { count: "exact" })
       .eq("user_id", uid)
       .in("status", ["pending", "sending"]);
-
-    cancelled = count || 0;
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

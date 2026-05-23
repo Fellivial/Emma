@@ -17,6 +17,7 @@ export default async function BusinessOverviewPage({
   const { supabase } = await requireClientAccess(slug);
 
   const today = new Date().toISOString().split("T")[0];
+  // eslint-disable-next-line react-hooks/purity
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const [totalRes, todayRes, weekRes, recentRes] = await Promise.all([

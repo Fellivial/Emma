@@ -240,7 +240,7 @@ export async function saveMessage(
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function rowToMemoryEntry(row: any): MemoryEntry {
+function rowToMemoryEntry(row: Record<string, unknown>): MemoryEntry {
   return {
     id: row.id,
     timestamp: new Date(row.created_at).getTime(),

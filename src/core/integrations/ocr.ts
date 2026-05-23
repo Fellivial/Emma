@@ -9,6 +9,7 @@ export async function extractTextFromImage(
   if (!SUPPORTED_IMAGE_TYPES.includes(mimeType)) {
     return { text: "", confidence: 0 };
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let worker: any = null;
   try {
     const { createWorker } = await import("tesseract.js");
@@ -18,8 +19,8 @@ export async function extractTextFromImage(
       text: data.text.replace(/\n{4,}/g, "\n\n").trim(),
       confidence: data.confidence,
     };
-  } catch (err: any) {
-    const msg = err?.message || String(err);
+  } catch (err) {
+    const msg = (err as Error)?.message || String(err);
     return { text: `OCR failed: ${msg}`, confidence: 0 };
   } finally {
     if (worker) await worker.terminate().catch(() => {});

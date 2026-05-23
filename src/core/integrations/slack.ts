@@ -51,7 +51,7 @@ export class SlackAdapter implements IntegrationAdapter {
         return { success: false, output: `Slack error: ${data.error}` };
       }
 
-      const channels: any[] = data.channels || [];
+      const channels: Array<{ id: string; name: string }> = data.channels || [];
       if (channels.length === 0) {
         return { success: true, output: "No channels found.", data: { channels: [] } };
       }
@@ -67,9 +67,9 @@ export class SlackAdapter implements IntegrationAdapter {
           channels: channels.map((c) => ({ id: c.id, name: c.name })),
         },
       };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "slack", err);
-      return { success: false, output: `Slack list channels failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "slack", err as Error);
+      return { success: false, output: `Slack list channels failed: ${(err as Error).message}` };
     }
   }
 
@@ -135,9 +135,9 @@ export class SlackAdapter implements IntegrationAdapter {
         output: `File "${filename}" uploaded to ${channel}`,
         data: { fileId: urlData.file_id, filename, channel },
       };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "slack", err);
-      return { success: false, output: `Slack upload failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "slack", err as Error);
+      return { success: false, output: `Slack upload failed: ${(err as Error).message}` };
     }
   }
 
@@ -181,9 +181,9 @@ export class SlackAdapter implements IntegrationAdapter {
         output: `Message sent to ${channel}`,
         data: { ts: data.ts, channel: data.channel },
       };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "slack", err);
-      return { success: false, output: `Slack failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "slack", err as Error);
+      return { success: false, output: `Slack failed: ${(err as Error).message}` };
     }
   }
 }

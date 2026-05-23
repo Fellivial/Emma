@@ -140,6 +140,7 @@ interface WindowUsage {
 
 interface UsageData {
   windows: { daily: WindowUsage | null; weekly: WindowUsage | null; monthly: WindowUsage | null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraPacks: { totalTokensRemaining: number; packs: any[] };
   planId: string;
   limits: Record<string, { tokens: number; messages: number }>;
@@ -380,7 +381,7 @@ export default function UsagePage() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-300/50" />
                   <span className="text-[11px] text-emma-200/35">
-                    You're consistently hitting your limit. Pro gives you 2× the monthly budget.
+                    You&apos;re consistently hitting your limit. Pro gives you 2× the monthly budget.
                   </span>
                 </div>
                 <Link href="/settings/billing" className="text-[11px] text-emma-300 shrink-0 ml-3">

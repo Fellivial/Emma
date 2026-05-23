@@ -8,8 +8,6 @@ import {
   Users,
   Zap,
   TrendingUp,
-  BarChart3,
-  Gift,
   Database,
 } from "lucide-react";
 

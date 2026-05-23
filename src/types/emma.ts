@@ -513,4 +513,8 @@ export interface EmmaApiResponse {
   expression?: AvatarExpression;
   memoryExtracts?: Partial<MemoryEntry>[];
   error?: string;
+  /** Upstream HTTP status code — present on error responses only. */
+  status?: number;
+  /** Machine-readable error code for programmatic handling. */
+  code?: "BAD_REQUEST" | "AUTH_ERROR" | "RATE_LIMIT" | "OVERLOADED" | "TIMEOUT" | "UPSTREAM_ERROR";
 }

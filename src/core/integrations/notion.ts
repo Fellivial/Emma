@@ -78,9 +78,9 @@ export class NotionAdapter implements IntegrationAdapter {
         output: `Page "${title}" created`,
         data: { pageId: data.id, url: data.url },
       };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "notion", err);
-      return { success: false, output: `Notion failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "notion", err as Error);
+      return { success: false, output: `Notion failed: ${(err as Error).message}` };
     }
   }
 
@@ -111,6 +111,7 @@ export class NotionAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pages: any[] = data.results || [];
 
       if (pages.length === 0) {
@@ -124,7 +125,9 @@ export class NotionAdapter implements IntegrationAdapter {
       const formatted = pages
         .map((p) => {
           const titleProp = Object.values(p.properties || {}).find(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (prop: any) => prop.type === "title"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ) as any;
           const title =
             titleProp?.title?.[0]?.plain_text || p.url?.split("/").pop() || "(untitled)";
@@ -138,9 +141,9 @@ export class NotionAdapter implements IntegrationAdapter {
         output: `Found ${pages.length} pages:\n${formatted}`,
         data: { count: pages.length, pages: pages.map((p) => ({ id: p.id, url: p.url })) },
       };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "notion", err);
-      return { success: false, output: `Notion search failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "notion", err as Error);
+      return { success: false, output: `Notion search failed: ${(err as Error).message}` };
     }
   }
 
@@ -203,9 +206,9 @@ export class NotionAdapter implements IntegrationAdapter {
 
       await markIntegrationUsed(clientId, "notion");
       return { success: true, output: `Page ${page_id} updated` };
-    } catch (err: any) {
-      await markIntegrationError(clientId, "notion", err);
-      return { success: false, output: `Notion update failed: ${err.message}` };
+    } catch (err) {
+      await markIntegrationError(clientId, "notion", err as Error);
+      return { success: false, output: `Notion update failed: ${(err as Error).message}` };
     }
   }
 }

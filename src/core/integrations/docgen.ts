@@ -73,6 +73,7 @@ export async function generateDocx(
   let buffer: Buffer;
   try {
     buffer = await Packer.toBuffer(doc);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { success: false, output: `DOCX generation failed: ${err.message}` };
   }
@@ -95,6 +96,7 @@ export async function generateDocx(
   try {
     await fs.writeFile(filePath, buffer);
     return { success: true, output: `DOCX generated: ${filePath}`, filePath };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { success: false, output: `DOCX write failed: ${err.message}` };
   }
@@ -125,6 +127,7 @@ export async function generatePdf(
     } catch (err) {
       reject(err);
     }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }).catch((err: any) => {
     throw new Error(`PDF generation failed: ${err.message}`);
   });
@@ -142,6 +145,7 @@ export async function generatePdf(
   try {
     await fs.writeFile(filePath, buffer);
     return { success: true, output: `PDF generated: ${filePath}`, filePath };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return { success: false, output: `PDF write failed: ${err.message}` };
   }

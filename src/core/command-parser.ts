@@ -2,7 +2,6 @@ import type {
   EmmaCommand,
   ParsedResponse,
   AvatarExpression,
-  AVATAR_EXPRESSIONS,
 } from "@/types/emma";
 
 const CMD_REGEX = /\[EMMA_CMD\](.*?)\[\/EMMA_CMD\]/gs;

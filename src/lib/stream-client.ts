@@ -134,7 +134,7 @@ export async function streamEmmaResponse(
         }
       }
     }
-  } catch (err) {
+  } catch {
     callbacks.onError("Stream interrupted");
   } finally {
     reader.releaseLock();

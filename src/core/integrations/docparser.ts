@@ -1,7 +1,6 @@
 import mammoth from "mammoth";
 
 // Cached at module level — dynamic import handles CJS/ESM interop under moduleResolution:bundler
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _pdfParse: ((buf: Buffer) => Promise<{ text: string; numpages: number }>) | null = null;
 async function getPdfParse() {
   if (!_pdfParse) {

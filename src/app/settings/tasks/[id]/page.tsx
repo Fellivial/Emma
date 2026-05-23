@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronRight, TrendingUp, Check, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, TrendingUp } from "lucide-react";
 
 interface TaskDetail {
   id: string;
@@ -145,7 +145,7 @@ export default function TaskDetailPage() {
                 <span className="text-[9px] text-emma-300 font-semibold">E</span>
               </div>
               <span className="text-[10px] text-emma-300/60 font-medium tracking-widest uppercase">
-                Emma's notes
+                Emma&apos;s notes
               </span>
               <span className="text-[10px] text-emma-200/15">
                 {formatTime(summary.generated_at)}

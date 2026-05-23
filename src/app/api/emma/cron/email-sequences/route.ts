@@ -172,6 +172,7 @@ export async function GET(req: NextRequest) {
           .eq("id", row.id);
 
         sent++;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         // ── 7. Mark failed ────────────────────────────────────────────
         console.error(`[Cron:Email] Failed ${row.id}:`, err);

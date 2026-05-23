@@ -41,12 +41,14 @@ export async function GET() {
       .eq("user_id", user.id)
       .single();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const planId = (membership as any)?.clients?.plan_id || "free";
     const plan = getPlan(planId);
 
     // Check usage (reuses enforcer logic for consistency)
     const result = await checkUsage(user.id, planId);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const windowMap: Record<string, any> = {};
     for (const w of result.allWindows) {
       windowMap[w.windowType] = w;
@@ -62,7 +64,7 @@ export async function GET() {
       .order("created_at", { ascending: true });
 
     const totalExtra = (packs || []).reduce(
-      (s: number, p: any) => s + (p.tokens_remaining || 0),
+      (s: number, p: Record<string, unknown>) => s + ((p.tokens_remaining as number) || 0),
       0
     );
 
@@ -74,6 +76,7 @@ export async function GET() {
       },
       extraPacks: {
         totalTokensRemaining: totalExtra,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         packs: (packs || []).map((p: any) => ({
           id: p.id,
           tokensGranted: p.tokens_granted,

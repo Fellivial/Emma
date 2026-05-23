@@ -49,9 +49,10 @@ function ProvenancePage() {
     }
 
     setLoading(false);
-  }, [supabase, preselectedTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, preselectedTaskId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchChains();
   }, [fetchChains]);
 

@@ -13,11 +13,8 @@ import type {
   AutonomousTask,
   ApprovalDetails,
 } from "@/types/emma";
-import { formatCommandLog } from "@/core/command-parser";
-import { getPersona } from "@/core/personas";
 import {
   getRoutine,
-  getAllRoutines,
   addCustomRoutine,
   removeCustomRoutine,
   BUILT_IN_ROUTINES,
@@ -109,6 +106,7 @@ export default function EmmaPage() {
 
       setTimeout(() => setActiveRoutineId(null), 3000);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [timeline, multiUser.activeUser.id]
   );
 
@@ -131,7 +129,7 @@ export default function EmmaPage() {
   // ── Scheduler (L3) ────────────────────────────────────────────────────────
   const scheduler = useScheduler(
     useCallback(
-      (routineId: string, scheduleId: string) => {
+      (routineId: string, _scheduleId: string) => {
         const routine = getRoutine(routineId);
         if (!routine) return;
 
@@ -157,17 +155,6 @@ export default function EmmaPage() {
   );
 
   // ── Load memories on mount ─────────────────────────────────────────────────
-  useEffect(() => {
-    fetchMemories();
-    timeline.log({
-      type: "system_event",
-      source: "system",
-      title: "EMMA L4 initialized",
-      detail: "All pillars online",
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const fetchMemories = async () => {
     setMemoriesLoading(true);
     try {
@@ -185,9 +172,22 @@ export default function EmmaPage() {
     }
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchMemories();
+    timeline.log({
+      type: "system_event",
+      source: "system",
+      title: "EMMA L4 initialized",
+      detail: "All pillars online",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Context-Aware Greeting ──────────────────────────────────────────────────
   useEffect(() => {
     if (initialized) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
 
     const greeting = generateGreeting(persona, memories);
@@ -370,6 +370,7 @@ export default function EmmaPage() {
     }
   }, [vision, timeline]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleVisionAnalyze = useCallback(async () => {
     const analysis = await vision.analyzeScene();
     if (analysis) {
@@ -656,6 +657,7 @@ export default function EmmaPage() {
   );
 
   const proactive = useProactiveSpeech(handleProactiveSpeak, true);
+  // eslint-disable-next-line react-hooks/refs
   proactiveResetRef.current = proactive.resetActivity;
 
   // ── Typing Awareness — avatar reacts to user typing ────────────────────────
@@ -682,6 +684,7 @@ export default function EmmaPage() {
     window.addEventListener("resize", handleResize);
     handleResize();
     return () => window.removeEventListener("resize", handleResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [avatar.state.layout, avatar.setLayout]);
 
   // ── Mobile immersive render ────────────────────────────────────────────────

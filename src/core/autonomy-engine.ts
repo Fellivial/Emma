@@ -1,4 +1,4 @@
-import type { AutonomyTier, Routine, EmmaNotification, NotificationAction } from "@/types/emma";
+import type { Routine, EmmaNotification } from "@/types/emma";
 import { uid } from "@/lib/utils";
 
 /**
@@ -25,7 +25,7 @@ import { uid } from "@/lib/utils";
  */
 export function buildTierNotification(
   routine: Routine,
-  source: "scheduler" | "proactive"
+  _source: "scheduler" | "proactive"
 ): EmmaNotification {
   const tier = routine.autonomyTier;
   const base = {

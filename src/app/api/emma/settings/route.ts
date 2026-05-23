@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import { loadClientConfigForUser, type ClientConfig } from "@/core/client-config";
+import { loadClientConfigForUser } from "@/core/client-config";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
 import { applyVertical, getAllVerticals } from "@/core/verticals/templates";
@@ -26,7 +26,7 @@ export async function GET() {
 
     // Also load usage stats
     const supabase = getServiceSupabase();
-    let usage = { dailyMessages: 0, dailyTokens: 0, monthlyTokens: 0, monthlyCost: 0 };
+    const usage = { dailyMessages: 0, dailyTokens: 0, monthlyTokens: 0, monthlyCost: 0 };
 
     if (supabase) {
       const today = new Date().toISOString().split("T")[0];
@@ -49,7 +49,7 @@ export async function GET() {
       usage.dailyMessages = dailyData?.message_count || 0;
       usage.dailyTokens = dailyData?.token_count || 0;
       usage.monthlyTokens = (monthlyData || []).reduce(
-        (sum: number, r: any) => sum + (r.token_count || 0),
+        (sum: number, r: Record<string, unknown>) => sum + ((r.token_count as number) || 0),
         0
       );
       // Estimate cost: ~$3/M input + ~$15/M output, rough average $6/M
@@ -179,6 +179,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update existing client
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
     if (body.name !== undefined) updates.name = body.name;
     if (body.personaName !== undefined) updates.persona_name = body.personaName;

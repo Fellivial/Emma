@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { frame, source } = await req.json();
+    const { frame } = await req.json();
 
     if (!frame) {
       return NextResponse.json({ error: "No frame provided" }, { status: 400 });

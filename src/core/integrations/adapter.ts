@@ -9,7 +9,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { encrypt, decrypt } from "@/core/security/encryption";
+import { decrypt } from "@/core/security/encryption";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

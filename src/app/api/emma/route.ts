@@ -531,7 +531,14 @@ export async function POST(req: NextRequest) {
       const upstreamBody = await anthropicRes.text().catch(() => "");
       console.error(`[EMMA] Anthropic API error ${status}:`, upstreamBody.slice(0, 500));
       const errMsg = getPersonaErrorMessage(status);
-      return new Response(JSON.stringify({ error: errMsg, status }), {
+      const code =
+        status === 400 ? "BAD_REQUEST" :
+        status === 401 ? "AUTH_ERROR" :
+        status === 429 ? "RATE_LIMIT" :
+        status === 529 ? "OVERLOADED" :
+        status === 504 ? "TIMEOUT" :
+        "UPSTREAM_ERROR";
+      return new Response(JSON.stringify({ error: errMsg, status, code }), {
         status: 502,
         headers: { "Content-Type": "application/json" },
       });

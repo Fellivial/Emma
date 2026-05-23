@@ -66,6 +66,7 @@ export default function McpPage() {
   }, [supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchServers();
   }, [fetchServers]);
 
@@ -175,7 +176,7 @@ export default function McpPage() {
       <div className="mb-8">
         <h1 className="text-xl font-light text-emma-100">MCP Servers</h1>
         <p className="text-xs text-emma-300/50 mt-1">
-          Connect Model Context Protocol servers to extend Emma's tool access.
+          Connect Model Context Protocol servers to extend Emma&apos;s tool access.
         </p>
       </div>
 

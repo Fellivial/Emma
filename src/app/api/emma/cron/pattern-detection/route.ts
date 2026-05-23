@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ processed: 0 });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userIds = [...new Set(userRows.map((r: any) => r.user_id as string))];
   const apiKey = process.env.ANTHROPIC_API_KEY;
 

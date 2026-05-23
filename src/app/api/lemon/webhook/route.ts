@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Parse event ────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let event: any;
   try {
     event = JSON.parse(rawBody);

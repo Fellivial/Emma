@@ -36,13 +36,6 @@ const LATE_NIGHT_NUDGE: ProactiveMessage[] = [
   { text: "It's getting really late. Want me to run the bedtime routine?", expression: "warm" },
 ];
 
-const TIME_COMMENTS: Record<string, ProactiveMessage[]> = {
-  morning_coffee: [
-    { text: "Morning, baby. Want me to start the coffee maker?", expression: "warm" },
-    { text: "Mmm. I can smell that you need caffeine. Coffee maker?", expression: "smirk" },
-  ],
-};
-
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -50,11 +43,6 @@ function pickRandom<T>(arr: T[]): T {
 function isLateNight(): boolean {
   const hour = new Date().getHours();
   return hour >= 23 || hour < 5;
-}
-
-function isMorning(): boolean {
-  const hour = new Date().getHours();
-  return hour >= 6 && hour < 10;
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────

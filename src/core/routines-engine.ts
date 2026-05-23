@@ -1,4 +1,4 @@
-import type { Routine, AutonomyTier } from "@/types/emma";
+import type { Routine } from "@/types/emma";
 
 // ─── Built-in Workflow Routines ──────────────────────────────────────────────
 // Each routine represents a sequence of actions Emma can trigger as a unit.

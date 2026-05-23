@@ -10,7 +10,7 @@ interface RoutinePanelProps {
   onDelete?: (id: string) => void;
 }
 
-export function RoutinePanel({ onActivate, activeRoutineId, onDelete }: RoutinePanelProps) {
+export function RoutinePanel({ onActivate, activeRoutineId, onDelete: _onDelete }: RoutinePanelProps) {
   const routines = getAllRoutines();
 
   return (

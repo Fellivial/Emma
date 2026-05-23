@@ -19,7 +19,6 @@ import * as crypto from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
 const PREFIX = "enc:v1:";
 
 function getKey(): Buffer | null {
@@ -37,6 +36,7 @@ export function encrypt(plaintext: string): string {
   const key = getKey();
   if (!key) {
     // Warn once per process start — not per call (avoid log spam)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!(globalThis as any).__emmaEncryptionWarned) {
       console.warn(
         "[EMMA] WARNING: EMMA_ENCRYPTION_KEY is not set. " +
@@ -44,6 +44,7 @@ export function encrypt(plaintext: string): string {
           "Set this env var before handling real user data. " +
           "Generate with: openssl rand -hex 32"
       );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (globalThis as any).__emmaEncryptionWarned = true;
     }
     return plaintext;
@@ -111,6 +112,7 @@ export function encryptFields<T extends Record<string, unknown>>(obj: T, fields:
   const result = { ...obj };
   for (const field of fields) {
     if (typeof result[field] === "string") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (result as any)[field] = encrypt(result[field] as string);
     }
   }
@@ -124,6 +126,7 @@ export function decryptFields<T extends Record<string, unknown>>(obj: T, fields:
   const result = { ...obj };
   for (const field of fields) {
     if (typeof result[field] === "string") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (result as any)[field] = decrypt(result[field] as string);
     }
   }

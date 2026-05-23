@@ -47,11 +47,6 @@ interface Pattern {
   detected_at: string;
 }
 
-interface TaskSummary {
-  task_id: string;
-  summary: string;
-  generated_at: string;
-}
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -89,6 +84,7 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 
@@ -369,7 +365,7 @@ function InsightsTab({
 
       {patterns.length === 0 && completedWithSummary.length === 0 && (
         <div className="text-center text-sm text-emma-200/20 py-12">
-          Complete a few tasks and I'll start noticing what you do repeatedly.
+          Complete a few tasks and I&apos;ll start noticing what you do repeatedly.
         </div>
       )}
 

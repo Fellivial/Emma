@@ -30,6 +30,7 @@ function BillingPageInner() {
         body: JSON.stringify({ variantId }),
       });
       const data = await res.json();
+      // eslint-disable-next-line react-hooks/immutability
       if (data.url) window.location.href = data.url;
     } catch {}
     setLoading(null);

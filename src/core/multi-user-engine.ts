@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type {
-  UserProfile,
-  UserPreferences,
-  AutonomyTier,
-  DEFAULT_USER_PREFERENCES,
-} from "@/types/emma";
+import type { UserProfile, UserPreferences, AutonomyTier } from "@/types/emma";
 import { uid } from "@/lib/utils";
 
 // ─── Default Users ───────────────────────────────────────────────────────────

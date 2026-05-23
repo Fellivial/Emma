@@ -12,6 +12,8 @@
  */
 
 import * as Sentry from "@sentry/nextjs";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ContentBlock, MessageParam } from "@anthropic-ai/sdk/resources";
 import { MODEL_BRAIN, MODEL_UTILITY } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -45,7 +47,7 @@ export interface AgentTask {
   maxSteps: number;
   triggerType: "cron" | "webhook" | "manual" | "event";
   triggerSource: string;
-  resumeMessages?: Array<{ role: string; content: any }>;
+  resumeMessages?: MessageParam[];
 }
 
 export interface AgentStepResult {
@@ -217,7 +219,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   const memoryFiles = new Map<string, string>();
 
   // Build conversation — seed from persisted transcript if resuming after approval
-  const messages: Array<{ role: string; content: any }> = task.resumeMessages
+  const messages: MessageParam[] = task.resumeMessages
     ? [...task.resumeMessages]
     : [
         {
@@ -259,7 +261,8 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       );
 
       if (!res.ok) {
-        const err = await res.text();
+        const errBody = await res.text().catch(() => "");
+        console.error(`[EMMA Agent] API error ${res.status}:`, errBody.slice(0, 200));
         steps.push({
           step,
           toolName: "error",
@@ -273,13 +276,17 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         break;
       }
 
-      const data = await res.json();
+      const data = await res.json() as {
+        content: ContentBlock[];
+        stop_reason: string | null;
+        usage?: { input_tokens: number; output_tokens: number };
+      };
       const inputTokens = data.usage?.input_tokens || 0;
       const outputTokens = data.usage?.output_tokens || 0;
       totalTokens += inputTokens + outputTokens;
 
       // ── Process response blocks ──────────────────────────────────────
-      const contentBlocks = data.content || [];
+      const contentBlocks: ContentBlock[] = data.content || [];
       let hasToolUse = false;
 
       for (const block of contentBlocks) {
@@ -291,14 +298,14 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         if (block.type === "tool_use") {
           hasToolUse = true;
           const toolName = block.name;
-          const toolInput = block.input || {};
+          const toolInput = (block.input as Record<string, unknown>) || {};
           const toolId = block.id;
 
           // Handle the native memory tool before the registry lookup.
           // Operations run against the in-session scratchpad Map.
           if (toolName === "memory") {
             const memOut = handleMemoryOp(memoryFiles, toolInput);
-            messages.push({ role: "assistant", content: contentBlocks });
+            messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
             messages.push({
               role: "user",
               content: [{ type: "tool_result", tool_use_id: toolId, content: memOut }],
@@ -331,7 +338,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             };
             steps.push(stepResult);
 
-            messages.push({ role: "assistant", content: contentBlocks });
+            messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
             messages.push({
               role: "user",
               content: [
@@ -451,7 +458,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           }
 
           // Detect output_var convention: tool may return { outputVar, output }
-          const outputVar: string | undefined = (toolResult as any).outputVar ?? undefined;
+          const outputVar = toolResult.outputVar;
 
           // Update intra-task scratchpad and persist (fire-and-forget)
           ctx = updateContext(ctx, step, toolName, toolResult.output, outputVar);
@@ -490,7 +497,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           }
 
           // Feed result back to Claude for next iteration
-          messages.push({ role: "assistant", content: contentBlocks });
+          messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
           messages.push({
             role: "user",
             content: [
@@ -522,15 +529,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       // pause_turn: server-side tool loop (web_search etc.) hit the 10-iteration
       // limit — append the partial response and resend to let it continue.
       if (data.stop_reason === "pause_turn") {
-        messages.push({ role: "assistant", content: contentBlocks });
+        messages.push({ role: "assistant", content: contentBlocks as MessageParam["content"] });
         continue;
       }
 
       // If Claude returned only text (no tool use), it's done thinking
       if (!hasToolUse && data.stop_reason === "end_turn") {
         const textOutput = contentBlocks
-          .filter((b: any) => b.type === "text")
-          .map((b: any) => b.text)
+          .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+          .map((b) => b.text)
           .join("");
 
         taskCompleted = true;
@@ -604,7 +611,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 // ─── Approval Gate ───────────────────────────────────────────────────────────
 
 async function createApproval(
-  supabase: any,
+  supabase: SupabaseClient | null,
   task: AgentTask,
   step: number,
   toolName: string,
@@ -649,7 +656,7 @@ async function createApproval(
 
 // ─── Action Logging ──────────────────────────────────────────────────────────
 
-async function logAction(supabase: any, taskId: string, step: AgentStepResult): Promise<void> {
+async function logAction(supabase: SupabaseClient | null, taskId: string, step: AgentStepResult): Promise<void> {
   if (!supabase) return;
 
   await supabase.from("action_log").insert({

@@ -125,7 +125,7 @@ export default function WaitlistPage() {
 
             {result.result === "accepted" ? (
               <>
-                <h2 className="text-lg font-light text-emma-200/80 mb-2">You're in.</h2>
+                <h2 className="text-lg font-light text-emma-200/80 mb-2">You&apos;re in.</h2>
                 <p className="text-sm font-light text-emma-200/40 mb-1">
                   Emma will reach out shortly.
                 </p>
@@ -133,12 +133,12 @@ export default function WaitlistPage() {
               </>
             ) : result.result === "waitlisted" ? (
               <>
-                <h2 className="text-lg font-light text-emma-200/80 mb-2">You're on the list.</h2>
+                <h2 className="text-lg font-light text-emma-200/80 mb-2">You&apos;re on the list.</h2>
                 <p className="text-sm font-light text-emma-200/40 mb-1">
                   Position <span className="text-emma-300 font-medium">#{result.position}</span>
                 </p>
                 <p className="text-xs text-emma-200/20">
-                  We'll contact you personally when a spot opens.
+                  We&apos;ll contact you personally when a spot opens.
                 </p>
               </>
             ) : (
@@ -175,8 +175,8 @@ export default function WaitlistPage() {
             <div className="rounded-2xl border border-surface-border bg-surface p-8">
               <div className="mb-6">
                 <p className="text-sm font-light text-emma-200/50 italic mb-3">
-                  "Hey! I'm Emma. I'm only taking {spots.totalSpots} people right now — want one of
-                  the spots?"
+                  &quot;Hey! I&apos;m Emma. I&apos;m only taking {spots.totalSpots} people right now — want one of
+                  the spots?&quot;
                 </p>
                 <h1 className="text-xl font-light text-emma-200/80 mb-1">
                   {spots.spotsRemaining === 1

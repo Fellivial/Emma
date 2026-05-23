@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from "react";
+import Image from "next/image";
 import { Mic, Eye, Volume2, VolumeX, ArrowUp, Plus, X, FileText } from "lucide-react";
 
 interface AttachedFile {
@@ -270,7 +271,7 @@ function FilePreview({ file, onRemove }: { file: AttachedFile; onRemove: (id: st
   return (
     <div className="relative group flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden border border-surface-border bg-emma-950/60">
       {file.preview ? (
-        <img src={file.preview} alt={file.file.name} className="w-full h-full object-cover" />
+        <Image src={file.preview} alt={file.file.name} fill className="object-cover" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <FileText size={14} className="text-emma-200/30" />

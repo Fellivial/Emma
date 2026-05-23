@@ -251,7 +251,7 @@ export async function checkUsageLimits(
       .gte("date", monthStartStr);
 
     const monthlyTokens = (monthlyData || []).reduce(
-      (sum: number, row: any) => sum + (row.token_count || 0),
+      (sum: number, row: Record<string, unknown>) => sum + ((row.token_count as number) || 0),
       0
     );
 

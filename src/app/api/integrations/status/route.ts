@@ -33,6 +33,7 @@ export async function GET() {
       .eq("user_id", user.id)
       .single();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const integrations: Record<string, any> = {};
 
     for (const svc of ALL_SERVICES) {
@@ -51,6 +52,7 @@ export async function GET() {
         .eq("client_id", membership.client_id);
 
       for (const row of rows || []) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const entry: Record<string, any> = {
           status: row.status,
           accountIdentifier: row.account_identifier,

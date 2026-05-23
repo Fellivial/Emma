@@ -156,7 +156,7 @@ export async function consumeRateLimit(
 // These now return permissive defaults — callers should migrate
 // to the async versions above.
 
-export function checkRateLimitSync(clientId: string): RateLimitResult {
+export function checkRateLimitSync(_clientId: string): RateLimitResult {
   const resetsAt = Date.now() + 3_600_000;
   return {
     allowed: true,

@@ -15,7 +15,7 @@ interface MemoryPanelProps {
 export function MemoryPanel({
   memories,
   loading,
-  onRefresh,
+  onRefresh: _onRefresh,
   onDelete,
   onExtract,
   extracting,

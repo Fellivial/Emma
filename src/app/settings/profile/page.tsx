@@ -106,7 +106,7 @@ export default function ProfilePage() {
         const data = await res.json().catch(() => ({}));
         setSaveError(data.error || `Save failed (${res.status})`);
       }
-    } catch (_e) {
+    } catch {
       setSaveError("Network error — changes not saved");
     }
     setSaving(false);

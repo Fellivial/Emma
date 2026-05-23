@@ -149,7 +149,7 @@ export function trimToFit(
   budgetTokens: number,
   config: ContextConfig = DEFAULT_CONFIG
 ): ApiMessage[] {
-  let current = [...messages];
+  const current = [...messages];
 
   while (estimateTotalTokens(current) > budgetTokens && current.length > config.minMessagesToKeep) {
     // Find the first non-summary message to remove

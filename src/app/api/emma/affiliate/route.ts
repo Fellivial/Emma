@@ -191,7 +191,8 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("affiliates")
         .update({
-          total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
         })
         .eq("id", affiliate.id);
 
@@ -222,6 +223,7 @@ export async function POST(req: NextRequest) {
 
       if (!affiliate) return NextResponse.json({ error: "Invalid affiliate" }, { status: 404 });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const commission = (monthlyRevenue || 0) * ((affiliate as any).commission_rate || 0.2);
 
       await supabase
@@ -233,6 +235,7 @@ export async function POST(req: NextRequest) {
           commission_paid: commission,
           converted_at: new Date().toISOString(),
         })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .eq("affiliate_id", (affiliate as any).id)
         .eq("referred_email", email.toLowerCase());
 
@@ -240,8 +243,10 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("affiliates")
         .update({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           total_earned: ((affiliate as any).total_earned || 0) + commission,
         })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .eq("id", (affiliate as any).id);
 
       return NextResponse.json({ converted: true, commission });

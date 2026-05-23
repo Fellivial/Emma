@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
-import { inferPlanFromBudget, getMRR, PLANS } from "@/core/pricing";
+import { inferPlanFromBudget, getMRR } from "@/core/pricing";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -86,6 +86,7 @@ export async function GET() {
     }
 
     const enrichedClients = (clients || []).map((client) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const memberIds = (client.client_members || []).map((m: any) => m.user_id);
       const usage = usageByClient.get(client.id) || { tokens: 0, messages: 0 };
       const monthlyTokens = usage.tokens;

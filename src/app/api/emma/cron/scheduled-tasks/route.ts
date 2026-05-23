@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         // Check rate limit
         const rateCheck = await checkRateLimit(scheduled.client_id);
         if (!rateCheck.allowed) {
-          console.log(`[Cron:Scheduled] Rate limited for client ${scheduled.client_id}`);
+          console.warn(`[Cron:Scheduled] Rate limited for client ${scheduled.client_id}`);
           skipped++;
           continue;
         }

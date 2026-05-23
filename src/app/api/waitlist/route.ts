@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
 
       if (spotsAvailable > 0) {
         // ── Spot available — immediate access ────────────────────────────
-        const { data: entry, error } = await supabase
+        const { error } = await supabase
           .from("waitlist_v2")
           .insert({
             name: name.trim(),

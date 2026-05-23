@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import type { EmotionState, EmotionLabel, EmotionAnalysis } from "@/types/emma";
+import type { EmotionState, EmotionLabel } from "@/types/emma";
 
 interface UseEmotionReturn {
   currentEmotion: EmotionState | null;

@@ -14,9 +14,11 @@ echo "EMMA_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.local
 # Fill in ANTHROPIC_API_KEY and the three SUPABASE_* vars in .env.local
 # (see Environment Variables below for the full list)
 
-# Run the database schema — paste supabase/schema.sql into the Supabase SQL Editor
-# Dashboard → SQL Editor → New query → paste → Run
-# (Only required the first time. All statements are idempotent — safe to re-run.)
+# Run the database schema (pick one):
+#   Option A — Supabase CLI (fastest):
+npx supabase db push --local   # or: supabase db push (against remote)
+#   Option B — Dashboard: SQL Editor → New query → paste supabase/schema.sql → Run
+# Both are idempotent — safe to re-run on an existing database.
 
 npm run dev  # localhost:3000
 ```
@@ -181,9 +183,31 @@ Tests live in `tests/unit/` and `tests/integration/`. Vitest with `@` path alias
 ```bash
 npx vitest run tests/unit/sanitise.test.ts   # single file
 npm test                                       # all tests
+npm run test:coverage                          # coverage report (v8)
 ```
 
 Coverage targets `src/core/**` and `src/lib/**`.
+
+### Integration tests
+
+`tests/integration/anthropic-beta-headers.test.ts` validates every Anthropic beta header and tool type against the live API. It skips automatically when `ANTHROPIC_API_KEY` is not set — safe to run in CI without the secret, but add the secret to actually gate deployments on header validity.
+
+```bash
+# Run integration tests locally (requires API key)
+ANTHROPIC_API_KEY=sk-ant-... npx vitest run tests/integration/anthropic-beta-headers.test.ts
+```
+
+**CI setup:** Add `ANTHROPIC_API_KEY` as a repository secret (GitHub: Settings → Secrets → Actions). The test will then run on every push and fail fast if a beta header has expired — catching the class of bug that caused the silent 502 regression in May 2026.
+
+### Feature availability
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Chat (streaming) | Available | |
+| Vision, Memory, Emotion | Available | |
+| Web search / web fetch | Available | GA tools, no beta header needed |
+| Document generation (pptx/xlsx/docx) | **Unavailable** | Anthropic changed the `container` API format; re-enabling pending documentation of new format |
+| ElevenLabs TTS | Available | BYOK — users connect their own key via Settings → Integrations |
 
 ## Avatar
 

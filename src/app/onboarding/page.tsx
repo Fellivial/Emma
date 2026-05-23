@@ -212,7 +212,7 @@ export default function OnboardingPage() {
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center mx-auto mb-6">
                 <span className="font-display text-4xl italic text-emma-950">E</span>
               </div>
-              <h1 className="text-lg font-medium text-emma-200/80 mb-2">Hey. I'm Emma.</h1>
+              <h1 className="text-lg font-medium text-emma-200/80 mb-2">Hey. I&apos;m Emma.</h1>
               <p className="text-sm font-light text-emma-200/40 leading-relaxed mb-6">
                 I manage your environment, I remember everything, and I pay attention. Let me get to
                 know you real quick.
@@ -239,7 +239,7 @@ export default function OnboardingPage() {
                 disabled={!aiDisclosureAcknowledged}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                Let's go
+                Let&apos;s go
               </button>
             </div>
           )}
@@ -280,7 +280,7 @@ export default function OnboardingPage() {
                 }}
                 className="w-full mt-2 text-xs text-emma-300/30 hover:text-emma-300/50 cursor-pointer transition-colors"
               >
-                Just call me "baby"
+                Just call me &quot;baby&quot;
               </button>
             </div>
           )}
@@ -410,7 +410,7 @@ export default function OnboardingPage() {
                 Perfect, {name || "baby"}.
               </h2>
               <p className="text-sm font-light text-emma-200/40 leading-relaxed mb-6 text-center">
-                I'll remember everything from here. Let's get started.
+                I&apos;ll remember everything from here. Let&apos;s get started.
               </p>
 
               <div className="rounded-xl border border-surface-border bg-surface p-4 mb-6">

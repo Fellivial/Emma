@@ -14,7 +14,7 @@
  * Enforcement MUST fail open — if DB errors, allow the request.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getPlan, LIMIT_WARNING_MESSAGE, LIMIT_BLOCK_MESSAGE } from "@/core/pricing";
 
 function getSupabase() {
@@ -96,7 +96,7 @@ function getMonthlyStart(anchorDay: number, tz: string): Date {
 
 // ─── Extra Pack Helper ───────────────────────────────────────────────────────
 
-async function getExtraTokens(userId: string, supabase: any): Promise<number> {
+async function getExtraTokens(userId: string, supabase: SupabaseClient): Promise<number> {
   const { data } = await supabase
     .from("extra_packs")
     .select("tokens_remaining")
@@ -104,7 +104,10 @@ async function getExtraTokens(userId: string, supabase: any): Promise<number> {
     .gt("valid_until", new Date().toISOString())
     .gt("tokens_remaining", 0);
 
-  return (data || []).reduce((sum: number, p: any) => sum + (p.tokens_remaining || 0), 0);
+  return (data || []).reduce(
+    (sum: number, p: Record<string, unknown>) => sum + ((p.tokens_remaining as number) || 0),
+    0
+  );
 }
 
 // ─── Main Check ──────────────────────────────────────────────────────────────
@@ -175,7 +178,9 @@ export async function checkUsage(
     ];
 
     const allWindows: WindowUsage[] = windowDefs.map((def) => {
-      const row = (rows || []).find((r: any) => r.window_type === def.type);
+      const row = (rows || []).find(
+      (r: Record<string, unknown>) => r.window_type === def.type
+    );
 
       const tokensUsed = row?.tokens_used || 0;
       const messagesUsed = row?.messages_used || 0;

@@ -44,6 +44,7 @@ export function useVision(): UseVisionReturn {
       navigator.mediaDevices &&
       typeof navigator.mediaDevices.getDisplayMedia === "function"
     ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(true);
     }
     if (typeof document !== "undefined") {

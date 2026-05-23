@@ -121,7 +121,6 @@ function clusterGoals(
   goals: Array<{ goal: string; createdAt: Date }>
 ): Map<string, Array<{ goal: string; createdAt: Date }>> {
   const clusters = new Map<string, Array<{ goal: string; createdAt: Date }>>();
-  const slugMap = new Map<string, string>(); // slug → representative slug
 
   for (const item of goals) {
     const slug = goalSlug(item.goal);
@@ -272,7 +271,7 @@ export async function detectPatterns(
 
   const patterns: DetectedPattern[] = [];
 
-  const goalItems = tasks.map((t: any) => ({
+  const goalItems = tasks.map((t: Record<string, unknown>) => ({
     goal: t.goal as string,
     createdAt: new Date(t.created_at),
   }));
@@ -281,15 +280,6 @@ export async function detectPatterns(
 
   for (const [rep, items] of clusters) {
     if (items.length < 4) continue;
-
-    const dayBuckets = new Set(items.map((i) => i.createdAt.toDateString()));
-    const weekBuckets = new Set(
-      items.map((i) => {
-        const d = i.createdAt;
-        const jan1 = new Date(d.getFullYear(), 0, 1);
-        return `${d.getFullYear()}-W${Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7)}`;
-      })
-    );
 
     // Daily: ≥5 distinct days in last 14 days
     const last14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -341,8 +331,10 @@ export async function detectPatterns(
   // Tool-sequence patterns: find repeated ordered sequences of ≥2 tools
   const sequences = new Map<string, { count: number; exampleGoals: string[] }>();
 
-  for (const task of tasks as any[]) {
-    const actions: string[] = (task.action_log || []).map((a: any) => a.action as string);
+  for (const task of tasks as Record<string, unknown>[]) {
+    const actions: string[] = ((task.action_log as Record<string, unknown>[] | null) || []).map(
+      (a) => a.action as string
+    );
     if (actions.length < 2) continue;
 
     // Use the first 4 tools as the fingerprint

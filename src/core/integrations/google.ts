@@ -104,6 +104,7 @@ async function googleFetch(
 
   let res = await fetch(url, {
     ...options,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     headers: { ...(options.headers as any), Authorization: `Bearer ${token}` },
   });
 
@@ -111,6 +112,7 @@ async function googleFetch(
     token = await refreshGoogleToken(clientId, service);
     res = await fetch(url, {
       ...options,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       headers: { ...(options.headers as any), Authorization: `Bearer ${token}` },
     });
     if (res.status === 401) throw new IntegrationAuthExpiredError(service);
@@ -189,6 +191,7 @@ export class GmailAdapter implements IntegrationAdapter {
 
       await markIntegrationUsed(clientId, "gmail");
       return { success: true, output: `Email sent to ${to}` };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "gmail", err);
@@ -272,6 +275,7 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: `File "${filename}" uploaded to Google Drive`,
         data: { fileId: data.id, name: data.name, mimeType: data.mimeType },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "google_drive", err);
@@ -309,6 +313,7 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const files: any[] = data.files || [];
 
       if (files.length === 0) {
@@ -323,6 +328,7 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: `Found ${files.length} files:\n${formatted}`,
         data: { count: files.length, files },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "google_drive", err);
@@ -354,6 +360,7 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: content.slice(0, 10_000),
         data: { fileId: file_id, truncated: content.length > 10_000 },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "google_drive", err);
@@ -432,6 +439,7 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
         output: `Event created: "${title}" on ${date}`,
         data: { eventId: created.id, htmlLink: created.htmlLink },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "google_calendar", err);
@@ -476,6 +484,7 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const events: any[] = data.items || [];
 
       if (events.length === 0) {
@@ -495,6 +504,7 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
         output: formatted,
         data: { count: events.length, events },
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err instanceof IntegrationAuthExpiredError) throw err;
       await markIntegrationError(clientId, "google_calendar", err);

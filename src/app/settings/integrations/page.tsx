@@ -183,6 +183,7 @@ export default function IntegrationsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatuses();
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
@@ -227,7 +228,7 @@ export default function IntegrationsPage() {
       <div className="mb-6">
         <h1 className="text-xl font-light text-emma-100">Integrations</h1>
         <p className="text-xs text-emma-300/50 mt-1">
-          Connect external services to extend Emma's capabilities.
+          Connect external services to extend Emma&apos;s capabilities.
         </p>
       </div>
 
@@ -586,9 +587,13 @@ function ElevenLabsConnect({
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (status.status === "connected" && step !== "select_voice") setStep("connected");
-    if (status.status !== "connected" && step === "connected") setStep("idle");
-  }, [status.status]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (status.status !== "connected" && step === "connected") {
+      setStep("idle");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status.status]);
 
   const handleConnectKey = async () => {
     if (!apiKey.trim()) return;
@@ -665,7 +670,7 @@ function ElevenLabsConnect({
       {step === "select_voice" && (
         <div>
           <p className="text-[11px] text-emerald-300/70 mb-3">
-            Connected! Choose Emma's voice, or skip to use Rachel (default).
+            Connected! Choose Emma&apos;s voice, or skip to use Rachel (default).
           </p>
           <VoiceSelector
             onSaved={(voiceName) => {

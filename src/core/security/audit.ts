@@ -74,7 +74,7 @@ export async function audit(entry: AuditEntry): Promise<void> {
   const logLine = `[AUDIT] ${entry.action} ${entry.resource}${entry.resourceId ? `:${entry.resourceId}` : ""} by=${entry.userId} reason="${entry.reason}"`;
 
   if (!supabase) {
-    console.log(logLine);
+    console.warn(logLine);
     return;
   }
 
@@ -91,7 +91,7 @@ export async function audit(entry: AuditEntry): Promise<void> {
   } catch (err) {
     // Never throw from audit — log and continue
     console.error("[AUDIT] Write failed:", err);
-    console.log(logLine); // Fallback to console
+    console.warn(logLine); // Fallback to console
   }
 }
 
@@ -102,7 +102,7 @@ export async function auditBatch(entries: AuditEntry[]): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) {
     for (const e of entries) {
-      console.log(`[AUDIT] ${e.action} ${e.resource} by=${e.userId}`);
+      console.warn(`[AUDIT] ${e.action} ${e.resource} by=${e.userId}`);
     }
     return;
   }
