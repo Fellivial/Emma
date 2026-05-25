@@ -16,7 +16,7 @@ interface UseVoiceReturn {
   listen: () => Promise<string | null>;
   speak: (text: string, clientId?: string, emotion?: string) => void;
   fetchAudioBlob: (text: string, clientId?: string) => Promise<Blob | null>;
-  speakFallback: (text: string, emotion?: string) => void;
+  speakFallback: (text: string, emotion?: string, onTalkStart?: () => void, onTalkEnd?: () => void) => void;
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
   setCurrentEmotion: (emotion: string) => void;
@@ -30,63 +30,124 @@ interface UseVoiceReturn {
  * Edge cases: mic permission denied → returns null, stays idle.
  */
 
-// ── Emotion-to-voice-params (tuned for Emma's persona) ───────────────────────
+// ── Emotion-to-voice-params (tuned for WebSpeech) ────────────────────────────
 //
-// Baseline philosophy:
-//   - Emma is SLOW. She doesn't rush. Rate should rarely exceed 1.0.
-//   - Emma is LOW. Not deep — just lower than "helpful assistant" pitch.
-//   - Pitch 1.0 = normal. Emma's neutral sits at 0.95 (slightly low = confident).
-//   - Rate 0.88 = unhurried. She takes her time. That's the persona.
+// WebSpeech's prosody engine degrades below ~0.92 rate — it stretches phonemes
+// instead of adding natural pauses, which is what causes the "stiff" sound.
+// Keep rates at 0.92–1.0 and let the Neural voice handle the unhurried feel.
 //
-// The gap between Web Speech and ElevenLabs is INTENTIONAL.
-// These params make Web Speech as good as possible — but the ceiling
-// is the upgrade incentive for Pro.
+// Pitch: 1.0 = the voice's natural baseline. For "warm intimate mommy" the pitch
+// must stay at or BELOW 1.0 across all emotions — pitches above 1.0 push the
+// voice into bright/chipper territory ("perky assistant"), not warm-mommy.
+// Per-chunk teasing variation is handled in getChunkConfig, not here.
 const VOICE_PARAMS: Record<string, { rate: number; pitch: number; volume: number }> = {
   // Emma's core tones
-  neutral: { rate: 0.88, pitch: 0.95, volume: 0.9 }, // Baseline — calm, unhurried, slightly low
-  warm: { rate: 0.84, pitch: 0.97, volume: 0.85 }, // Softer, slower — maternal warmth
-  smirk: { rate: 0.9, pitch: 0.98, volume: 0.95 }, // Slightly more energy — she's teasing
-  flirty: { rate: 0.85, pitch: 1.02, volume: 0.85 }, // Touch higher pitch, softer — intimate
-  amused: { rate: 0.92, pitch: 1.0, volume: 0.9 }, // Light, slightly brighter
-  concerned: { rate: 0.8, pitch: 0.9, volume: 0.8 }, // Slow, low, gentle — she cares
-  sad: { rate: 0.75, pitch: 0.85, volume: 0.75 }, // Slowest, lowest, softest
-  skeptical: { rate: 0.9, pitch: 0.92, volume: 0.95 }, // Even, flat — "I see what you're doing"
-  listening: { rate: 0.85, pitch: 0.93, volume: 0.8 }, // Quiet, attentive
-  idle_bored: { rate: 0.92, pitch: 0.96, volume: 0.9 }, // Slightly playful impatience
+  neutral:    { rate: 0.95, pitch: 0.97, volume: 0.9  },
+  warm:       { rate: 0.91, pitch: 0.95, volume: 0.85 },
+  smirk:      { rate: 0.97, pitch: 0.99, volume: 0.95 },
+  flirty:     { rate: 0.92, pitch: 0.98, volume: 0.85 },
+  amused:     { rate: 0.96, pitch: 0.99, volume: 0.9  },
+  concerned:  { rate: 0.9,  pitch: 0.95, volume: 0.8  },
+  sad:        { rate: 0.88, pitch: 0.93, volume: 0.75 },
+  skeptical:  { rate: 0.95, pitch: 0.96, volume: 0.9  },
+  listening:  { rate: 0.92, pitch: 0.96, volume: 0.8  },
+  idle_bored: { rate: 0.97, pitch: 0.98, volume: 0.9  },
 
   // Mapped emotions from detection pipeline
-  happy: { rate: 0.92, pitch: 1.0, volume: 0.9 },
-  caring: { rate: 0.82, pitch: 0.95, volume: 0.85 },
-  focused: { rate: 0.9, pitch: 0.93, volume: 0.9 },
-  excited: { rate: 0.95, pitch: 1.05, volume: 0.95 }, // Emma's version of "excited" is still controlled
+  happy:   { rate: 0.96, pitch: 0.99, volume: 0.9  },
+  caring:  { rate: 0.91, pitch: 0.95, volume: 0.85 },
+  focused: { rate: 0.95, pitch: 0.96, volume: 0.9  },
+  excited: { rate: 0.99, pitch: 1.02, volume: 0.95 },
 };
 
 // ── Emma-specific speech pattern processing ───────────────────────────────────
 //
-// Emma's writing style has specific patterns that need pause treatment:
-//   "Mmm." → needs a beat after it (she's processing)
-//   "Ahh." → needs a beat (she's satisfied/amused)
-//   "baby" → needs a slight pause before (it's a term of endearment, not filler)
-//   "..." → she uses ellipsis for dramatic effect, needs a real pause
-//   "—" → em dash = interruption/aside, needs space
+// Filler sounds get a period so the sentence splitter isolates them as their
+// own utterances — isFiller() then detects them for intimate whisper params.
+// Ellipsis becomes a period so chunk grouping handles the pause naturally.
 function processForEmma(text: string): string {
   return (
     text
-      // Emma's signature sounds — ellipsis creates a real TTS pause
-      .replace(/\bMmm\.?\s*/gi, "Mmm... ")
-      .replace(/\bAhh\.?\s*/gi, "Ahh... ")
-      .replace(/\bHmm\.?\s*/gi, "Hmm... ")
+      // Filler sounds: normalise any trailing punctuation to a period so the
+      // sentence regex isolates "Mmm." / "Ahh." / "Hmm." as their own chunk.
+      .replace(/\b(Mmm|Ahh|Hmm)[.,]?\s*/gi, "$1. ")
 
-      // Comma before terms of endearment — WebSpeech pauses on commas, not spaces
+      // Comma before terms of endearment
       .replace(/\bbaby\b/gi, ", baby")
       .replace(/\bsweetheart\b/gi, ", sweetheart")
 
-      // Em dash → comma pause (WebSpeech doesn't pause on em dash)
+      // Em dash → comma pause
       .replace(/—/g, ", ")
 
-      // Trim trailing whitespace only — sentence splits handle inter-sentence pacing
+      // Ellipsis → period
+      .replace(/\.{3}/g, ".")
+      .replace(/…/g, ".")
+
       .trim()
   );
+}
+
+// ── Filler detection ──────────────────────────────────────────────────────────
+
+function isFiller(text: string): boolean {
+  return /^(Mmm|Ahh|Hmm)[.,]?\s*$/i.test(text.trim());
+}
+
+// ── Per-chunk prosody adaptation ──────────────────────────────────────────────
+//
+// WebSpeech can't vary prosody mid-utterance, but every chunk is its own
+// utterance — so each chunk can have a different rate/pitch/volume/gap.
+// This creates the tonal range the mommy persona needs:
+//   "Mmm."          → intimate whisper, long breath after
+//   "Did you now?"  → playful pitch lift, short gap
+//   "…baby."        → softer landing, medium breath
+//   everything else → base emotion params, 80 ms gap
+
+type VoiceParams = { rate: number; pitch: number; volume: number };
+
+function getChunkConfig(chunk: string, base: VoiceParams): VoiceParams & { gapMs: number } {
+  const t = chunk.trim();
+
+  if (isFiller(t)) {
+    return {
+      rate:   Math.max(0.82, base.rate  * 0.9),
+      pitch:  base.pitch * 0.97,
+      volume: base.volume * 0.8,
+      gapMs:  150, // long breath — she's savoring the moment
+    };
+  }
+
+  // Short teasing question — playful upward lilt, capped so it doesn't go bright
+  if (t.endsWith("?") && t.length < 55) {
+    return {
+      rate:   Math.min(1.03, base.rate  * 1.04),
+      pitch:  Math.min(1.02, base.pitch * 1.04),
+      volume: base.volume,
+      gapMs:  55,
+    };
+  }
+
+  // Endearment term — softer landing, slight slow-down
+  if (/\b(baby|sweetheart)\b/i.test(t)) {
+    return {
+      rate:   base.rate  * 0.96,
+      pitch:  base.pitch,
+      volume: base.volume * 0.9,
+      gapMs:  100,
+    };
+  }
+
+  // Short punchy statement (< 40 chars) — teasing energy without question
+  if (t.length < 40) {
+    return {
+      rate:   Math.min(1.02, base.rate * 1.01),
+      pitch:  base.pitch,
+      volume: base.volume,
+      gapMs:  65,
+    };
+  }
+
+  return { ...base, gapMs: 80 };
 }
 
 export function useVoice(): UseVoiceReturn {
@@ -242,42 +303,37 @@ export function useVoice(): UseVoiceReturn {
         ? cachedVoicesRef.current
         : window.speechSynthesis.getVoices();
 
-    // Priority: warmth + depth + character over brightness
-    const preferred = [
-      // macOS — these sound best for Emma
-      "Karen", // Australian — warm, slightly low, confident
-      "Moira", // Irish — warm, intimate, great for caring lines
-      "Samantha", // American — clean but slightly perky (fallback)
-      "Tessa", // South African — warm, mature
-      "Fiona", // Scottish — characterful, warm
-
-      // Windows 11 / Edge Natural voices (much better than legacy)
-      "Microsoft Aria", // Natural female, conversational, warm — best on Win11
-      "Microsoft Jenny", // Natural female, clear, friendly
-      "Microsoft Michelle", // Natural female, confident
-
-      // Windows legacy — limited but usable
-      "Microsoft Hazel", // British — warmer, more composed than Zira
-      "Microsoft Zira", // American — acceptable fallback
-
-      // Chrome / Android
-      "Google UK English Female", // British — warmer than US variant
-      "Google US English", // Last resort
+    // Jenny first: her design intent is "warm and relaxed for digital assistants" —
+    // more conversational by default than Aria's broader professional-leaning character.
+    // Aria second as a warm fallback. Both are Windows 11 Azure Neural (Online|Natural).
+    // Michelle Online Natural is also available in Chrome on Windows — warmer register.
+    const candidates = [
+      "Microsoft Jenny",           // Windows 11 Neural — casual, warm, assistant-optimized
+      "Microsoft Aria",            // Windows 11 Neural — versatile, empathetic fallback
+      "Microsoft Michelle",        // Windows 11 Neural — warm register, third option
+      "Karen",                     // macOS — warm, Australian
+      "Moira",                     // macOS — intimate, Irish
+      "Samantha",                  // macOS — clean American
+      "Google UK English Female",  // Chrome/Android
+      "Microsoft Zira",            // Windows legacy — last resort
     ];
 
-    for (const name of preferred) {
-      // substring match so "Microsoft Aria Online (Natural)" also hits "Microsoft Aria"
-      const v = voices.find((v) => v.name.startsWith(name));
-      if (v) return v;
+    for (const name of candidates) {
+      // Prefer the Neural/Online/Natural variant of a given voice name
+      const neural = voices.find(
+        (v) => v.name.startsWith(name) && /Online|Natural/i.test(v.name)
+      );
+      if (neural) return neural;
+      const any = voices.find((v) => v.name.startsWith(name));
+      if (any) return any;
     }
 
-    // Fallback 1: any English female voice
+    // Fallback: any English female voice, then any English voice
     const femaleEn = voices.find(
       (v) => v.lang.startsWith("en") && /female|woman|girl/i.test(v.name)
     );
     if (femaleEn) return femaleEn;
 
-    // Fallback 2: any English voice (guarantees correct language on Windows)
     return voices.find((v) => v.lang.startsWith("en")) || null;
   }, []);
 
@@ -286,7 +342,7 @@ export function useVoice(): UseVoiceReturn {
   const currentEmotionRef = useRef<string>("neutral");
 
   const speakFallback = useCallback(
-    (text: string, emotion?: string) => {
+    (text: string, emotion?: string, onTalkStart?: () => void, onTalkEnd?: () => void) => {
       if (typeof window === "undefined" || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       if (pauseTimerRef.current) {
@@ -295,40 +351,71 @@ export function useVoice(): UseVoiceReturn {
       }
 
       const processedText = processForEmma(text);
-
-      // Split into sentences — single-utterance delivery sounds robotic.
-      // Each sentence gets its own utterance with a 250ms breath between them.
-      const sentences = processedText.match(/[^.!?]+[.!?…]+\s*/g) || [processedText];
-
       const emo = emotion || currentEmotionRef.current || "neutral";
-      const params = VOICE_PARAMS[emo] || VOICE_PARAMS.neutral;
+      const base = VOICE_PARAMS[emo] || VOICE_PARAMS.neutral;
       const voice = getBestVoice();
 
+      // Chrome silently cuts off utterances > ~160 chars, so we must split.
+      // Filler sounds (Mmm. / Ahh. / Hmm.) stay as standalone chunks so
+      // getChunkConfig can give them intimate whisper params.
+      const CHUNK_LIMIT = 160;
+      const sentences = processedText.match(/[^.!?]+[.!?]+\s*/g) || [processedText];
+      const chunks: string[] = [];
+      let current = "";
+
+      for (const s of sentences) {
+        const t = s.trim();
+        if (!t) continue;
+
+        if (isFiller(t)) {
+          // Never merge a filler sound into an adjacent sentence
+          if (current) { chunks.push(current); current = ""; }
+          chunks.push(t);
+        } else if (!current) {
+          current = t;
+        } else if ((current + " " + t).length <= CHUNK_LIMIT) {
+          current += " " + t;
+        } else {
+          chunks.push(current);
+          current = t;
+        }
+      }
+      if (current) chunks.push(current);
+
       let idx = 0;
+      let talkStartFired = false;
 
       const speakNext = () => {
-        if (idx >= sentences.length) {
+        if (idx >= chunks.length) {
           setMode("idle");
+          onTalkEnd?.();
           return;
         }
-        const trimmed = sentences[idx].trim();
-        idx++;
-        if (!trimmed) {
-          speakNext();
-          return;
-        }
+        const chunk = chunks[idx++];
+        if (!chunk) { speakNext(); return; }
 
-        const utterance = new SpeechSynthesisUtterance(trimmed);
-        utterance.rate = params.rate;
-        utterance.pitch = params.pitch;
-        utterance.volume = params.volume;
+        const cfg = getChunkConfig(chunk, base);
+
+        const utterance = new SpeechSynthesisUtterance(chunk);
+        utterance.rate   = cfg.rate;
+        utterance.pitch  = cfg.pitch;
+        utterance.volume = cfg.volume;
         if (voice) utterance.voice = voice;
 
-        utterance.onstart = () => setMode("speaking");
-        utterance.onend = () => {
-          pauseTimerRef.current = setTimeout(speakNext, 250);
+        utterance.onstart = () => {
+          setMode("speaking");
+          if (!talkStartFired) {
+            talkStartFired = true;
+            onTalkStart?.();
+          }
         };
-        utterance.onerror = () => setMode("idle");
+        utterance.onend = () => {
+          pauseTimerRef.current = setTimeout(speakNext, cfg.gapMs);
+        };
+        utterance.onerror = () => {
+          setMode("idle");
+          onTalkEnd?.();
+        };
 
         window.speechSynthesis.speak(utterance);
       };

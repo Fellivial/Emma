@@ -1,7 +1,22 @@
 import type { Metadata } from "next";
+import { Outfit, Cormorant_Garamond } from "next/font/google";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-// Import global styles
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["200", "300", "400", "500", "600"],
+  variable: "--font-outfit",
+  display: "swap",
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "EMMA",
@@ -10,17 +25,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={`dark ${outfit.variable} ${cormorant.variable}`}>
       <head>
+        {/* defer lets HTML render before the cubism runtime executes */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/live2d/live2dcubismcore.min.js" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap"
-          rel="stylesheet"
-        />
+        <script src="/live2d/live2dcubismcore.min.js" defer />
       </head>
       <body className="antialiased">
         <ErrorBoundary>{children}</ErrorBoundary>
