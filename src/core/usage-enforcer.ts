@@ -1,16 +1,16 @@
 /**
- * Usage Enforcer — multi-window metering for Emma.
+ * Usage Enforcer — 5-hour rolling window metering for Emma.
  *
- * Checks three windows (daily/weekly/monthly) before every brain call.
+ * Checks a single 5-hour UTC-aligned window before every brain call.
  * Returns enforcement status — caller decides response.
  *
  * Rules:
  *   Enterprise → skip entirely (unlimited)
- *   Any window >= 100% → hard block (LIMIT_BLOCK_MESSAGE)
- *   Any window >= 80% and warning not yet sent → warning (LIMIT_WARNING_MESSAGE)
+ *   Window >= 100% → hard block (LIMIT_BLOCK_MESSAGE)
+ *   Window >= 80% and warning not yet sent → warning (LIMIT_WARNING_MESSAGE)
  *   Otherwise → ok
  *
- * Extra Response packs stack on top of monthly token limit.
+ * Extra Response packs stack on top of the per-window token limit.
  * Enforcement MUST fail open — if DB errors, allow the request.
  */
 
@@ -51,47 +51,13 @@ export interface EnforcementResult {
   upgradeUrl?: string;
 }
 
-// ─── Window Boundary Helpers ─────────────────────────────────────────────────
+// ─── Window Boundary Helper ──────────────────────────────────────────────────
 
-function getDailyStart(tz: string): Date {
-  try {
-    const now = new Date();
-    const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const dateStr = fmt.format(now); // "2026-04-25"
-    return new Date(dateStr + "T00:00:00Z");
-  } catch {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    return d;
-  }
-}
-
-function getWeeklyStart(tz: string): Date {
-  const daily = getDailyStart(tz);
-  const dayOfWeek = daily.getUTCDay(); // 0=Sun, 1=Mon
-  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  daily.setUTCDate(daily.getUTCDate() - mondayOffset);
-  return daily;
-}
-
-function getMonthlyStart(anchorDay: number, tz: string): Date {
-  const daily = getDailyStart(tz);
-  const currentDay = daily.getUTCDate();
-
-  if (currentDay >= anchorDay) {
-    daily.setUTCDate(anchorDay);
-  } else {
-    // Go to previous month
-    daily.setUTCMonth(daily.getUTCMonth() - 1);
-    const lastDay = new Date(daily.getUTCFullYear(), daily.getUTCMonth() + 1, 0).getUTCDate();
-    daily.setUTCDate(Math.min(anchorDay, lastDay));
-  }
-  return daily;
+// Returns the start of the current 5-hour UTC-aligned block.
+// Blocks: 00:00–04:59, 05:00–09:59, 10:00–14:59, 15:00–19:59, 20:00–24:59 UTC.
+function get5HourStart(): Date {
+  const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+  return new Date(Math.floor(Date.now() / FIVE_HOURS_MS) * FIVE_HOURS_MS);
 }
 
 // ─── Extra Pack Helper ───────────────────────────────────────────────────────
@@ -115,8 +81,8 @@ async function getExtraTokens(userId: string, supabase: SupabaseClient): Promise
 export async function checkUsage(
   userId: string | null,
   planId: string,
-  userTimezone: string = "UTC",
-  billingAnchorDay: number = 1,
+  _userTimezone: string = "UTC",
+  _billingAnchorDay: number = 1,
   clientId?: string
 ): Promise<EnforcementResult> {
   const plan = getPlan(planId);
@@ -132,25 +98,19 @@ export async function checkUsage(
   const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
 
   try {
-    const dailyStart = getDailyStart(userTimezone);
-    const weeklyStart = getWeeklyStart(userTimezone);
-    const monthlyStart = getMonthlyStart(billingAnchorDay, userTimezone);
+    const windowStart = get5HourStart();
 
-    // Load all three windows in one query
+    // Load the single 5-hour window
     const { data: rows } = await supabase
       .from("usage_windows")
       .select("window_type, window_start, tokens_used, messages_used, warning_sent")
       .eq("user_id", effectiveId)
-      .or(
-        `and(window_type.eq.daily,window_start.eq.${dailyStart.toISOString()}),` +
-          `and(window_type.eq.weekly,window_start.eq.${weeklyStart.toISOString()}),` +
-          `and(window_type.eq.monthly,window_start.eq.${monthlyStart.toISOString()})`
-      );
+      .eq("window_type", "daily")
+      .eq("window_start", windowStart.toISOString());
 
-    // Get extra pack tokens (stacks on monthly limit; not applicable for anonymous client metering)
+    // Extra pack tokens stack on the per-window token limit
     const extraTokens = clientId ? 0 : await getExtraTokens(effectiveId, supabase);
 
-    // Build window usage objects
     const windowDefs: Array<{
       type: "daily" | "weekly" | "monthly";
       start: Date;
@@ -159,21 +119,9 @@ export async function checkUsage(
     }> = [
       {
         type: "daily",
-        start: dailyStart,
-        tokenLimit: plan.tokenBudgetDaily,
+        start: windowStart,
+        tokenLimit: plan.tokenBudgetDaily + extraTokens,
         messageLimit: plan.messageLimitDaily,
-      },
-      {
-        type: "weekly",
-        start: weeklyStart,
-        tokenLimit: plan.tokenBudgetWeekly,
-        messageLimit: plan.messageLimitWeekly,
-      },
-      {
-        type: "monthly",
-        start: monthlyStart,
-        tokenLimit: plan.tokenBudgetMonthly + extraTokens,
-        messageLimit: plan.messageLimitDaily * 30,
       },
     ];
 
@@ -242,8 +190,8 @@ export async function recordUsage(
   inputTokens: number,
   outputTokens: number,
   planId: string,
-  userTimezone: string = "UTC",
-  billingAnchorDay: number = 1,
+  _userTimezone: string = "UTC",
+  _billingAnchorDay: number = 1,
   clientId?: string
 ): Promise<void> {
   const supabase = getSupabase();
@@ -251,44 +199,33 @@ export async function recordUsage(
 
   const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
   const total = BigInt(inputTokens + outputTokens);
-  const dailyStart = getDailyStart(userTimezone);
-  const weeklyStart = getWeeklyStart(userTimezone);
-  const monthlyStart = getMonthlyStart(billingAnchorDay, userTimezone);
+  const windowStart = get5HourStart();
 
-  const windows: Array<{ type: string; start: Date }> = [
-    { type: "daily", start: dailyStart },
-    { type: "weekly", start: weeklyStart },
-    { type: "monthly", start: monthlyStart },
-  ];
-
-  for (const w of windows) {
-    try {
-      await supabase.rpc("increment_usage_window", {
-        p_user_id: effectiveId,
-        p_window_type: w.type,
-        p_window_start: w.start.toISOString(),
-        p_tokens: Number(total),
-        p_messages: 1,
-      });
-    } catch (err) {
-      console.error(`[UsageEnforcer] Failed to increment ${w.type}:`, err);
-    }
+  try {
+    await supabase.rpc("increment_usage_window", {
+      p_user_id: effectiveId,
+      p_window_type: "daily",
+      p_window_start: windowStart.toISOString(),
+      p_tokens: Number(total),
+      p_messages: 1,
+    });
+  } catch (err) {
+    console.error("[UsageEnforcer] Failed to increment window:", err);
   }
 
-  // Deduct from extra packs if monthly plan tokens exhausted (not applicable for anonymous client metering)
+  // Deduct from extra packs if window token limit exhausted
   try {
     const plan = getPlan(planId);
     if (!clientId && plan && plan.tokenBudgetMonthly < 999_999_999) {
-      const { data: monthRow } = await supabase
+      const { data: windowRow } = await supabase
         .from("usage_windows")
         .select("tokens_used")
         .eq("user_id", effectiveId)
-        .eq("window_type", "monthly")
-        .eq("window_start", monthlyStart.toISOString())
+        .eq("window_type", "daily")
+        .eq("window_start", windowStart.toISOString())
         .single();
 
-      if (monthRow && monthRow.tokens_used > plan.tokenBudgetMonthly) {
-        // Deduct from oldest valid pack
+      if (windowRow && windowRow.tokens_used > plan.tokenBudgetDaily) {
         const { data: packs } = await supabase
           .from("extra_packs")
           .select("id, tokens_remaining")
@@ -302,9 +239,7 @@ export async function recordUsage(
           const deduct = Math.min(packs[0].tokens_remaining, Number(total));
           await supabase
             .from("extra_packs")
-            .update({
-              tokens_remaining: Math.max(0, packs[0].tokens_remaining - deduct),
-            })
+            .update({ tokens_remaining: Math.max(0, packs[0].tokens_remaining - deduct) })
             .eq("id", packs[0].id);
         }
       }
