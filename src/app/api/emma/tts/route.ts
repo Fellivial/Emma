@@ -13,42 +13,50 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { text, voiceId, clientId } = await req.json();
+    const { text, voiceId } = await req.json();
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    // ── Resolve ElevenLabs API key ──────────────────────────────────────
-    // Priority:
-    //   1. User's BYOK key from client_integrations (encrypted)
-    //   2. No key → 501 → client uses Web Speech
+    // ── Resolve ElevenLabs API key via session user ─────────────────────
+    // Look up the client's ElevenLabs integration using the authenticated session.
+    // No clientId needed from the request body — session cookie is sufficient.
 
     let apiKey: string | null = null;
     let storedVoiceId: string | null = null;
+    let resolvedClientId: string | null = null;
 
-    if (clientId) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-      if (supabaseUrl && supabaseKey) {
-        const supabase = createClient(supabaseUrl, supabaseKey);
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { data: membership } = await supabase
+        .from("client_members")
+        .select("client_id")
+        .eq("user_id", sessionUser.id)
+        .single();
+
+      if (membership?.client_id) {
+        resolvedClientId = membership.client_id;
+
         const { data } = await supabase
           .from("client_integrations")
-          .select("access_token, status, voice_id")
-          .eq("client_id", clientId)
+          .select("access_token, status, metadata")
+          .eq("client_id", resolvedClientId)
           .eq("service", "elevenlabs")
           .eq("status", "connected")
           .single();
 
         if (data?.access_token) {
-          try {
-            apiKey = decrypt(data.access_token);
-          } catch {
-            apiKey = null;
+          const decrypted = decrypt(data.access_token);
+          if (decrypted && !decrypted.startsWith("[")) {
+            apiKey = decrypted;
           }
         }
-        storedVoiceId = data?.voice_id || null;
+        storedVoiceId = data?.metadata?.voiceId || null;
       }
     }
 
@@ -80,22 +88,17 @@ export async function POST(req: NextRequest) {
     });
 
     if (res.status === 401) {
-      // Key is invalid — update integration status
-      if (clientId) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (supabaseUrl && supabaseKey) {
-          const supabase = createClient(supabaseUrl, supabaseKey);
-          await supabase
-            .from("client_integrations")
-            .update({
-              status: "auth_expired",
-              last_error: "API key invalid or revoked",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("client_id", clientId)
-            .eq("service", "elevenlabs");
-        }
+      if (resolvedClientId && supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        await supabase
+          .from("client_integrations")
+          .update({
+            status: "auth_expired",
+            last_error: "API key invalid or revoked",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("client_id", resolvedClientId)
+          .eq("service", "elevenlabs");
       }
       return new NextResponse(null, { status: 204 });
     }
