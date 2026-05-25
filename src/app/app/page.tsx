@@ -517,6 +517,10 @@ export default function EmmaPage() {
 
             // ── Final event: commands, expression, full text ─────────────
             onDone: async (event: StreamDoneEvent) => {
+              // Kick off TTS immediately — runs in parallel with all state updates below
+              const audioBlobPromise =
+                ttsEnabled && event.text ? voice.fetchAudioBlob(event.text) : Promise.resolve(null);
+
               // Finalize message with parsed data
               setMessages((prev) =>
                 prev.map((m) =>
@@ -600,9 +604,9 @@ export default function EmmaPage() {
                 avatar.setExpression(event.expression);
               }
 
-              // TTS + lip sync
+              // TTS + lip sync — audioBlob was already in-flight from top of onDone
               if (ttsEnabled && event.text) {
-                const audioBlob = await voice.fetchAudioBlob(event.text);
+                const audioBlob = await audioBlobPromise;
                 if (audioBlob) {
                   avatar.startTalkingWithAudio(audioBlob);
                 } else {

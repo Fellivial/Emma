@@ -47,6 +47,14 @@ export async function POST(req: NextRequest) {
     if (validationRes.status === 401) {
       const body = await validationRes.text().catch(() => "");
       console.error("[elevenlabs] key rejected by ElevenLabs (401):", body);
+      let parsed: { detail?: { status?: string } } = {};
+      try { parsed = JSON.parse(body); } catch { /* non-JSON body */ }
+      if (parsed?.detail?.status === "missing_permissions") {
+        return NextResponse.json(
+          { error: "API key is missing required permissions — create a new key with full access at elevenlabs.io/app/settings/api-keys" },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { error: "API key is invalid — check your ElevenLabs dashboard" },
         { status: 400 }

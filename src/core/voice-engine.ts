@@ -369,15 +369,11 @@ export function useVoice(): UseVoiceReturn {
   );
 
   const speak = useCallback(
-    (text: string, clientId?: string, emotion?: string) => {
-      // Always try ElevenLabs if clientId provided — server 501s if no key configured
-      if (clientId) {
-        speakElevenLabs(text, clientId).then((ok) => {
-          if (!ok) speakFallback(text, emotion);
-        });
-        return;
-      }
-      speakFallback(text, emotion);
+    (text: string, _clientId?: string, emotion?: string) => {
+      // Always try ElevenLabs first — server returns 204 if no key configured
+      speakElevenLabs(text).then((ok) => {
+        if (!ok) speakFallback(text, emotion);
+      });
     },
     [speakElevenLabs, speakFallback]
   );
