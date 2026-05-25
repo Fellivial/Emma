@@ -6,6 +6,11 @@ import { getUser } from "@/lib/supabase/server";
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
+// Short-lived cache so repeated TTS calls don't re-query Supabase on every message.
+interface TtsCacheEntry { apiKey: string; voiceId: string | null; clientId: string; ts: number }
+const ttsCache = new Map<string, TtsCacheEntry>();
+const TTS_CACHE_TTL = 60_000; // 60 s
+
 export async function POST(req: NextRequest) {
   const sessionUser = await getUser();
   if (!sessionUser) {
@@ -30,7 +35,13 @@ export async function POST(req: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (supabaseUrl && supabaseKey) {
+    // Check cache first to avoid repeated Supabase round-trips on every TTS call
+    const cached = ttsCache.get(sessionUser.id);
+    if (cached && Date.now() - cached.ts < TTS_CACHE_TTL) {
+      apiKey = cached.apiKey;
+      storedVoiceId = cached.voiceId;
+      resolvedClientId = cached.clientId;
+    } else if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       const { data: membership } = await supabase
@@ -54,9 +65,10 @@ export async function POST(req: NextRequest) {
           const decrypted = decrypt(data.access_token);
           if (decrypted && !decrypted.startsWith("[")) {
             apiKey = decrypted;
+            storedVoiceId = (data?.metadata?.voiceId as string | null) || null;
+            ttsCache.set(sessionUser.id, { apiKey: decrypted, voiceId: storedVoiceId, clientId: resolvedClientId!, ts: Date.now() });
           }
         }
-        storedVoiceId = data?.metadata?.voiceId || null;
       }
     }
 
@@ -88,6 +100,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (res.status === 401) {
+      ttsCache.delete(sessionUser.id);
       if (resolvedClientId && supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         await supabase
