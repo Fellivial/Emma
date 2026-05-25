@@ -115,7 +115,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     name: "Free",
     price: "$0",
-    period: "300K tokens/mo · Forever",
+    period: "Forever free",
     features: ["Chat interface", "Web Speech TTS", "Basic Live2D avatar"],
     cta: "Get Started",
     ctaHref: "/register",
@@ -123,7 +123,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     name: "Starter",
     price: "$29/mo",
-    period: "1M tokens/month",
+    period: "Up to 3× free tier",
     features: [
       "Chat + Persistent Memory",
       "Vision + Emotion Detection",
@@ -138,7 +138,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     name: "Pro",
     price: "$79/mo",
-    period: "2M tokens/month",
+    period: "Up to 7× free tier",
     features: [
       "Everything in Starter",
       "Autonomous agent (50 actions/hr)",
@@ -154,7 +154,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     name: "Enterprise",
     price: "Contact",
-    period: "Unlimited · SLA",
+    period: "Unlimited",
     features: [
       "Everything in Pro",
       "Unlimited autonomous actions",
