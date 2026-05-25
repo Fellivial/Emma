@@ -24,6 +24,7 @@ interface UsageBlocked {
 interface ChatPanelProps {
   messages: ChatMessageType[];
   loading: boolean;
+  historyLoading?: boolean;
   onSend: (text: string) => void;
   onVoice: () => void;
   voiceSupported: boolean;
@@ -47,6 +48,7 @@ interface ChatPanelProps {
 export function ChatPanel({
   messages,
   loading,
+  historyLoading,
   onSend,
   onVoice,
   voiceSupported,
@@ -84,6 +86,16 @@ export function ChatPanel({
         ref={scrollContainerRef}
         className="emma-chat-scroll flex-1 overflow-auto px-5 py-4 flex flex-col gap-3"
       >
+        {historyLoading && messages.length === 0 && (
+          <div className="flex items-end gap-2 animate-fade-in">
+            <div className="w-7 h-7 rounded-full shrink-0 bg-gradient-to-br from-emma-300/30 to-emma-400/30" />
+            <div className="flex flex-col gap-1.5">
+              <div className="h-3.5 w-48 rounded-full bg-emma-200/6 animate-pulse" />
+              <div className="h-3.5 w-36 rounded-full bg-emma-200/4 animate-pulse" />
+              <div className="h-3.5 w-24 rounded-full bg-emma-200/3 animate-pulse" />
+            </div>
+          </div>
+        )}
         {messages
           .filter((msg) => msg.role === "user" || !!msg.display)
           .map((msg) => (

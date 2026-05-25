@@ -210,18 +210,11 @@ export default function EmmaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Context-Aware Greeting (or history restore) ────────────────────────────
+  // ── Eager greeting — show immediately, don't wait for history ───────────────
   useEffect(() => {
     if (initialized) return;
-    if (historyReady === null) return; // wait for history check
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
-
-    if (historyReady.length > 0) {
-      setMessages(historyReady);
-      setApiMessages(historyReady.map((m) => ({ role: m.role, content: m.content })));
-      return;
-    }
 
     const greeting = generateGreeting(persona, memories);
     const greetingExpression = getGreetingExpression(persona);
@@ -237,11 +230,17 @@ export default function EmmaPage() {
     setMessages([greetingMsg]);
     setApiMessages([{ role: "assistant", content: greeting }]);
 
-    // Set avatar expression for greeting
     setTimeout(() => {
       avatar.setExpression(greetingExpression as AvatarExpression);
     }, 500);
-  }, [initialized, persona, memories, avatar, historyReady]);
+  }, [initialized, persona, memories, avatar]);
+
+  // ── When history loads with messages, replace the greeting ───────────────────
+  useEffect(() => {
+    if (historyReady === null || historyReady.length === 0) return;
+    setMessages(historyReady);
+    setApiMessages(historyReady.map((m) => ({ role: m.role, content: m.content })));
+  }, [historyReady]);
 
   // ── Memory extraction ──────────────────────────────────────────────────────
   const extractMemories = useCallback(async () => {
@@ -905,6 +904,7 @@ export default function EmmaPage() {
             <ChatPanel
               messages={messages}
               loading={loading}
+              historyLoading={historyReady === null}
               onSend={sendMessage}
               onVoice={handleVoice}
               voiceSupported={voice.supported}

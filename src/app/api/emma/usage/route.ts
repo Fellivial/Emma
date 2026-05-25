@@ -45,23 +45,23 @@ export async function GET() {
     const planId = (membership as any)?.clients?.plan_id || "free";
     const plan = getPlan(planId);
 
-    // Check usage (reuses enforcer logic for consistency)
-    const result = await checkUsage(user.id, planId);
+    // Run usage check and pack detail query in parallel — both are independent of each other
+    const [result, { data: packs }] = await Promise.all([
+      checkUsage(user.id, planId),
+      supabase
+        .from("extra_packs")
+        .select("id, tokens_granted, tokens_remaining, valid_until")
+        .eq("user_id", user.id)
+        .gt("valid_until", new Date().toISOString())
+        .gt("tokens_remaining", 0)
+        .order("created_at", { ascending: true }),
+    ]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const windowMap: Record<string, any> = {};
     for (const w of result.allWindows) {
       windowMap[w.windowType] = w;
     }
-
-    // Get extra packs
-    const { data: packs } = await supabase
-      .from("extra_packs")
-      .select("id, tokens_granted, tokens_remaining, valid_until")
-      .eq("user_id", user.id)
-      .gt("valid_until", new Date().toISOString())
-      .gt("tokens_remaining", 0)
-      .order("created_at", { ascending: true });
 
     const totalExtra = (packs || []).reduce(
       (s: number, p: Record<string, unknown>) => s + ((p.tokens_remaining as number) || 0),
