@@ -610,8 +610,14 @@ export default function EmmaPage() {
                 if (audioBlob) {
                   avatar.startTalkingWithAudio(audioBlob);
                 } else {
-                  avatar.startTalking(event.text);
-                  voice.speakFallback(event.text, event.expression ?? undefined);
+                  // WebSpeech: drive avatar from actual utterance start/end events
+                  // so mouth only moves when speech is actually playing.
+                  voice.speakFallback(
+                    event.text,
+                    event.expression ?? undefined,
+                    () => avatar.startTalkingContinuous(),
+                    () => avatar.stopTalking()
+                  );
                 }
               } else if (event.text) {
                 avatar.startTalking(event.text);

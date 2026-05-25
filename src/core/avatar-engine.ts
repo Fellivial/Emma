@@ -76,6 +76,7 @@ interface UseAvatarReturn {
   init: () => Promise<boolean>;
   setExpression: (expr: AvatarExpression) => void;
   startTalking: (text: string) => void;
+  startTalkingContinuous: () => void;
   startTalkingWithAudio: (audioBlob: Blob) => void;
   stopTalking: () => void;
   setListening: () => void;
@@ -512,8 +513,8 @@ export function useAvatar(): UseAvatarReturn {
         lipSyncFrameRef.current = requestAnimationFrame(animate);
       };
 
-      audio.onplay = () => {
-        if (ctx.state === "suspended") ctx.resume();
+      audio.onplay = async () => {
+        if (ctx.state === "suspended") await ctx.resume();
         animate();
       };
 
@@ -546,6 +547,34 @@ export function useAvatar(): UseAvatarReturn {
     },
     [resetIdleTimer]
   );
+
+  // ── Continuous Lip Sync (WebSpeech — driven by utterance events, not timer) ──
+
+  const startTalkingContinuous = useCallback(() => {
+    resetIdleTimer();
+    setState((s) => ({ ...s, talking: true }));
+
+    if (modelRef.current) {
+      try {
+        modelRef.current.motion("Talk", 0, 2);
+      } catch {}
+    }
+
+    const animate = () => {
+      if (modelRef.current) {
+        const phase = (Date.now() / 150) * Math.PI;
+        const mouthOpen = Math.abs(Math.sin(phase)) * 0.7;
+        const core = modelRef.current?.internalModel?.coreModel;
+        if (core) {
+          try {
+            core.setParameterValueById("ParamMouthOpenY", mouthOpen);
+          } catch {}
+        }
+      }
+      lipSyncFrameRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+  }, [resetIdleTimer]);
 
   // ── Text-Based Lip Sync (fallback) ─────────────────────────────────────────
 
@@ -666,6 +695,7 @@ export function useAvatar(): UseAvatarReturn {
     init,
     setExpression,
     startTalking,
+    startTalkingContinuous,
     startTalkingWithAudio,
     stopTalking,
     setListening,
