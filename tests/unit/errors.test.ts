@@ -29,7 +29,7 @@ describe("fetchWithRetry", () => {
 
       await expect(
         fetchWithRetry(
-          "https://api.anthropic.com/v1/messages",
+          "https://openrouter.ai/api/v1/chat/completions",
           { method: "POST" },
           { maxRetries: 0, connectionTimeoutMs: 50 }
         )
@@ -49,7 +49,7 @@ describe("fetchWithRetry", () => {
       vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse);
 
       const result = await fetchWithRetry(
-        "https://api.anthropic.com/v1/messages",
+        "https://openrouter.ai/api/v1/chat/completions",
         { method: "POST" },
         { maxRetries: 0, connectionTimeoutMs: 5000 }
       );
@@ -68,7 +68,7 @@ describe("fetchWithRetry", () => {
 
       await expect(
         fetchWithRetry(
-          "https://api.anthropic.com/v1/messages",
+          "https://openrouter.ai/api/v1/chat/completions",
           { method: "POST" },
           { maxRetries: 2, connectionTimeoutMs: 50 }
         )

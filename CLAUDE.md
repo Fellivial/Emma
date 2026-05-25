@@ -28,7 +28,7 @@ Emma is a Next.js AI workspace agent. The app shell lives at `src/app/app/page.t
 Every user message goes through:
 1. `sanitiseInput()` (`src/core/security/sanitise.ts`) — injection detection, length limits
 2. `checkUsage()` (`src/core/usage-enforcer.ts`) — multi-window (daily/weekly/monthly) metering
-3. `POST /api/emma` (`src/app/api/emma/route.ts`) — streaming SSE brain route to Anthropic
+3. `POST /api/emma` (`src/app/api/emma/route.ts`) — streaming SSE brain route via OpenRouter
 4. `parseEmmaResponse()` (`src/core/command-parser.ts`) — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
 
 The brain route streams SSE deltas to the client. After the full response is collected, it appends a `{"type":"done", ...}` event with the parsed expression and routineId. Client-side streaming is handled by `src/lib/stream-client.ts`.
@@ -40,7 +40,7 @@ All engines are React hooks or plain modules in `src/core/`:
 | Engine | Purpose |
 |---|---|
 | `personas.ts` | Builds the full system prompt: persona + memories + vision context + emotion state + routines |
-| `models.ts` | Single source of truth for Anthropic model IDs (brain=Sonnet, utility=Haiku) |
+| `models.ts` | Single source of truth for OpenRouter model IDs (brain/utility/vision) |
 | `memory-engine.ts` / `memory-db.ts` | In-memory store + Supabase persistence with AES-256-GCM field encryption |
 | `client-config.ts` | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG` |
 | `usage-enforcer.ts` | Multi-window token/message metering; must fail-open (never block on DB errors) |
@@ -70,7 +70,7 @@ All routes are under `src/app/api/`:
 
 ### Auth & Middleware
 
-`src/middleware.ts` gates all routes via Supabase SSR. Public paths: `/login`, `/auth/callback`, `/landing`, `/api/waitlist`, `/api/emma/webhook`, `/waitlist`, `/api/emma/unsubscribe`. API routes authenticate inside each handler. When `NEXT_PUBLIC_SUPABASE_URL` is not set (local dev), middleware is a no-op.
+`src/proxy.ts` gates all routes via Supabase SSR. Public paths: `/login`, `/auth/callback`, `/landing`, `/api/waitlist`, `/api/emma/webhook`, `/waitlist`, `/api/emma/unsubscribe`. API routes authenticate inside each handler. When `NEXT_PUBLIC_SUPABASE_URL` is not set (local dev), middleware is a no-op.
 
 ### Personas
 
@@ -84,7 +84,7 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Required — brain, vision, memory, emotion |
+| `OPENROUTER_API_KEY` | Required — all LLM calls (brain, vision, memory, emotion) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Required for auth/DB (skip for local dev) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Required for client-side auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | Required for server-side DB operations |

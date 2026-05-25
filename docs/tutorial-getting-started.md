@@ -5,7 +5,7 @@ You'll build a working Emma instance — full streaming chat with an animated av
 ## What you'll need
 
 - Node.js 20+ (`node --version` to check)
-- An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+- An OpenRouter API key from [openrouter.ai/keys](https://openrouter.ai/keys)
 - For the full setup: a Supabase project (free tier works)
 
 ---
@@ -23,7 +23,7 @@ npm install
 ## Step 2: Set your API key
 
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
+echo "OPENROUTER_API_KEY=sk-or-..." > .env.local
 ```
 
 That's the only required variable. Everything else degrades gracefully.
@@ -39,9 +39,9 @@ npm run dev
 Open [localhost:3000](http://localhost:3000). You'll see Emma's chat interface immediately.
 
 **What you just got:**
-- Streaming chat via Claude Sonnet 4.6
+- Streaming chat via OpenRouter (Claude Sonnet by default)
 - Live2D avatar with 10 expressions reacting to every response
-- Web search and web fetch (Anthropic-hosted, no extra key)
+- Web search and web fetch (no extra key)
 - In-persona greeting on first load
 
 Auth is disabled (no Supabase URL set). Memory won't persist across reloads. That's expected.
@@ -76,10 +76,10 @@ Go to [supabase.com](https://supabase.com), create a project, and collect:
 cp .env.local.example .env.local
 ```
 
-Open `.env.local` and fill in the three Supabase variables plus your Anthropic key:
+Open `.env.local` and fill in the three Supabase variables plus your OpenRouter key:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+OPENROUTER_API_KEY=sk-or-...
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
 SUPABASE_SERVICE_ROLE_KEY=eyJxxx...
@@ -135,10 +135,10 @@ Visit `/login`. Create an account. Emma will now remember facts about you across
 ## What you built
 
 A running Emma instance with:
-- Streaming AI chat powered by Claude Sonnet 4.6
+- Streaming AI chat via OpenRouter (Claude Sonnet by default)
 - Live2D avatar with expression sync
 - Persistent memory, user auth, and chat history (full setup only)
-- Anthropic-hosted web search with no extra key
+- Web search with no extra key
 
 **Next steps:**
 - [Connect integrations](howto-connect-integrations.md) to let Emma take real actions (send email, check calendar, post to Slack)

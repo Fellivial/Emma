@@ -30,7 +30,7 @@ Main chat endpoint. Streams SSE deltas to the client.
 - `delta` — partial text chunk
 - `tool_start` — tool call beginning (name, inputs)
 - `tool_result` — tool execution result
-- `server_tool_use` — Anthropic-hosted tool (web_search, web_fetch)
+- `server_tool_use` — hosted tool result (web_search, web_fetch)
 - `done` — final event with `{ text, expression, routineId, refused, contextWindowExceeded, tokensUsed }`
 
 **Usage enforcement:** Runs `checkUsage()` before streaming. Returns a 200 with `refused: true` in the `done` event when blocked — not a 4xx — so the client can show an in-persona message.
@@ -265,7 +265,7 @@ Executes a single step of the autonomous agent loop. Called internally by the ta
 
 ### `POST /api/emma/files`
 
-Uploads a file to the Anthropic Files API. Returns the `file_id`.
+Uploads a file. Returns the `file_id`.
 
 **Auth:** Required
 
@@ -279,7 +279,7 @@ Lists the user's uploaded files.
 
 ### `DELETE /api/emma/files/[id]`
 
-Deletes a file from Anthropic and the `user_files` table.
+Deletes a file and removes the record from the `user_files` table.
 
 ### `GET /api/emma/files/download/[file_id]`
 

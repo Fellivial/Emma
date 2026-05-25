@@ -107,7 +107,6 @@ export interface ApiMessageContent {
   id?: string;
   name?: string;
   input?: unknown;
-  cache_control?: { type: "ephemeral" };
 }
 
 // ─── Voice Types ─────────────────────────────────────────────────────────────
