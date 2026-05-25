@@ -200,9 +200,7 @@ ${serializeUserContext(ctx.activeUser)}
 Adapt your behavior to this user's preferences. Use their name naturally.`;
   }
 
-  const blocks: SystemBlock[] = [
-    { type: "text", text: stable },
-  ];
+  const blocks: SystemBlock[] = [{ type: "text", text: stable }];
 
   // ── Dynamic suffix (per-turn, never cached) ────────────────────────────────
   const dynamicParts: string[] = [];

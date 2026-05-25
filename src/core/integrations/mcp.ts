@@ -15,7 +15,7 @@ function getSupabase() {
 
 /**
  * Returns MCP server entries for the given client, ready to pass to the
- * Anthropic API as mcp_servers. Returns an empty array if Supabase is
+ * the API as mcp_servers. Returns an empty array if Supabase is
  * unavailable or the client has no connected MCP integrations.
  */
 export async function getMcpServersForClient(clientId?: string): Promise<McpServer[]> {

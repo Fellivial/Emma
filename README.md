@@ -1,6 +1,6 @@
 # Emma — AI Companion System
 
-Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities. Built on Next.js + Supabase + Anthropic.
+Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities. Built on Next.js + Supabase + OpenRouter.
 
 ## Quick Start
 

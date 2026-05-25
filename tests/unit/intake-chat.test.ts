@@ -36,7 +36,7 @@ vi.mock("resend", () => ({
   })),
 }));
 
-vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+vi.stubEnv("OPENROUTER_API_KEY", "test-key");
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test.supabase.co");
 vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
 

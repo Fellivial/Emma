@@ -177,7 +177,7 @@ export const FAQS: FAQ[] = [
     n: "02",
     question: "What AI models does Emma use?",
     answer:
-      "Emma uses Anthropic's Claude models for reasoning, conversation, and vision tasks. Voice synthesis is handled by ElevenLabs (BYOK) or Web Speech API. Emotion detection blends three signal sources: voice tone, facial expression via Claude Vision, and text sentiment.",
+      "Emma uses Claude models via OpenRouter for reasoning, conversation, and vision tasks. Voice synthesis is handled by ElevenLabs (BYOK) or Web Speech API. Emotion detection blends three signal sources: voice tone, facial expression via Claude Vision, and text sentiment.",
   },
   {
     n: "03",

@@ -13,7 +13,7 @@ function makeHangingFetch() {
       signal?.addEventListener("abort", () => {
         reject(new DOMException("The operation was aborted.", "AbortError"));
       });
-      // Never resolves — mimics a hung Anthropic connection
+      // Never resolves — mimics a hung connection
     });
 }
 
@@ -22,61 +22,47 @@ describe("fetchWithRetry", () => {
     vi.restoreAllMocks();
   });
 
-  it(
-    "throws EmmaError with status 504 when connectionTimeoutMs elapses before response",
-    async () => {
-      vi.spyOn(global, "fetch").mockImplementation(makeHangingFetch());
+  it("throws EmmaError with status 504 when connectionTimeoutMs elapses before response", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(makeHangingFetch());
 
-      await expect(
-        fetchWithRetry(
-          "https://openrouter.ai/api/v1/chat/completions",
-          { method: "POST" },
-          { maxRetries: 0, connectionTimeoutMs: 50 }
-        )
-      ).rejects.toMatchObject({
-        name: "EmmaError",
-        code: "TIMEOUT",
-        status: 504,
-      });
-    },
-    2000
-  );
-
-  it(
-    "resolves normally when response arrives before timeout",
-    async () => {
-      const mockResponse = new Response(JSON.stringify({ ok: true }), { status: 200 });
-      vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse);
-
-      const result = await fetchWithRetry(
+    await expect(
+      fetchWithRetry(
         "https://openrouter.ai/api/v1/chat/completions",
         { method: "POST" },
-        { maxRetries: 0, connectionTimeoutMs: 5000 }
-      );
+        { maxRetries: 0, connectionTimeoutMs: 50 }
+      )
+    ).rejects.toMatchObject({
+      name: "EmmaError",
+      code: "TIMEOUT",
+      status: 504,
+    });
+  }, 2000);
 
-      expect(result.status).toBe(200);
-    },
-    2000
-  );
+  it("resolves normally when response arrives before timeout", async () => {
+    const mockResponse = new Response(JSON.stringify({ ok: true }), { status: 200 });
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse);
 
-  it(
-    "does not retry on connection timeout — fetch called exactly once",
-    async () => {
-      const fetchSpy = vi
-        .spyOn(global, "fetch")
-        .mockImplementation(makeHangingFetch());
+    const result = await fetchWithRetry(
+      "https://openrouter.ai/api/v1/chat/completions",
+      { method: "POST" },
+      { maxRetries: 0, connectionTimeoutMs: 5000 }
+    );
 
-      await expect(
-        fetchWithRetry(
-          "https://openrouter.ai/api/v1/chat/completions",
-          { method: "POST" },
-          { maxRetries: 2, connectionTimeoutMs: 50 }
-        )
-      ).rejects.toMatchObject({ status: 504 });
+    expect(result.status).toBe(200);
+  }, 2000);
 
-      // Must not retry on AbortError — only one attempt
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-    },
-    2000
-  );
+  it("does not retry on connection timeout — fetch called exactly once", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(makeHangingFetch());
+
+    await expect(
+      fetchWithRetry(
+        "https://openrouter.ai/api/v1/chat/completions",
+        { method: "POST" },
+        { maxRetries: 2, connectionTimeoutMs: 50 }
+      )
+    ).rejects.toMatchObject({ status: 504 });
+
+    // Must not retry on AbortError — only one attempt
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  }, 2000);
 });

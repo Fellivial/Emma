@@ -3,11 +3,11 @@
  *
  * Margins at 100% cap (worst case):
  *   Starter: $4.16 cost → $29 price = 86% margin
- *   Pro:     $15.32 cost ($8.32 Anthropic + $7 ElevenLabs) → $79 price = 81% margin
+ *   Pro:     $15.32 cost ($8.32 LLM (OpenRouter) + $7 ElevenLabs) → $79 price = 81% margin
  *
  * At typical 40-60% usage: Starter ~93%, Pro ~89%.
  *
- * Blended Anthropic rate: $4.16/1M tokens (75% Sonnet + 25% Haiku).
+ * Blended LLM rate (OpenRouter, varies by model): ~$4.16/1M tokens (75% Sonnet + 25% Haiku).
  *
  * ElevenLabs gating:
  *   Free/Starter → Web Speech API (browser, $0)

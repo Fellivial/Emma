@@ -20,12 +20,12 @@ export interface StreamDoneEvent {
   generatedFiles?: GeneratedFile[];
   /** Non-text content blocks (e.g. compaction blocks) to preserve in history. */
   compactionBlocks?: Record<string, unknown>[];
-  /** Anthropic message ID — pass back as lastResponseId for cache diagnostics. */
+  /** Message ID — pass back as lastResponseId for diagnostics. */
   messageId?: string;
   /**
    * True when Claude refused the request (stop_reason === "refusal").
    * The client must NOT add this exchange to API history — roll back apiMessages
-   * so the refused turn is not replayed to Anthropic on the next request.
+   * so the refused turn is not replayed on the next request.
    */
   refused?: boolean;
   /**
