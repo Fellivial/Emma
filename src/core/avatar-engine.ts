@@ -306,8 +306,14 @@ export function useAvatar(): UseAvatarReturn {
         return false;
       }
 
-      const PIXI = await import("pixi.js");
-      const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+      // Load all pixi packages in parallel — avoids 4 sequential network round-trips.
+      const [PIXI, { Live2DModel }, pixiDisplay, { utils: pixiUtils }] = await Promise.all([
+        import("pixi.js"),
+        import("pixi-live2d-display/cubism4"),
+        import("@pixi/display"),
+        import("@pixi/core"),
+      ]);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Live2DModel.registerTicker(PIXI.Ticker as any);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -318,7 +324,6 @@ export function useAvatar(): UseAvatarReturn {
       // isInteractive() on every display object, but the top-level @pixi/display
       // never has FederatedEventTarget mixin applied to it. Patch it here so
       // Live2DModel instances satisfy the EventBoundary contract.
-      const pixiDisplay = await import("@pixi/display");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const proto = pixiDisplay.Container.prototype as any;
       if (typeof proto.isInteractive !== "function") {
@@ -327,15 +332,10 @@ export function useAvatar(): UseAvatarReturn {
         };
       }
 
-      // pixi-live2d-display's resolveURL calls @pixi/core's utils.url.resolve,
-      // which wraps Node.js's url.resolve. Turbopack does not polyfill the Node.js
-      // `url` module, so url.resolve is undefined in browser bundles. Patch it to
-      // use the native URL constructor before the model is created.
       // pixi-live2d-display calls utils.url.resolve (deprecated in PixiJS v7.3+).
       // Overwrite it as a plain data property so PixiJS's deprecated getter is
       // shadowed and never fires its console.warn. Also fixes Turbopack builds
       // where the underlying Node url.resolve is not polyfilled.
-      const { utils: pixiUtils } = await import("@pixi/core");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const urlShim = (pixiUtils as any)?.url;
       if (urlShim) {
@@ -361,8 +361,7 @@ export function useAvatar(): UseAvatarReturn {
         // triggers PixiJS v7 EventBoundary hit-walking before our @pixi/display
         // prototype patch can run. We replicate hit detection via canvas pointerdown.
         // autoFocus kept: head-tracking uses pointermove, not hit test events.
-        const modelURL =
-          `${window.location.origin}/live2d/emma/Design_genius_White/Design_genius(1).model3.json`;
+        const modelURL = `${window.location.origin}/live2d/emma/Design_genius_White/Design_genius(1).model3.json`;
         const model = (await Live2DModel.from(
           modelURL,
           {
@@ -393,14 +392,20 @@ export function useAvatar(): UseAvatarReturn {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hitAreas: string[] = (model as any).hitTest(x, y) ?? [];
           if (hitAreas.includes("Head")) {
-            try { model.motion("Tap_Head"); } catch {}
+            try {
+              model.motion("Tap_Head");
+            } catch {}
             setState((s) => ({ ...s, expression: "amused" }));
           }
           if (hitAreas.includes("Body")) {
-            try { model.motion("Tap_Body"); } catch {}
+            try {
+              model.motion("Tap_Body");
+            } catch {}
             setState((s) => ({ ...s, expression: "skeptical" }));
             setTimeout(() => {
-              try { model.expression("flirty"); } catch {}
+              try {
+                model.expression("flirty");
+              } catch {}
               setState((s) => ({ ...s, expression: "flirty" }));
             }, 800);
           }
