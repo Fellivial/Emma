@@ -14,10 +14,12 @@ vi.mock("@supabase/supabase-js", () => ({
         return {
           select: () => ({
             eq: () => ({
-              or: () =>
-                mockState.queryThrows
-                  ? Promise.reject(new Error("simulated DB failure"))
-                  : Promise.resolve({ data: mockState.windowRows }),
+              eq: () => ({
+                eq: () =>
+                  mockState.queryThrows
+                    ? Promise.reject(new Error("simulated DB failure"))
+                    : Promise.resolve({ data: mockState.windowRows }),
+              }),
             }),
           }),
         };
@@ -43,20 +45,15 @@ vi.mock("@supabase/supabase-js", () => ({
 
 import { checkUsage } from "@/core/usage-enforcer";
 
-// Free plan derived limits: monthly=300_000, weekly=75_000, daily=10_714, msg/day=10
-const FREE_DAILY_TOKENS = 10_714;
-const FREE_DAILY_MSGS = 10;
+// Free plan: tokenBudgetDaily = floor(floor(300_000/4)/7) = 10_714
+const FREE_WINDOW_TOKENS = 10_714;
+const FREE_WINDOW_MSGS = 10;
 const TEST_USER = "user-abc";
 
-function makeRow(
-  windowType: "daily" | "weekly" | "monthly",
-  tokensUsed: number,
-  messagesUsed = 0,
-  warningSent = false
-) {
+function makeRow(tokensUsed: number, messagesUsed = 0, warningSent = false) {
   return {
-    window_type: windowType,
-    window_start: "2026-05-10T00:00:00.000Z",
+    window_type: "daily",
+    window_start: new Date(Math.floor(Date.now() / (5 * 3600000)) * (5 * 3600000)).toISOString(),
     tokens_used: tokensUsed,
     messages_used: messagesUsed,
     warning_sent: warningSent,
@@ -95,21 +92,21 @@ describe("checkUsage — fail-open contract", () => {
 });
 
 describe("checkUsage — window enforcement", () => {
-  it("returns ok when all windows have zero usage", async () => {
+  it("returns ok when window has zero usage", async () => {
     mockState.windowRows = [];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
-    expect(result.allWindows).toHaveLength(3);
+    expect(result.allWindows).toHaveLength(1);
   });
 
   it("returns ok when usage is below 80%", async () => {
-    mockState.windowRows = [makeRow("daily", Math.floor(FREE_DAILY_TOKENS * 0.5))];
+    mockState.windowRows = [makeRow(Math.floor(FREE_WINDOW_TOKENS * 0.5))];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
   });
 
   it("returns warning when usage hits 80% and warning not yet sent", async () => {
-    mockState.windowRows = [makeRow("daily", Math.floor(FREE_DAILY_TOKENS * 0.8), 0, false)];
+    mockState.windowRows = [makeRow(Math.floor(FREE_WINDOW_TOKENS * 0.8), 0, false)];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("warning");
     expect(result.warningWindow).toBeDefined();
@@ -117,13 +114,13 @@ describe("checkUsage — window enforcement", () => {
   });
 
   it("returns ok (not warning again) when 80% hit but warning already sent", async () => {
-    mockState.windowRows = [makeRow("daily", Math.floor(FREE_DAILY_TOKENS * 0.8), 0, true)];
+    mockState.windowRows = [makeRow(Math.floor(FREE_WINDOW_TOKENS * 0.8), 0, true)];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
   });
 
-  it("returns blocked when token usage hits 100% of daily budget", async () => {
-    mockState.windowRows = [makeRow("daily", FREE_DAILY_TOKENS)];
+  it("returns blocked when token usage hits 100% of window budget", async () => {
+    mockState.windowRows = [makeRow(FREE_WINDOW_TOKENS)];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("blocked");
     expect(result.blockedWindow).toBeDefined();
@@ -132,30 +129,15 @@ describe("checkUsage — window enforcement", () => {
     expect(result.upgradeUrl).toBeDefined();
   });
 
-  it("returns blocked when message limit hits 100% of daily messages", async () => {
-    mockState.windowRows = [makeRow("daily", 100, FREE_DAILY_MSGS)];
+  it("returns blocked when message limit hits 100% of window messages", async () => {
+    mockState.windowRows = [makeRow(100, FREE_WINDOW_MSGS)];
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("blocked");
   });
 
-  it("blocked window is the most constrained across all three windows", async () => {
-    const FREE_WEEKLY_TOKENS = 75_000;
-    mockState.windowRows = [
-      makeRow("daily", 100),
-      makeRow("weekly", FREE_WEEKLY_TOKENS),
-      makeRow("monthly", 1_000),
-    ];
-    const result = await checkUsage(TEST_USER, "free");
-    expect(result.status).toBe("blocked");
-    expect(result.blockedWindow!.windowType).toBe("weekly");
-  });
-
-  it("extra pack tokens stack on monthly limit and prevent blocking", async () => {
-    // Monthly at 100% of base budget — but extra pack adds 500K tokens
-    const FREE_MONTHLY_TOKENS = 300_000;
-    mockState.windowRows = [makeRow("monthly", FREE_MONTHLY_TOKENS)];
+  it("extra pack tokens stack on window limit and prevent blocking", async () => {
+    mockState.windowRows = [makeRow(FREE_WINDOW_TOKENS)];
     mockState.extraPacks = [{ tokens_remaining: 500_000 }];
-    // Effective monthly limit = 800_000; 300_000 used = 37.5% → ok
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
   });
