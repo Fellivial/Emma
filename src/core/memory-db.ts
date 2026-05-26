@@ -12,7 +12,7 @@ import { audit } from "@/core/security/audit";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) return null;
   return createClient(url, key);
@@ -102,12 +102,8 @@ export async function addMemoriesForUser(
   userId: string,
   entries: Array<Omit<MemoryEntry, "id" | "timestamp"> & { id?: string }>
 ): Promise<MemoryEntry[]> {
-  const results: MemoryEntry[] = [];
-  for (const entry of entries) {
-    const result = await addMemoryForUser(userId, entry);
-    if (result) results.push(result);
-  }
-  return results;
+  const results = await Promise.all(entries.map((entry) => addMemoryForUser(userId, entry)));
+  return results.filter((r): r is MemoryEntry => r !== null);
 }
 
 // â”€â”€â”€ Delete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -157,18 +153,8 @@ export async function incrementUsage(
     p_tokens: tokens,
   });
 
-  // If RPC doesn't exist yet, fall back to manual upsert
   if (error) {
-    await supabase.from("usage").upsert(
-      {
-        user_id: userId,
-        date: today,
-        message_count: messages,
-        token_count: tokens,
-        api_calls: 1,
-      },
-      { onConflict: "user_id,date" }
-    );
+    console.error("[memory-db] incrementUsage RPC failed:", error);
   }
 }
 
@@ -253,4 +239,3 @@ function rowToMemoryEntry(row: Record<string, unknown>): MemoryEntry {
     userId: row.user_id as string,
   };
 }
-
