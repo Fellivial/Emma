@@ -1,6 +1,9 @@
 export const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export function openRouterHeaders(): Record<string, string> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error("[openrouter] OPENROUTER_API_KEY is not set — all LLM calls will fail");
+  }
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}`,

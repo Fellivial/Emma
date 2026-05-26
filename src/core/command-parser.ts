@@ -1,11 +1,5 @@
-import type {
-  EmmaCommand,
-  ParsedResponse,
-  AvatarExpression,
-} from "@/types/emma";
+import type { EmmaCommand, ParsedResponse, AvatarExpression } from "@/types/emma";
 
-const CMD_REGEX = /\[EMMA_CMD\](.*?)\[\/EMMA_CMD\]/gs;
-const ROUTINE_REGEX = /\[EMMA_ROUTINE\](.*?)\[\/EMMA_ROUTINE\]/gs;
 const EMOTION_REGEX = /\[emotion:\s*(\w+)\]/i;
 
 const VALID_EXPRESSIONS = new Set<string>([
@@ -25,11 +19,12 @@ const VALID_EXPRESSIONS = new Set<string>([
  * Parse EMMA response into clean text, device commands, routine trigger, and avatar expression.
  */
 export function parseEmmaResponse(raw: string): ParsedResponse {
+  const CMD_REGEX = /\[EMMA_CMD\](.*?)\[\/EMMA_CMD\]/gs;
+  const ROUTINE_REGEX = /\[EMMA_ROUTINE\](.*?)\[\/EMMA_ROUTINE\]/gs;
   const commands: EmmaCommand[] = [];
   let match: RegExpExecArray | null;
 
   // Extract device commands
-  CMD_REGEX.lastIndex = 0;
   while ((match = CMD_REGEX.exec(raw)) !== null) {
     try {
       const parsed = JSON.parse(match[1]) as EmmaCommand;

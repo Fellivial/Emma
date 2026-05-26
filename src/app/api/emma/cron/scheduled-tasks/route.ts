@@ -158,6 +158,30 @@ function calculateNextRun(cronExpression: string): string {
     return next.toISOString();
   }
 
+  // Weekly: "M H * * N" (specific day of week)
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek !== "*") {
+    const targetDay = parseInt(dayOfWeek, 10);
+    const targetHour = parseInt(hour, 10);
+    const targetMinute = parseInt(minute, 10);
+    const next = new Date(now);
+    next.setHours(targetHour, targetMinute, 0, 0);
+    const daysUntil = (targetDay - now.getDay() + 7) % 7 || 7;
+    next.setDate(next.getDate() + (next <= now ? daysUntil : daysUntil === 7 ? 7 : daysUntil));
+    return next.toISOString();
+  }
+
+  // Monthly: "M H D * *" (specific day of month)
+  if (dayOfMonth !== "*" && month === "*" && dayOfWeek === "*") {
+    const targetDay = parseInt(dayOfMonth, 10);
+    const targetHour = parseInt(hour, 10);
+    const targetMinute = parseInt(minute, 10);
+    const next = new Date(now);
+    next.setDate(targetDay);
+    next.setHours(targetHour, targetMinute, 0, 0);
+    if (next <= now) next.setMonth(next.getMonth() + 1);
+    return next.toISOString();
+  }
+
   // Fallback — 1 hour from now
   return new Date(now.getTime() + 3_600_000).toISOString();
 }
