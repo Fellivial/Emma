@@ -171,55 +171,6 @@ registerTool({
   },
 });
 
-// Tool: run_workflow — Execute a predefined workflow routine (moderate)
-registerTool({
-  name: "run_workflow",
-  description:
-    "Execute a named workflow routine (e.g., 'morning_standup', 'inbox_triage', 'focus_mode')",
-  inputSchema: {
-    type: "object",
-    properties: {
-      routine_id: { type: "string", description: "ID of the workflow routine to run" },
-    },
-    required: ["routine_id"],
-    additionalProperties: false,
-  },
-  riskLevel: "moderate",
-  handler: async (input) => {
-    return {
-      success: false,
-      output: `Workflow execution is not available in autonomous mode. Routine "${input.routine_id}" must be triggered from the main chat interface.`,
-    };
-  },
-});
-
-// Tool: send_notification — Send a notification to the user (safe)
-registerTool({
-  name: "send_notification",
-  description: "Send a notification message to the user",
-  inputSchema: {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      message: { type: "string" },
-      priority: {
-        anyOf: [{ type: "string", enum: ["low", "medium", "high"] }, { type: "null" }],
-        description: "Notification priority (null for default medium)",
-      },
-    },
-    required: ["title", "message", "priority"],
-    additionalProperties: false,
-  },
-  riskLevel: "safe",
-  handler: async (input) => {
-    return {
-      success: true,
-      output: `Notification sent: ${input.title}`,
-      data: input,
-    };
-  },
-});
-
 // Tool: send_email — Send an email (DANGEROUS — always requires approval)
 registerTool({
   name: "send_email",
