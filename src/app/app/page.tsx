@@ -17,6 +17,7 @@ import {
   getRoutine,
   addCustomRoutine,
   removeCustomRoutine,
+  matchRoutineTrigger,
   BUILT_IN_ROUTINES,
 } from "@/core/routines-engine";
 import { useVoice } from "@/core/voice-engine";
@@ -320,47 +321,32 @@ export default function EmmaPage() {
     setRoutineVersion((v) => v + 1);
   }, []);
 
-  // ── Autonomous tasks polling (15s) ────────────────────────────────────────
+  // ── Tasks + approvals polling (15s, pauses when tab hidden) ─────────────────
   useEffect(() => {
     let cancelled = false;
-    const loadTasks = async () => {
+    const poll = async () => {
+      if (document.hidden) return;
       try {
-        const res = await fetch("/api/emma/tasks?type=tasks&limit=6");
+        const res = await fetch("/api/emma/tasks?type=all&limit=6");
         if (res.ok && !cancelled) {
           const data = await res.json();
           if (data.tasks) setAutonomousTasks(data.tasks);
-        }
-      } catch {
-        /* silent */
-      }
-    };
-    loadTasks();
-    const id = setInterval(loadTasks, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
-  // ── Approvals polling (30s) ────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    const loadApprovals = async () => {
-      try {
-        const res = await fetch("/api/emma/tasks?type=approvals");
-        if (res.ok && !cancelled) {
-          const data = await res.json();
           if (data.approvals) setPendingApprovals(data.approvals);
         }
       } catch {
         /* silent */
       }
     };
-    loadApprovals();
-    const id = setInterval(loadApprovals, 30_000);
+    poll();
+    const id = setInterval(poll, 15_000);
+    const onVisible = () => {
+      if (!document.hidden) poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -428,6 +414,12 @@ export default function EmmaPage() {
       const textEmotion = emotion.analyzeText(text);
       const combinedEmotion = emotion.getCombined() || textEmotion;
       voice.setCurrentEmotion(combinedEmotion.primary);
+
+      // Instant routine detection — kick off the routine before Emma's response arrives.
+      // Emma's response will also emit [EMMA_ROUTINE] if relevant; executeRoutineById is idempotent
+      // over the 3s display window so a double-call is harmless.
+      const preMatchedRoutineId = matchRoutineTrigger(text);
+      if (preMatchedRoutineId) executeRoutineById(preMatchedRoutineId, "user");
 
       let visionContext: string | undefined;
       if (vision.active && vision.lastAnalysis) {
@@ -505,10 +497,17 @@ export default function EmmaPage() {
           {
             // ── Stream text deltas into the placeholder message ──────────
             onDelta: (deltaText: string) => {
+              // Strip any complete internal tags that escaped the server-side filter.
+              // Partial tags spanning chunk boundaries are cleaned up by parseEmmaResponse on done.
+              const safe = deltaText.replace(
+                /\[emotion:[^\]]*\]|\[EMMA_ROUTINE\][^\[]*\[\/EMMA_ROUTINE\]|\[EMMA_CMD\][^\[]*\[\/EMMA_CMD\]/g,
+                ""
+              );
+              if (!safe) return;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, display: m.display + deltaText, content: m.content + deltaText }
+                    ? { ...m, display: m.display + safe, content: m.content + safe }
                     : m
                 )
               );
@@ -807,10 +806,11 @@ export default function EmmaPage() {
           {visibleMessages.map((msg) => (
             <MobileChatBubble key={msg.id} message={msg} />
           ))}
-          {loading && (() => {
-            const last = messages[messages.length - 1];
-            return !last || last.role === "user" || !last.display;
-          })() && <MobileTypingBubble />}
+          {loading &&
+            (() => {
+              const last = messages[messages.length - 1];
+              return !last || last.role === "user" || !last.display;
+            })() && <MobileTypingBubble />}
         </div>
 
         {/* Pinned input bar */}
@@ -1021,9 +1021,7 @@ function MobileChatBubble({ message }: { message: ChatMessageType }) {
       <div className="w-6 h-6 rounded-full shrink-0 mt-0.5 bg-gradient-to-br from-emma-300 to-emma-400 flex items-center justify-center">
         <span className="font-display text-xs italic text-emma-950">E</span>
       </div>
-      <div className="flex-1 text-sm leading-relaxed text-white/80 pt-0.5">
-        {message.display}
-      </div>
+      <div className="flex-1 text-sm leading-relaxed text-white/80 pt-0.5">{message.display}</div>
     </div>
   );
 }

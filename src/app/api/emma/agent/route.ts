@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
 
         const { data: task } = await supabase
           .from("tasks")
-          .select("*, action_log(*))")
+          .select("*, action_log(*)")
           .eq("id", body.taskId)
           .eq("user_id", userId)
           .single();
