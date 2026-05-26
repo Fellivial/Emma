@@ -275,9 +275,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     Sentry.captureException(err);
     console.error("[Agent API] Error:", err);
-    return NextResponse.json(
-      { error: "Agent operation failed", detail: String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Agent operation failed" }, { status: 500 });
   }
 }

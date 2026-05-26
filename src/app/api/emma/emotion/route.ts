@@ -17,7 +17,18 @@ const EMOTION_OUTPUT_SCHEMA = {
   properties: {
     primary: {
       type: "string",
-      enum: ["neutral","happy","sad","angry","anxious","tired","excited","frustrated","calm","stressed"],
+      enum: [
+        "neutral",
+        "happy",
+        "sad",
+        "angry",
+        "anxious",
+        "tired",
+        "excited",
+        "frustrated",
+        "calm",
+        "stressed",
+      ],
     },
     confidence: { type: "number" },
     valence: { type: "number" },
@@ -38,6 +49,10 @@ export async function POST(req: NextRequest) {
 
     if (!frame) {
       return NextResponse.json({ error: "No frame provided" }, { status: 400 });
+    }
+
+    if (typeof frame === "string" && frame.length > 700_000) {
+      return NextResponse.json({ error: "Frame too large" }, { status: 413 });
     }
 
     const res = await fetch(OPENROUTER_URL, {
@@ -83,6 +98,6 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Emotion analysis failed" }, { status: 500 });
   }
 }

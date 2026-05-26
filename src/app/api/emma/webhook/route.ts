@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[Webhook] Error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }
 
@@ -159,7 +159,8 @@ function buildGoalFromEvent(
     // Simple template variable substitution: {{key}} → eventData[key]
     let goal = template.goal as string;
     for (const [key, value] of Object.entries(eventData)) {
-      goal = goal.replace(`{{${key}}}`, String(value));
+      const safe = String(value).replace(/\{\{|\}\}/g, "");
+      goal = goal.replace(`{{${key}}}`, safe);
     }
     return goal;
   }
