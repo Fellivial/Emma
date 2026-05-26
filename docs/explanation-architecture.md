@@ -26,7 +26,7 @@ checkUsage()             ← src/core/usage-enforcer.ts
        ▼
 POST /api/emma            ← src/app/api/emma/route.ts
   - build system prompt blocks (stable + dynamic)
-  - call Anthropic Messages API (streaming)
+  - call OpenRouter chat completions API (streaming)
   - attach tools: web_search, web_fetch, integration tools, MCP tools
   - stream SSE deltas to client
        │
@@ -46,28 +46,28 @@ Client handles done event
 
 ---
 
-## The System Prompt: Two Blocks
+## The System Prompt: Two Parts
 
-Emma's system prompt is split into two Anthropic content blocks:
+Emma's system prompt is assembled in `buildSystemPromptBlocks()` as two logical parts, then concatenated into a flat string before being sent to OpenRouter:
 
-**Block 1 — Stable (cached)**  
+**Part 1 — Stable**  
 Contains: persona, response length rules, routine instructions, avatar expression rules, available tools, memories, active user profile.
 
-This block is marked `cache_control: { type: "ephemeral" }`. After the first request, Anthropic caches it. Subsequent turns pay ~10% of the base input token price for the prefix (90% cost reduction on the system prompt once the cache warms up).
+Kept separate from the dynamic part because it's large and changes rarely. If you switch to a provider that supports prompt caching (e.g. native Anthropic SDK), this part is the right unit to mark cacheable.
 
-The stable block must be byte-for-byte identical across turns for the cache to hit. That's why timestamps, vision context, and emotion state are NOT in this block.
-
-**Block 2 — Dynamic (never cached)**  
+**Part 2 — Dynamic**  
 Contains: current screen description (from vision), detected emotion state.
 
-Omitted entirely when neither is present. Changes every turn — putting it in a separate block ensures it never pollutes the cached prefix.
+Omitted entirely when neither is present. Changes every turn — keeping it separate from the stable part avoids unnecessary churn if caching is later re-enabled.
 
 ```
 buildSystemPromptBlocks()        ← src/core/personas.ts
   returns [
-    { type: "text", text: stablePrompt, cache_control: { type: "ephemeral" } },
+    { type: "text", text: stablePrompt },
     { type: "text", text: dynamicContext }  // omitted if empty
   ]
+// Joined into a flat string before the OpenRouter call
+buildSystemPrompt()  →  stablePrompt + "\n\n" + dynamicContext
 ```
 
 ---
@@ -97,32 +97,23 @@ Blocked requests return `{ refused: true }` in the SSE `done` event rather than 
 
 ---
 
-## Prompt Caching Economics
-
-At Sonnet 4.6 pricing ($3/MTok input, $0.30/MTok cached):
-
-Emma's system prompt is approximately 2,000–5,000 tokens (varies by persona + memories).  
-Without caching: 2,500 tokens × $3/MTok × 1,000 requests/day = **$7.50/day** in system prompt costs.  
-With caching: $7.50 first turn + 999 × $0.75 = **$8.25/day** total — same coverage, ~10× lower marginal cost per turn after warmup.
-
-The 5-minute cache TTL means the cache resets between conversations that have more than 5 minutes between turns. For power users in active sessions, the cache almost always hits.
-
----
-
 ## Chat History Race Guard
 
 When the app loads, two things happen in parallel:
 1. `fetchMemories()` — loads user's persistent memories
 2. `fetch("/api/emma/history")` — loads the last 50 messages
 
-The greeting `useEffect` must not fire until we know whether history exists. If it fired before history loaded, a returning user would see a greeting message appear above their restored conversation — wrong.
+To avoid a blank screen while history loads, Emma shows a greeting immediately on mount and replaces it when history arrives:
 
-The solution is a three-state `historyReady` variable:
-- `null` — history check in progress, greeting blocked
-- `[]` — no history, show greeting
-- `[...messages]` — history found, restore and skip greeting
+- **Effect 1** — runs on mount. Renders the greeting immediately. The user sees something in under one frame (~16ms) instead of waiting 100–400ms for the DB round-trip.
+- **Effect 2** — runs when `historyReady` resolves. If history is non-empty, replaces the greeting with the real conversation. If empty, the greeting stays.
 
-`historyReady` starts as `null`. The greeting effect checks `if (historyReady === null) return` before doing anything. History fetch sets it to the loaded array (or `[]` on error). Only then does the effect run to completion.
+The chat panel shows pulsing skeleton bubbles while `historyReady === null` and messages are empty, so returning users see visual continuity rather than a flash.
+
+`historyReady` is a three-state variable:
+- `null` — history fetch in progress (skeleton shown)
+- `[]` — no history found (greeting stays)
+- `[...messages]` — history loaded (greeting replaced)
 
 ---
 

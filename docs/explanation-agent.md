@@ -18,7 +18,7 @@ The agent loop solves this: Emma plans the task, executes tools in sequence, han
 
 ## How the Agent Loop Works (`src/core/agent-loop.ts`)
 
-The loop is a continuation-passing architecture around the Anthropic Messages API:
+The loop is a continuation-passing architecture around the OpenRouter chat completions API:
 
 ```
 1. POST /api/emma/agent with task + tools + message history
@@ -30,11 +30,10 @@ The loop is a continuation-passing architecture around the Anthropic Messages AP
 3. Repeat until text response or max iterations
 ```
 
-**`pause_turn` stop reason:** When Emma uses `web_search_20260209` or `web_fetch_20260209`, Anthropic runs the tool server-side. The API returns `stop_reason: "pause_turn"` while the search is executing. The agent loop detects this and immediately resends the current response as input, allowing the loop to continue once the server-side tool finishes. Without this handling, the agent silently stops mid-task.
+**`pause_turn` stop reason:** When Emma uses `web_search` or `web_fetch`, the API returns `stop_reason: "pause_turn"` while the search executes server-side. The agent loop detects this and immediately resends the current response as input, allowing the loop to continue once the tool finishes. Without this handling, the agent silently stops mid-task.
 
 **Tool execution:** Tools are executed inside the agent route, not client-side. The agent has access to:
-- Anthropic-hosted: `web_search`, `web_fetch` (no key required)
-- Native Anthropic: `memory` scratchpad for long sessions
+- Built-in: `web_search`, `web_fetch` (no key required)
 - Integration tools: all tools registered in `tool-registry.ts` (Gmail, Calendar, Slack, Notion, HubSpot, Drive)
 - User MCP tools: any server the user connected via `/settings/mcp`
 
@@ -97,34 +96,31 @@ Every tool in `src/core/tool-registry.ts` has a `riskLevel` of `safe`, `moderate
 | `moderate` | Tier 2 (suggest) | `send_email`, `book_appointment`, `slack_send_message`, `notion_create_page`, `hubspot_create_contact` |
 | `dangerous` | Tier 3 (alert) | `hubspot_create_deal`, `drive_upload_file`, `send_whatsapp` |
 
-The tool registry uses `strict: true` on all tool definitions — Anthropic's grammar-constrained sampling guarantees tool inputs exactly match their JSON schema. Malformed inputs that would silently fail are caught before execution.
+The tool registry uses `strict: true` on all tool definitions — grammar-constrained sampling guarantees tool inputs exactly match their JSON schema. Malformed inputs that would silently fail are caught before execution.
 
 ---
 
-## Why Custom Agent Loop Instead of Managed Agents
+## Why a Custom Agent Loop
 
-Anthropic offers a Managed Agents platform (research preview) that would replace the custom agent loop entirely. Emma uses a custom loop for three reasons:
+Emma uses a custom loop rather than a managed agent platform for three reasons:
 
-1. **Data sovereignty:** Managed Agents stores session history, events, and container state on Anthropic's servers. Emma's architecture keeps all user data in the user's own Supabase database.
+1. **Data sovereignty:** Emma's architecture keeps all user data in the user's own Supabase database — no session history or state stored on third-party infrastructure.
 
-2. **Not ZDR or HIPAA eligible:** Managed Agents doesn't offer Zero Data Retention. For enterprise customers with compliance requirements, the custom loop is the only option.
+2. **Compliance:** For enterprise customers with Zero Data Retention or HIPAA requirements, the custom loop is the only option.
 
-3. **Custom memory model:** Emma's AES-256-GCM encrypted memory engine is more private than Managed Agents Memory Stores (which are stored unencrypted on Anthropic's infrastructure).
+3. **Custom memory model:** Emma's AES-256-GCM encrypted memory engine provides field-level encryption that managed platforms don't offer.
 
-The trade-off: the custom loop requires more code to maintain, doesn't get Anthropic's built-in container execution, and requires handling `pause_turn` manually. This is a deliberate choice that prioritizes user data control.
+The trade-off: the custom loop requires more code to maintain and requires handling `pause_turn` manually. This is a deliberate choice that prioritizes user data control.
 
 ---
 
 ## Web Search in the Agent
 
-Emma uses `web_search_20260209` and `web_fetch_20260209` — Anthropic's GA server-side tools — in both the brain route (chat) and the agent loop. No external API key is needed.
+Emma uses `web_search` and `web_fetch` as server-side tools in both the brain route (chat) and the agent loop. No external API key is needed.
 
 These are the same tools in both paths, which means:
 - Web search results are consistent between chat and agentic tasks
 - No cost for Brave Search or any third-party search API
-- Anthropic handles rate limiting, result filtering, and content extraction
-
-The `_20260209` version uses internal code execution to filter results before loading them into context, which reduces token waste compared to the earlier `_20250305` version.
 
 ---
 

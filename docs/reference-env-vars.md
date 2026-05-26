@@ -12,14 +12,14 @@ These must be set. Emma will start without them but core features will fail.
 
 | Variable | Purpose | How to get it |
 |----------|---------|--------------|
-| `ANTHROPIC_API_KEY` | All Claude API calls (brain, vision, emotion, memory extraction) | [console.anthropic.com](https://console.anthropic.com) → API Keys |
+| `OPENROUTER_API_KEY` | All LLM calls (brain, vision, emotion, memory extraction) | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Supabase Dashboard → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client-side auth (safe to expose) | Supabase Dashboard → Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-side DB operations (bypasses RLS — keep secret) | Supabase Dashboard → Settings → API |
 | `EMMA_ENCRYPTION_KEY` | AES-256-GCM key for encrypting tokens and memories at rest | `openssl rand -hex 32` |
 | `NEXT_PUBLIC_APP_URL` | Base URL for OG images, email links, and OAuth redirects | Your deployment URL, e.g. `https://emma.yourdomain.com` |
 
-**Minimal local dev:** Only `ANTHROPIC_API_KEY` is needed for chat to work. Supabase vars enable auth and persistence. `EMMA_ENCRYPTION_KEY` is required once Supabase is configured.
+**Minimal local dev:** Only `OPENROUTER_API_KEY` is needed for chat to work. Supabase vars enable auth and persistence. `EMMA_ENCRYPTION_KEY` is required once Supabase is configured.
 
 ---
 

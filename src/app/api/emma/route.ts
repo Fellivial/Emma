@@ -54,7 +54,7 @@ function detectMaxTokens(msgs: ApiMessage[], hasDocuments = false): number {
 /**
  * Streaming brain route.
  *
- * Sends streamed text deltas to the client as they arrive from Anthropic.
+ * Sends streamed text deltas to the client as they arrive from OpenRouter.
  * After the full response is collected, appends a final JSON event with
  * parsed commands, expression, and routineId.
  *

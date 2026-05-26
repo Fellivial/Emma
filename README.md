@@ -1,6 +1,6 @@
 # Emma — AI Companion System
 
-Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities. Built on Next.js + Supabase + Anthropic.
+Vertically-integrated AI companion with animated avatar, voice, vision, memory, and autonomous agent capabilities. Built on Next.js + Supabase + OpenRouter.
 
 ## Quick Start
 
@@ -8,7 +8,7 @@ Vertically-integrated AI companion with animated avatar, voice, vision, memory, 
 
 ```bash
 npm install
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
+echo "OPENROUTER_API_KEY=sk-or-..." > .env.local
 npm run dev  # localhost:3000
 ```
 
@@ -21,7 +21,7 @@ cp .env.local.example .env.local
 # Generate the encryption key and append it directly to .env.local
 echo "EMMA_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.local
 
-# Fill in ANTHROPIC_API_KEY and the three SUPABASE_* vars in .env.local
+# Fill in OPENROUTER_API_KEY and the three SUPABASE_* vars in .env.local
 # (see Environment Variables below for the full list)
 
 # Run the database schema (pick one):
@@ -52,7 +52,7 @@ src/
 ├── app/
 │   ├── api/
 │   │   ├── emma/
-│   │   │   ├── route.ts            # Brain — streaming SSE to Anthropic
+│   │   │   ├── route.ts            # Brain — streaming SSE via OpenRouter
 │   │   │   ├── memory/route.ts     # Memory CRUD + extraction
 │   │   │   ├── vision/route.ts     # Claude Vision scene analysis
 │   │   │   ├── emotion/route.ts    # Emotion detection via Claude
@@ -80,7 +80,7 @@ src/
 │   └── ...                         # Chat, avatar, panels, settings UI
 ├── core/
 │   ├── personas.ts                 # System prompt builder
-│   ├── models.ts                   # Anthropic model IDs (single source of truth)
+│   ├── models.ts                   # OpenRouter model IDs (single source of truth)
 │   ├── memory-engine.ts / memory-db.ts
 │   ├── client-config.ts            # Per-client config from Supabase `clients` table
 │   ├── usage-enforcer.ts           # Multi-window token/message metering
@@ -133,7 +133,7 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | Brain, vision, memory, emotion |
+| `OPENROUTER_API_KEY` | ✅ | All LLM calls (brain, vision, memory, emotion) — get key at openrouter.ai/keys |
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Auth + DB |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Client-side auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Server-side DB (bypasses RLS) |
@@ -198,25 +198,14 @@ npm run test:coverage                          # coverage report (v8)
 
 Coverage targets `src/core/**` and `src/lib/**`.
 
-### Integration tests
-
-`tests/integration/anthropic-beta-headers.test.ts` validates every Anthropic beta header and tool type against the live API. It skips automatically when `ANTHROPIC_API_KEY` is not set — safe to run in CI without the secret, but add the secret to actually gate deployments on header validity.
-
-```bash
-# Run integration tests locally (requires API key)
-ANTHROPIC_API_KEY=sk-ant-... npx vitest run tests/integration/anthropic-beta-headers.test.ts
-```
-
-**CI setup:** Add `ANTHROPIC_API_KEY` as a repository secret (GitHub: Settings → Secrets → Actions). The test will then run on every push and fail fast if a beta header has expired — catching the class of bug that caused the silent 502 regression in May 2026.
-
 ### Feature availability
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Chat (streaming) | Available | |
 | Vision, Memory, Emotion | Available | |
-| Web search / web fetch | Available | GA tools, no beta header needed |
-| Document generation (pptx/xlsx/docx) | **Unavailable** | Anthropic changed the `container` API format; re-enabling pending documentation of new format |
+| Web search / web fetch | Available | No extra key needed |
+| Document generation (pptx/xlsx/docx) | **Unavailable** | Pending re-implementation for OpenRouter |
 | ElevenLabs TTS | Available | BYOK — users connect their own key via Settings → Integrations |
 
 ## Documentation

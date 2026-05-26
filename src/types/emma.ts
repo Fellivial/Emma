@@ -107,7 +107,6 @@ export interface ApiMessageContent {
   id?: string;
   name?: string;
   input?: unknown;
-  cache_control?: { type: "ephemeral" };
 }
 
 // ─── Voice Types ─────────────────────────────────────────────────────────────
@@ -469,7 +468,7 @@ export interface EmmaApiRequest {
   persona?: string;
   activeUser?: UserProfile;
   emotionState?: EmotionState;
-  /** Files already uploaded to Anthropic Files API to attach to this turn. */
+  /** Files already uploaded via the Files API to attach to this turn. */
   attachedFiles?: AttachedFile[];
   /** Direct PDF (or other document) URLs to attach as document blocks this turn. */
   pdfUrls?: string[];
@@ -479,7 +478,7 @@ export interface EmmaApiRequest {
   searchResults?: SearchResult[];
   /**
    * Document generation skills to enable: "pptx" | "xlsx" | "docx" | "pdf".
-   * When set, the code_execution tool and an Anthropic skills container are
+   * When set, the code_execution tool and a skills container are
    * included in the request so Emma can produce real downloadable files.
    */
   skills?: string[];

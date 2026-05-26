@@ -119,18 +119,12 @@ interface PromptContext {
 export interface SystemBlock {
   type: "text";
   text: string;
-  cache_control?: { type: "ephemeral" };
 }
 
-/**
- * Returns the system prompt as two Anthropic system blocks:
- *   [0] Stable block — persona, routines, memories, user profile. Marked with
- *       cache_control so Anthropic caches it across turns (saves ~90% input cost
- *       on the prefix once the cache warms up).
+/** Returns the system prompt as two blocks:
+ *   [0] Stable block — persona, routines, memories, user profile.
  *   [1] Dynamic block — vision context + emotion state. Omitted when neither is
- *       present. Never cached because both change every turn.
- *
- * Pass the return value directly as the `system` field of the Anthropic request.
+ *       present. Changes every turn so it's kept separate from the stable prefix.
  */
 export function buildSystemPromptBlocks(ctx: PromptContext): SystemBlock[] {
   const persona = PERSONAS[ctx.personaId];
@@ -206,9 +200,7 @@ ${serializeUserContext(ctx.activeUser)}
 Adapt your behavior to this user's preferences. Use their name naturally.`;
   }
 
-  const blocks: SystemBlock[] = [
-    { type: "text", text: stable, cache_control: { type: "ephemeral" } },
-  ];
+  const blocks: SystemBlock[] = [{ type: "text", text: stable }];
 
   // ── Dynamic suffix (per-turn, never cached) ────────────────────────────────
   const dynamicParts: string[] = [];

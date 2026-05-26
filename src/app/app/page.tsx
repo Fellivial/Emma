@@ -534,7 +534,7 @@ export default function EmmaPage() {
                     : m
                 )
               );
-              // Refused exchanges must not enter API history — Anthropic
+              // Refused exchanges must not enter API history — the model
               // rejects turns that follow a refusal in the same context.
               // Roll back to the snapshot taken before this send.
               if (event.refused) {
@@ -544,7 +544,7 @@ export default function EmmaPage() {
                 // 6 most recent messages so the next request definitely fits.
                 setApiMessages((prev) => prev.slice(-6));
               } else {
-                // Preserve compaction blocks alongside the text so Anthropic can
+                // Preserve compaction blocks alongside the text so the model can
                 // reconstruct compressed history on the next turn.
                 setApiMessages((prev) => [
                   ...prev,

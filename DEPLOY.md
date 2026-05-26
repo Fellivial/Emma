@@ -40,7 +40,7 @@ vercel link  # Link to your project
 # Set environment variables in Vercel dashboard:
 # Settings → Environment Variables
 # Add for BOTH Production and Preview:
-#   ANTHROPIC_API_KEY
+#   OPENROUTER_API_KEY
 #   NEXT_PUBLIC_SUPABASE_URL
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
 #   SUPABASE_SERVICE_ROLE_KEY
@@ -189,7 +189,7 @@ vercel logs emma.yourdomain.com --follow
 
 | Variable | Required | Where |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Brain, vision, memory, emotion, summarize |
+| `OPENROUTER_API_KEY` | Yes | All LLM calls (brain, vision, memory, emotion, summarize) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Auth, DB |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Client-side auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side DB operations |

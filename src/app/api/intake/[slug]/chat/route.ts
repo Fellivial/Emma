@@ -120,7 +120,7 @@ export async function POST(
     );
   }
   // Strip any trailing non-user messages so we never send a trailing assistant
-  // turn to Anthropic (Sonnet 4.6 returns 400 on assistant-turn prefill).
+  // turn to the model (returns 400 on assistant-turn prefill).
   const trimmedMessages = messages.slice(
     0,
     messages.findLastIndex((m) => m.role === "user") + 1

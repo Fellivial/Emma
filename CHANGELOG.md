@@ -4,16 +4,22 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ---
 
+## 2026-05-26
+
+### OpenRouter migration
+- **All LLM calls migrated to OpenRouter** — `ANTHROPIC_API_KEY` replaced by `OPENROUTER_API_KEY`. All routes (`/api/emma`, `/api/emma/agent`, `/api/emma/vision`, `/api/emma/emotion`, `/api/emma/memory`, `/api/emma/summarize`) now call `https://openrouter.ai/api/v1/chat/completions` via the unified `src/lib/openrouter.ts` helper.
+- **Model IDs updated** — `src/core/models.ts` now uses OpenRouter model identifiers. Swap to `anthropic/claude-sonnet-4-5` / `google/gemini-2.5-flash` for production.
+- **Dead code removed** — `@anthropic-ai/sdk` dependency removed. `tests/integration/anthropic-beta-headers.test.ts` removed. `FEATURES.md` removed.
+
+---
+
 ## 2026-05-23
 
 ### API stability
-- **Anthropic beta header validation** — All expired beta headers removed (`message-edits-2025-11-15`, `code-execution-2026-01-20`, `skills-2025-10-02`, `memory-2025-08-18`). The valid set is now `compact-2026-01-12`, `files-api-2025-04-14`, `mcp-client-2025-11-20`, `cache-diagnosis-2026-04-07`, and `code-execution-2025-08-25` (only when skills are enabled). These expired headers caused every chat message to return 502 silently.
-- **`tool_search_tool_bm25` name fixed** — Was `"tool_search"`, now correctly `"tool_search_tool_bm25"` as required by `tool_search_tool_bm25_20251119`.
 - **Error responses include `status` and `code`** — The 502 JSON body now carries `{ error, status, code }` where `code` is one of `BAD_REQUEST | AUTH_ERROR | RATE_LIMIT | OVERLOADED | TIMEOUT | UPSTREAM_ERROR`. Enables programmatic error handling without parsing persona messages.
-- **Upstream errors logged** — `console.error("[EMMA] Anthropic API error …")` fires before every 502 return. The same logging is now in `agent-loop.ts` for autonomous task failures.
+- **Upstream errors logged** — `console.error` fires before every 502 return. The same logging is in `agent-loop.ts` for autonomous task failures.
 
 ### Developer experience
-- **Live CI test for beta headers** — `tests/integration/anthropic-beta-headers.test.ts` validates all active beta headers and tool types against the Anthropic API. Skips automatically when `ANTHROPIC_API_KEY` is absent. Set the secret in CI to gate deployments on header validity.
 - **Type safety** — `agent-loop.ts` `any` casts replaced with `MessageParam`, `ContentBlock`, and `SupabaseClient | null`. `ToolResult` gains `outputVar?: string`. `EmmaApiResponse` gains `status?` and `code?`. `stream-client.ts` unused `catch (err)` binding removed.
 
 ### Architecture note (Next.js 16.2.4)

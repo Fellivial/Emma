@@ -47,7 +47,7 @@ const nextConfig = {
               "img-src 'self' data: blob:",
               "media-src 'self' blob:",
               "connect-src 'self'" +
-                " https://api.anthropic.com" +
+                " https://openrouter.ai" +
                 " https://api.elevenlabs.io" +
                 " https://*.supabase.co" +
                 " https://api.resend.com" +
