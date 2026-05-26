@@ -52,6 +52,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (typeof frame === "string" && frame.length > 700_000) {
+      return NextResponse.json({ analysis: null, error: "Frame too large" } as VisionApiResponse, {
+        status: 413,
+      });
+    }
+
     const mimeType = mediaType || "image/jpeg";
 
     const res = await fetch(OPENROUTER_URL, {
@@ -119,8 +125,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ analysis } as VisionApiResponse);
   } catch (err) {
     console.error("[EMMA Vision API] Unexpected error:", err);
-    return NextResponse.json({ analysis: null, error: String(err) } as VisionApiResponse, {
-      status: 500,
-    });
+    return NextResponse.json(
+      { analysis: null, error: "Vision analysis failed" } as VisionApiResponse,
+      {
+        status: 500,
+      }
+    );
   }
 }

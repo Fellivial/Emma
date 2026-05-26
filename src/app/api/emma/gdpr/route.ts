@@ -183,6 +183,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("[GDPR] Error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Request failed" }, { status: 500 });
   }
 }

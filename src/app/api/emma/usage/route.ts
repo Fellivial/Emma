@@ -96,9 +96,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[/api/emma/usage]", err);
-    return NextResponse.json(
-      { error: "Failed to load usage data", detail: String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load usage data" }, { status: 500 });
   }
 }

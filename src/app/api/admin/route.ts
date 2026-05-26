@@ -150,7 +150,7 @@ export async function GET() {
     const affiliateStats = {
       active: affiliates?.filter((a) => a.status === "active").length || 0,
       totalReferrals: affiliates?.reduce((s, a) => s + (a.total_referrals || 0), 0) || 0,
-      totalCommissions: affiliates?.reduce((s, a) => s + parseFloat(a.total_earned || 0), 0) || 0,
+      totalCommissions: affiliates?.reduce((s, a) => s + parseFloat(a.total_earned ?? "0"), 0) || 0,
     };
 
     // ── Channel Breakdown ─────────────────────────────────────────────────
@@ -167,9 +167,7 @@ export async function GET() {
     }
 
     // ── Message Feedback ──────────────────────────────────────────────────
-    const { data: feedbackRows } = await supabase
-      .from("message_feedback")
-      .select("rating");
+    const { data: feedbackRows } = await supabase.from("message_feedback").select("rating");
     const feedbackStats = {
       total: feedbackRows?.length || 0,
       up: (feedbackRows || []).filter((r) => r.rating === "up").length,
@@ -199,9 +197,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[/api/admin]", err);
-    return NextResponse.json(
-      { error: "Failed to load admin dashboard", detail: String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load admin dashboard" }, { status: 500 });
   }
 }

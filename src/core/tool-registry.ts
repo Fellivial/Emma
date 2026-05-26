@@ -96,9 +96,7 @@ const TOOL_INTEGRATION_MAP: Record<string, string> = {
  * Get tool definitions formatted for OpenAI-compatible function calling.
  * Pass connectedIntegrations to exclude tools whose integration isn't active.
  */
-export function getToolsForClaude(
-  connectedIntegrations?: Set<string>
-): Array<{
+export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
   type: "function";
   function: {
     name: string;
@@ -135,10 +133,7 @@ registerTool({
     properties: {
       topic: { type: "string", description: "What to summarize" },
       style: {
-        anyOf: [
-          { type: "string", enum: ["brief", "detailed", "bullet_points"] },
-          { type: "null" },
-        ],
+        anyOf: [{ type: "string", enum: ["brief", "detailed", "bullet_points"] }, { type: "null" }],
         description: "Summary style (null for default brief)",
       },
     },
@@ -173,59 +168,6 @@ registerTool({
 
     const data = await res.json();
     return { success: true, output: extractText(data), data: { topic: input.topic } };
-  },
-});
-
-
-// Tool: run_workflow — Execute a predefined workflow routine (moderate)
-registerTool({
-  name: "run_workflow",
-  description:
-    "Execute a named workflow routine (e.g., 'morning_standup', 'inbox_triage', 'focus_mode')",
-  inputSchema: {
-    type: "object",
-    properties: {
-      routine_id: { type: "string", description: "ID of the workflow routine to run" },
-    },
-    required: ["routine_id"],
-    additionalProperties: false,
-  },
-  riskLevel: "moderate",
-  handler: async (input) => {
-    return {
-      success: false,
-      output: `Workflow execution is not available in autonomous mode. Routine "${input.routine_id}" must be triggered from the main chat interface.`,
-    };
-  },
-});
-
-// Tool: send_notification — Send a notification to the user (safe)
-registerTool({
-  name: "send_notification",
-  description: "Send a notification message to the user",
-  inputSchema: {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      message: { type: "string" },
-      priority: {
-        anyOf: [
-          { type: "string", enum: ["low", "medium", "high"] },
-          { type: "null" },
-        ],
-        description: "Notification priority (null for default medium)",
-      },
-    },
-    required: ["title", "message", "priority"],
-    additionalProperties: false,
-  },
-  riskLevel: "safe",
-  handler: async (input) => {
-    return {
-      success: true,
-      output: `Notification sent: ${input.title}`,
-      data: input,
-    };
   },
 });
 
@@ -265,7 +207,7 @@ registerTool({
       });
 
       return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -302,8 +244,20 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { title: "Product Demo with Acme", date: "2025-11-14", time: "14:00", duration_minutes: 60, attendees: ["jane@acme.com", "bob@acme.com"] },
-    { title: "Team Standup", date: "2025-11-15", time: "09:00", duration_minutes: 30, attendees: null },
+    {
+      title: "Product Demo with Acme",
+      date: "2025-11-14",
+      time: "14:00",
+      duration_minutes: 60,
+      attendees: ["jane@acme.com", "bob@acme.com"],
+    },
+    {
+      title: "Team Standup",
+      date: "2025-11-15",
+      time: "09:00",
+      duration_minutes: 30,
+      attendees: null,
+    },
   ],
   riskLevel: "dangerous",
   handler: async (input, context) => {
@@ -329,7 +283,7 @@ registerTool({
       });
 
       return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -426,7 +380,13 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { email: "jane.doe@acme.com", firstname: "Jane", lastname: "Doe", company: "Acme Inc", phone: "+14155550100" },
+    {
+      email: "jane.doe@acme.com",
+      firstname: "Jane",
+      lastname: "Doe",
+      company: "Acme Inc",
+      phone: "+14155550100",
+    },
     { email: "lead@example.org", firstname: null, lastname: null, company: null, phone: null },
   ],
   riskLevel: "moderate",
@@ -461,7 +421,7 @@ registerTool({
         output: `Contact created with ID: ${data.id}`,
         data: { contactId: data.id, email: input.email },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -490,10 +450,7 @@ registerTool({
     properties: {
       contact_id: { type: "string", description: "HubSpot contact ID" },
       activity_type: {
-        anyOf: [
-          { type: "string", enum: ["call", "email", "meeting"] },
-          { type: "null" },
-        ],
+        anyOf: [{ type: "string", enum: ["call", "email", "meeting"] }, { type: "null" }],
         description: "Type of activity (null defaults to generic note)",
       },
       note: { type: "string", description: "Activity details or notes" },
@@ -502,7 +459,11 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { contact_id: "12345", activity_type: "call", note: "Discussed Q4 pricing. Will follow up next week." },
+    {
+      contact_id: "12345",
+      activity_type: "call",
+      note: "Discussed Q4 pricing. Will follow up next week.",
+    },
     { contact_id: "67890", activity_type: null, note: "Sent proposal PDF via email." },
   ],
   riskLevel: "moderate",
@@ -546,7 +507,7 @@ registerTool({
         output: `Activity logged successfully (note ID: ${data.id})`,
         data: { noteId: data.id, contactId: input.contact_id, activityType },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -593,7 +554,7 @@ registerTool({
         message: input.message as string,
         ...(input.thread_ts ? { thread_ts: input.thread_ts as string } : {}),
       });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -649,7 +610,7 @@ registerTool({
         };
       }
       return adapter.uploadFile(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -697,7 +658,7 @@ registerTool({
         };
       }
       return adapter.listFiles(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -740,7 +701,7 @@ registerTool({
         };
       }
       return adapter.readFile(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -782,7 +743,7 @@ registerTool({
         };
       }
       return adapter.listChannels(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -827,7 +788,7 @@ registerTool({
         };
       }
       return adapter.uploadFile(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -858,8 +819,16 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { parent_page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", title: "Meeting Notes 2024-01-15", content: "Discussed Q1 roadmap and action items." },
-    { parent_page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891", title: "Project Brief", content: null },
+    {
+      parent_page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      title: "Meeting Notes 2024-01-15",
+      content: "Discussed Q1 roadmap and action items.",
+    },
+    {
+      parent_page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891",
+      title: "Project Brief",
+      content: null,
+    },
   ],
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -867,7 +836,7 @@ registerTool({
       const { NotionAdapter } = await import("@/core/integrations/notion");
       const adapter = new NotionAdapter();
       return adapter.createPage(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -917,7 +886,7 @@ registerTool({
         };
       }
       return adapter.searchPages(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -949,8 +918,16 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", title: "Updated Title", content: "Appended section with new details." },
-    { page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891", title: null, content: "Additional notes appended." },
+    {
+      page_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      title: "Updated Title",
+      content: "Appended section with new details.",
+    },
+    {
+      page_id: "b2c3d4e5-f6a7-8901-bcde-f01234567891",
+      title: null,
+      content: "Additional notes appended.",
+    },
   ],
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -958,7 +935,7 @@ registerTool({
       const { NotionAdapter } = await import("@/core/integrations/notion");
       const adapter = new NotionAdapter();
       return adapter.updatePage(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1000,7 +977,7 @@ registerTool({
       const { WhatsAppAdapter } = await import("@/core/integrations/whatsapp");
       const adapter = new WhatsAppAdapter();
       return adapter.sendText(input.to as string, input.message as string);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return { success: false, output: `WhatsApp failed: ${err.message}` };
     }
@@ -1033,7 +1010,7 @@ registerTool({
         context.userId
       );
       return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return { success: false, output: `DOCX failed: ${err.message}` };
     }
@@ -1066,7 +1043,7 @@ registerTool({
         context.userId
       );
       return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       return { success: false, output: `PDF failed: ${err.message}` };
     }
@@ -1085,7 +1062,7 @@ registerTool({
       payload: {
         type: "string",
         description:
-          "JSON payload to send in the request body, serialized as a string (e.g. '{\"key\": \"value\"}')",
+          'JSON payload to send in the request body, serialized as a string (e.g. \'{"key": "value"}\')',
       },
     },
     required: ["url", "payload"],
@@ -1106,7 +1083,7 @@ registerTool({
       return { success: false, output: "Invalid webhook URL." };
     }
     const privateRange =
-      /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|::1$)/i;
+      /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|0\.|::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|::ffff:)/i;
     if (privateRange.test(hostname)) {
       return { success: false, output: "Webhook URL must point to a public host." };
     }
@@ -1141,7 +1118,7 @@ registerTool({
         output: `Webhook responded ${res.status}: ${body.slice(0, 500)}`,
         data: { status: res.status },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "AbortError") {
         return { success: false, output: "Webhook timed out after 10 seconds." };
@@ -1179,8 +1156,20 @@ registerTool({
     additionalProperties: false,
   },
   inputExamples: [
-    { dealname: "Acme Corp — Enterprise Plan", amount: "12000", pipeline: null, dealstage: "appointmentscheduled", contact_id: "12345" },
-    { dealname: "New Inbound Lead", amount: null, pipeline: null, dealstage: null, contact_id: null },
+    {
+      dealname: "Acme Corp — Enterprise Plan",
+      amount: "12000",
+      pipeline: null,
+      dealstage: "appointmentscheduled",
+      contact_id: "12345",
+    },
+    {
+      dealname: "New Inbound Lead",
+      amount: null,
+      pipeline: null,
+      dealstage: null,
+      contact_id: null,
+    },
   ],
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -1188,7 +1177,7 @@ registerTool({
       const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
       const adapter = new HubSpotAdapter();
       return adapter.createDeal(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1236,7 +1225,7 @@ registerTool({
       const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
       const adapter = new HubSpotAdapter();
       return adapter.updateDealStage(context.clientId || "", input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1274,15 +1263,20 @@ registerTool({
     additionalProperties: false,
   },
   riskLevel: "safe",
-  handler: async (input) => {
+  handler: async (input, context) => {
     const supabase = getSupabaseAdmin();
     if (!supabase) return { success: false, output: "Database not configured." };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("ingested_documents")
       .select("id, label, extracted_text, character_count")
-      .eq("id", input.document_id as string)
-      .single();
+      .eq("id", input.document_id as string);
+
+    if (context.clientId) {
+      query = query.eq("client_id", context.clientId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error || !data) {
       return { success: false, output: `Document not found: ${input.document_id}` };
@@ -1521,8 +1515,8 @@ registerTool({
           output: text || "No text detected.",
           data: { confidence },
         };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (err: any) {
         return { success: false, output: `OCR failed: ${err.message}` };
       }
     }
@@ -1567,7 +1561,7 @@ registerTool({
         maxResults: Number(input.max_results) || 10,
         timeMax: new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString(),
       });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -1603,7 +1597,7 @@ registerTool({
         };
       }
       return adapter.getTodayEvents(context.clientId || "");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationAuthExpiredError") {
         return {
@@ -1644,7 +1638,7 @@ registerTool({
         limit: input.limit ? Number(input.limit) : 10,
         query: input.query as string | undefined,
       });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1686,7 +1680,7 @@ registerTool({
         limit: input.limit ? Number(input.limit) : 10,
         stage: input.stage as string | undefined,
       });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1717,7 +1711,7 @@ registerTool({
       const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
       const adapter = new HubSpotAdapter();
       return adapter.getContactById(context.clientId || "", input.contact_id as string);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
         return {
@@ -1744,8 +1738,7 @@ registerTool({
       },
       voice_id: {
         type: ["string", "null"],
-        description:
-          "ElevenLabs voice ID (null uses user's configured voice or default Rachel)",
+        description: "ElevenLabs voice ID (null uses user's configured voice or default Rachel)",
       },
     },
     required: ["text", "voice_id"],

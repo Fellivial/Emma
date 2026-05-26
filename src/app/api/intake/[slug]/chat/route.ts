@@ -4,6 +4,7 @@ import { MODEL_BRAIN } from "@/core/models";
 import { sanitiseInput } from "@/core/security/sanitise";
 import { checkUsage, recordUsage } from "@/core/usage-enforcer";
 import { loadClientConfigOrNull } from "@/core/client-config";
+import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import { Resend } from "resend";
 import { syncLeadToHubSpot } from "@/lib/hubspot";
 import { appendLeadToSheet } from "@/lib/sheets";
@@ -30,27 +31,6 @@ Do not emit this tag until you have all three fields confirmed by the visitor.`;
 // Regex to extract the structured completion tag
 const INTAKE_COMPLETE_RE =
   /\[INTAKE_COMPLETE:\s*name=([^,\]]+),\s*contact=([^,\]]+),\s*notes=([^\]]+)\]/i;
-
-// ─── Rate limiting (in-memory, per-IP, per-slug) ──────────────────────────────
-
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 20; // messages per window per IP+slug
-
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(ip: string, slug: string): boolean {
-  const key = `${ip}:${slug}`;
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
-}
 
 // ─── IP hashing (SHA-256, one-way) ───────────────────────────────────────────
 
@@ -90,7 +70,9 @@ export async function POST(
     request.headers.get("x-real-ip") ??
     "unknown";
 
-  if (!checkRateLimit(ip, slug)) {
+  const rateLimitKey = `ip:${ip}:${slug}`;
+  const rateCheck = await checkRateLimit(rateLimitKey, 20, 1_000_000);
+  if (!rateCheck.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
@@ -121,10 +103,7 @@ export async function POST(
   }
   // Strip any trailing non-user messages so we never send a trailing assistant
   // turn to the model (returns 400 on assistant-turn prefill).
-  const trimmedMessages = messages.slice(
-    0,
-    messages.findLastIndex((m) => m.role === "user") + 1
-  );
+  const trimmedMessages = messages.slice(0, messages.findLastIndex((m) => m.role === "user") + 1);
 
   // Replace last user message content with sanitised version
   const safeMessages = trimmedMessages.map((m, i) =>
@@ -155,10 +134,7 @@ export async function POST(
       body: JSON.stringify({
         model: MODEL_BRAIN,
         max_tokens: 512,
-        messages: [
-          { role: "system", content: INTAKE_SYSTEM_PROMPT },
-          ...safeMessages,
-        ],
+        messages: [{ role: "system", content: INTAKE_SYSTEM_PROMPT }, ...safeMessages],
       }),
     });
 
@@ -179,6 +155,7 @@ export async function POST(
   const inputTokens = orData.usage?.prompt_tokens ?? 0;
   const outputTokens = orData.usage?.completion_tokens ?? 0;
   await recordUsage(null, inputTokens, outputTokens, config.planId, "UTC", 1, slug);
+  await consumeRateLimit(rateLimitKey, 1, inputTokens + outputTokens);
 
   // ── A6: Server-side extraction of completion tag ──────────────────────────
   const match = INTAKE_COMPLETE_RE.exec(rawReply);

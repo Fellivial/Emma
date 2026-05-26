@@ -141,7 +141,7 @@ export function sanitiseInput(input: string): SanitisationResult {
 
       // Escalate threat level
       if (severity === "high" && threat !== "high") threat = "high";
-      else if (severity === "medium" && threat === "none") threat = "medium";
+      else if (severity === "medium" && threat !== "high") threat = "medium";
       else if (severity === "low" && threat === "none") threat = "low";
     }
   }
