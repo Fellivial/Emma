@@ -15,6 +15,7 @@ npm run test:coverage # Coverage report (v8)
 ```
 
 Run a single test file:
+
 ```bash
 npx vitest run tests/unit/sanitise.test.ts
 ```
@@ -26,8 +27,9 @@ Emma is a Next.js AI workspace agent. The app shell lives at `src/app/app/page.t
 ### Request Flow
 
 Every user message goes through:
+
 1. `sanitiseInput()` (`src/core/security/sanitise.ts`) — injection detection, length limits
-2. `checkUsage()` (`src/core/usage-enforcer.ts`) — multi-window (daily/weekly/monthly) metering
+2. `checkUsage()` (`src/core/usage-enforcer.ts`) — 5-hour rolling window metering
 3. `POST /api/emma` (`src/app/api/emma/route.ts`) — streaming SSE brain route via OpenRouter
 4. `parseEmmaResponse()` (`src/core/command-parser.ts`) — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
 
@@ -37,20 +39,20 @@ The brain route streams SSE deltas to the client. After the full response is col
 
 All engines are React hooks or plain modules in `src/core/`:
 
-| Engine | Purpose |
-|---|---|
-| `personas.ts` | Builds the full system prompt: persona + memories + vision context + emotion state + routines |
-| `models.ts` | Single source of truth for OpenRouter model IDs (brain/utility/vision) |
-| `memory-engine.ts` / `memory-db.ts` | In-memory store + Supabase persistence with AES-256-GCM field encryption |
-| `client-config.ts` | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG` |
-| `usage-enforcer.ts` | Multi-window token/message metering; must fail-open (never block on DB errors) |
-| `avatar-engine.ts` | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip) |
-| `emotion-engine.ts` | Detects user emotional state from voice/text; feeds into system prompt |
-| `autonomy-engine.ts` | Autonomy tier system (1=notify, 2=suggest, 3=execute) |
-| `routines-engine.ts` | Workflow routines — built-in and user-defined |
-| `integrations/adapter.ts` | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot |
-| `security/sanitise.ts` | Prompt injection detection and input cleaning |
-| `security/encryption.ts` | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var) |
+| Engine                              | Purpose                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `personas.ts`                       | Builds the full system prompt: persona + memories + vision context + emotion state + routines |
+| `models.ts`                         | Single source of truth for OpenRouter model IDs (brain/utility/vision)                        |
+| `memory-engine.ts` / `memory-db.ts` | In-memory store + Supabase persistence with AES-256-GCM field encryption                      |
+| `client-config.ts`                  | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`        |
+| `usage-enforcer.ts`                 | 5-hour single-window token/message metering; must fail-open (never block on DB errors)        |
+| `avatar-engine.ts`                  | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip)                |
+| `emotion-engine.ts`                 | Detects user emotional state from voice/text; feeds into system prompt                        |
+| `autonomy-engine.ts`                | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                         |
+| `routines-engine.ts`                | Workflow routines — built-in and user-defined                                                 |
+| `integrations/adapter.ts`           | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot      |
+| `security/sanitise.ts`              | Prompt injection detection and input cleaning                                                 |
+| `security/encryption.ts`            | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                             |
 
 ### API Routes
 
@@ -58,8 +60,8 @@ All routes are under `src/app/api/`:
 
 - `emma/route.ts` — Brain (streaming SSE)
 - `emma/memory/route.ts` — Memory CRUD + extraction
-- `emma/vision/route.ts` — Claude Vision scene analysis
-- `emma/emotion/route.ts` — Emotion extraction via Claude
+- `emma/vision/route.ts` — Scene analysis via OpenRouter (vision model)
+- `emma/emotion/route.ts` — Emotion extraction via OpenRouter (utility model)
 - `emma/tts/route.ts` — ElevenLabs TTS
 - `emma/settings/route.ts` — User settings (GET/PUT)
 - `emma/usage/route.ts` — Usage stats
@@ -70,7 +72,7 @@ All routes are under `src/app/api/`:
 
 ### Auth & Middleware
 
-`src/proxy.ts` gates all routes via Supabase SSR. Public paths: `/login`, `/auth/callback`, `/landing`, `/api/waitlist`, `/api/emma/webhook`, `/waitlist`, `/api/emma/unsubscribe`. API routes authenticate inside each handler. When `NEXT_PUBLIC_SUPABASE_URL` is not set (local dev), middleware is a no-op.
+`src/proxy.ts` gates all routes via Supabase SSR. Public paths: `/login`, `/register`, `/auth/callback`, `/landing`, `/api/waitlist`, `/api/emma/webhook`, `/waitlist`, `/api/emma/unsubscribe`, `/intake/`. API routes authenticate inside each handler. When `NEXT_PUBLIC_SUPABASE_URL` is not set (local dev), middleware is a no-op.
 
 ### Personas
 
@@ -82,29 +84,34 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 
 ## Environment Variables
 
-| Variable | Purpose |
-|---|---|
-| `OPENROUTER_API_KEY` | Required — all LLM calls (brain, vision, memory, emotion) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Required for auth/DB (skip for local dev) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Required for client-side auth |
-| `SUPABASE_SERVICE_ROLE_KEY` | Required for server-side DB operations |
-| `EMMA_ENCRYPTION_KEY` | AES-256 field encryption key (`openssl rand -hex 32`) |
-| `ELEVENLABS_API_KEY` | Not a server var — users connect their own key via Settings → Integrations |
-| `RESEND_API_KEY` | Email sequences (`EMAIL_FROM`, `NEXT_PUBLIC_APP_URL` also required) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail + Google Calendar OAuth |
-| `EMMA_ADMIN_EMAILS` | Comma-separated emails allowed into `/admin` |
-| `CRON_SECRET` | Authenticates Vercel cron calls to `/api/emma/cron/*` routes |
-| `LEMONSQUEEZY_API_KEY` | Billing — checkout + subscription management |
-| `LEMONSQUEEZY_STORE_ID` | Billing — checkout session creation |
-| `LEMONSQUEEZY_WEBHOOK_SECRET` | Billing — webhook signature verification |
-| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | LemonSqueezy variant ID for the Starter plan ($29/mo) |
-| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | LemonSqueezy variant ID for the Pro plan ($79/mo) |
-| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | LemonSqueezy variant ID for the $9 Extra Response Pack |
-| `NEXT_PUBLIC_SMB_DOMAIN` | Subdomain routing — e.g. `intake.yourdomain.com` → `{slug}.intake.yourdomain.com` maps to `/intake/{slug}` |
-| `GOOGLE_SHEETS_SA_KEY` | JSON blob of a GCP service account for Google Sheets lead appending (`client_email` + `private_key`) |
-| `HUBSPOT_API_KEY` | HubSpot private app token for deal/contact sync (Portal Settings → Integrations → Private Apps) |
-| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | Notion OAuth app credentials (api.notion.com → My Integrations) |
-| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | Slack OAuth v2 app credentials (api.slack.com → Your Apps) |
+| Variable                                    | Purpose                                                                                                    |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`                        | Required — all LLM calls (brain, vision, memory, emotion)                                                  |
+| `NEXT_PUBLIC_SUPABASE_URL`                  | Required for auth/DB (skip for local dev)                                                                  |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | Required for client-side auth                                                                              |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | Required for server-side DB operations                                                                     |
+| `EMMA_ENCRYPTION_KEY`                       | AES-256 field encryption key (`openssl rand -hex 32`)                                                      |
+| `NEXT_PUBLIC_APP_URL`                       | Base URL for OG images and email links (e.g. `https://yourapp.com`)                                        |
+| `ELEVENLABS_API_KEY`                        | Not a server var — users connect their own key via Settings → Integrations                                 |
+| `RESEND_API_KEY`                            | Email sequences + intake lead notifications                                                                |
+| `EMAIL_FROM`                                | Sender address for Resend emails                                                                           |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail + Google Calendar OAuth                                                                              |
+| `EMMA_ADMIN_EMAILS`                         | Comma-separated emails allowed into `/admin`                                                               |
+| `CRON_SECRET`                               | Authenticates Vercel cron calls to `/api/emma/cron/*` routes                                               |
+| `LEMONSQUEEZY_API_KEY`                      | Billing — checkout + subscription management                                                               |
+| `LEMONSQUEEZY_STORE_ID`                     | Billing — checkout session creation                                                                        |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`               | Billing — webhook signature verification                                                                   |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | LemonSqueezy variant ID for the Starter plan ($29/mo)                                                      |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | LemonSqueezy variant ID for the Pro plan ($79/mo)                                                          |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | LemonSqueezy variant ID for the $9 Extra Response Pack                                                     |
+| `NEXT_PUBLIC_SMB_DOMAIN`                    | Subdomain routing — e.g. `intake.yourdomain.com` → `{slug}.intake.yourdomain.com` maps to `/intake/{slug}` |
+| `GOOGLE_SHEETS_SA_KEY`                      | JSON blob of a GCP service account for Google Sheets lead appending (`client_email` + `private_key`)       |
+| `HUBSPOT_API_KEY`                           | HubSpot private app token for deal/contact sync (Portal Settings → Integrations → Private Apps)            |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | Notion OAuth app credentials (api.notion.com → My Integrations)                                            |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | Slack OAuth v2 app credentials (api.slack.com → Your Apps)                                                 |
+| `SENTRY_ORG`                                | Sentry org slug for source map uploads at build time                                                       |
+| `SENTRY_PROJECT`                            | Sentry project slug                                                                                        |
+| `SENTRY_AUTH_TOKEN`                         | Sentry auth token for source map uploads (build only)                                                      |
 
 ## Database Setup
 
@@ -124,19 +131,21 @@ Body: `font-sans` → Outfit. Display/italic: `font-display` → Cormorant Garam
 
 ## Plans & Usage Limits
 
-Four tiers: `free`, `starter`, `pro`, `enterprise` (defined in `src/core/pricing.ts`). Limits are multi-window: daily / weekly / monthly — whichever hits first blocks. 80% of any window → in-persona warning. 100% → hard block + Extra Response pack offer. Enterprise skips enforcement entirely.
+Four tiers: `free`, `starter`, `pro`, `enterprise` (defined in `src/core/pricing.ts`). Limits are enforced per 5-hour rolling window (UTC-aligned blocks). 80% of the window budget → in-persona warning. 100% → hard block + Extra Response pack offer. Enterprise skips enforcement entirely.
 
 ## Hooks (GateGuard)
 
 Two hooks are active that block operations until facts are presented:
 
 **Before creating a new file** (`pre:edit-write`), state:
+
 1. What files/lines will call this new file
 2. Confirmation no existing file serves the same purpose
 3. Field structure if the file reads/writes data
 4. The user's instruction verbatim
 
 **Before the first Bash command each session** (`pre:bash`), state:
+
 1. The current user request in one sentence
 2. What this specific command verifies or produces
 
@@ -153,6 +162,7 @@ Available skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/pla
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
 
 Key routing rules:
+
 - Product ideas/brainstorming → invoke /office-hours
 - Strategy/scope → invoke /plan-ceo-review
 - Architecture → invoke /plan-eng-review
