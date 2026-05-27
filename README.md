@@ -83,7 +83,7 @@ src/
 │   ├── models.ts                   # OpenRouter model IDs (single source of truth)
 │   ├── memory-engine.ts / memory-db.ts
 │   ├── client-config.ts            # Per-client config from Supabase `clients` table
-│   ├── usage-enforcer.ts           # Multi-window token/message metering
+│   ├── usage-enforcer.ts           # 5-hour single-window token/message metering
 │   ├── avatar-engine.ts            # Live2D: 10 expressions, lip sync, 3 layout modes
 │   ├── emotion-engine.ts           # User emotional state detection
 │   ├── autonomy-engine.ts          # Autonomy tiers (1=notify, 2=suggest, 3=execute)
@@ -101,7 +101,7 @@ src/
 Every `/app` chat message:
 
 1. `sanitiseInput()` — injection detection, length limits
-2. `checkUsage()` — multi-window metering (daily / weekly / monthly)
+2. `checkUsage()` — 5-hour rolling window metering
 3. `POST /api/emma` — streaming SSE brain route
 4. `parseEmmaResponse()` — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
 5. Avatar, TTS, and timeline update on the client
@@ -131,33 +131,33 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 
 ## Environment Variables
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `OPENROUTER_API_KEY` | ✅ | All LLM calls (brain, vision, memory, emotion) — get key at openrouter.ai/keys |
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Auth + DB |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Client-side auth |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Server-side DB (bypasses RLS) |
-| `EMMA_ENCRYPTION_KEY` | ✅ | AES-256 field encryption (`openssl rand -hex 32`) |
-| `NEXT_PUBLIC_APP_URL` | ✅ | Base URL for OG images and email links |
-| `RESEND_API_KEY` | — | Email sequences + intake lead notifications |
-| `EMAIL_FROM` | — | Sender address for Resend |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail + Google Calendar OAuth |
-| `EMMA_ADMIN_EMAILS` | — | Comma-separated emails allowed into `/admin` |
-| `CRON_SECRET` | — | Authenticates Vercel cron calls |
-| `LEMONSQUEEZY_API_KEY` | — | Billing checkout + subscription management |
-| `LEMONSQUEEZY_STORE_ID` | — | Billing checkout session creation |
-| `LEMONSQUEEZY_WEBHOOK_SECRET` | — | Webhook signature verification |
-| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | — | LemonSqueezy variant ID for the Starter plan ($29/mo) |
-| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | — | LemonSqueezy variant ID for the Pro plan ($79/mo) |
-| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | — | Variant ID for the $9 Extra Response Pack |
-| `NEXT_PUBLIC_SMB_DOMAIN` | — | Subdomain routing — e.g. `intake.yourdomain.com` |
-| `GOOGLE_SHEETS_SA_KEY` | — | GCP service account JSON for Google Sheets lead appending |
-| `HUBSPOT_API_KEY` | — | HubSpot private app token for deal/contact sync |
-| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | — | Notion OAuth app credentials |
-| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | — | Slack OAuth v2 app credentials |
-| `SENTRY_ORG` | — | Sentry org slug for source map uploads at build time |
-| `SENTRY_PROJECT` | — | Sentry project slug |
-| `SENTRY_AUTH_TOKEN` | — | Sentry auth token for source map uploads (build only) |
+| Variable                                    | Required | Purpose                                                                        |
+| ------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `OPENROUTER_API_KEY`                        | ✅       | All LLM calls (brain, vision, memory, emotion) — get key at openrouter.ai/keys |
+| `NEXT_PUBLIC_SUPABASE_URL`                  | ✅       | Auth + DB                                                                      |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | ✅       | Client-side auth                                                               |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | ✅       | Server-side DB (bypasses RLS)                                                  |
+| `EMMA_ENCRYPTION_KEY`                       | ✅       | AES-256 field encryption (`openssl rand -hex 32`)                              |
+| `NEXT_PUBLIC_APP_URL`                       | ✅       | Base URL for OG images and email links                                         |
+| `RESEND_API_KEY`                            | —        | Email sequences + intake lead notifications                                    |
+| `EMAIL_FROM`                                | —        | Sender address for Resend                                                      |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | —        | Gmail + Google Calendar OAuth                                                  |
+| `EMMA_ADMIN_EMAILS`                         | —        | Comma-separated emails allowed into `/admin`                                   |
+| `CRON_SECRET`                               | —        | Authenticates Vercel cron calls                                                |
+| `LEMONSQUEEZY_API_KEY`                      | —        | Billing checkout + subscription management                                     |
+| `LEMONSQUEEZY_STORE_ID`                     | —        | Billing checkout session creation                                              |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`               | —        | Webhook signature verification                                                 |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | —        | LemonSqueezy variant ID for the Starter plan ($29/mo)                          |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | —        | LemonSqueezy variant ID for the Pro plan ($79/mo)                              |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | —        | Variant ID for the $9 Extra Response Pack                                      |
+| `NEXT_PUBLIC_SMB_DOMAIN`                    | —        | Subdomain routing — e.g. `intake.yourdomain.com`                               |
+| `GOOGLE_SHEETS_SA_KEY`                      | —        | GCP service account JSON for Google Sheets lead appending                      |
+| `HUBSPOT_API_KEY`                           | —        | HubSpot private app token for deal/contact sync                                |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | —        | Notion OAuth app credentials                                                   |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | —        | Slack OAuth v2 app credentials                                                 |
+| `SENTRY_ORG`                                | —        | Sentry org slug for source map uploads at build time                           |
+| `SENTRY_PROJECT`                            | —        | Sentry project slug                                                            |
+| `SENTRY_AUTH_TOKEN`                         | —        | Sentry auth token for source map uploads (build only)                          |
 
 ## Database
 
@@ -184,7 +184,7 @@ Key tables: `profiles`, `memories`, `usage_events`, `client_integrations`, `clie
 
 Four tiers defined in `src/core/pricing.ts`: `free`, `starter`, `pro`, `enterprise`.
 
-Limits are multi-window — daily / weekly / monthly, whichever hits first blocks. 80% of any window triggers an in-persona warning. 100% → hard block + Extra Response pack offer. Enterprise skips enforcement entirely.
+Limits are enforced per 5-hour rolling window (UTC-aligned blocks). 80% of the window budget triggers an in-persona warning. 100% → hard block + Extra Response pack offer. Enterprise skips enforcement entirely.
 
 ## Testing
 
@@ -200,29 +200,29 @@ Coverage targets `src/core/**` and `src/lib/**`.
 
 ### Feature availability
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Chat (streaming) | Available | |
-| Vision, Memory, Emotion | Available | |
-| Web search / web fetch | Available | No extra key needed |
-| Document generation (pptx/xlsx/docx) | **Unavailable** | Pending re-implementation for OpenRouter |
-| ElevenLabs TTS | Available | BYOK — users connect their own key via Settings → Integrations |
+| Feature                              | Status          | Notes                                                          |
+| ------------------------------------ | --------------- | -------------------------------------------------------------- |
+| Chat (streaming)                     | Available       |                                                                |
+| Vision, Memory, Emotion              | Available       |                                                                |
+| Web search / web fetch               | Available       | No extra key needed                                            |
+| Document generation (pptx/xlsx/docx) | **Unavailable** | Pending re-implementation for OpenRouter                       |
+| ElevenLabs TTS                       | Available       | BYOK — users connect their own key via Settings → Integrations |
 
 ## Documentation
 
-| Doc | Type | What it covers |
-|-----|------|----------------|
-| [Getting Started](docs/tutorial-getting-started.md) | Tutorial | From zero to working chat in 2 minutes; full setup with Supabase |
-| [Connect Integrations](docs/howto-connect-integrations.md) | How-to | Gmail, Google Calendar, Slack, Notion, HubSpot OAuth setup |
-| [SMB Intake Widget](docs/howto-smb-intake.md) | How-to | Deploy a public lead-capture chat widget for a business client |
-| [Add Billing](docs/howto-add-billing.md) | How-to | LemonSqueezy setup, webhooks, plan feature gating |
-| [Chat History](docs/howto-chat-history.md) | How-to | Enable persistent conversation history across page reloads |
-| [API Reference](docs/reference-api.md) | Reference | Every API route — auth, request body, response shape |
-| [Environment Variables](docs/reference-env-vars.md) | Reference | Full env var table with how-to-get instructions |
-| [Plans & Limits](docs/reference-plans.md) | Reference | Token budgets, feature flags, multi-window enforcement |
-| [Architecture](docs/explanation-architecture.md) | Explanation | Chat pipeline, two-block system prompt, prompt caching design |
-| [Security](docs/explanation-security.md) | Explanation | Prompt injection defense, AES-256-GCM field encryption |
-| [Autonomous Agent](docs/explanation-agent.md) | Explanation | Agent loop, autonomy tiers, tool risk levels |
+| Doc                                                        | Type        | What it covers                                                   |
+| ---------------------------------------------------------- | ----------- | ---------------------------------------------------------------- |
+| [Getting Started](docs/tutorial-getting-started.md)        | Tutorial    | From zero to working chat in 2 minutes; full setup with Supabase |
+| [Connect Integrations](docs/howto-connect-integrations.md) | How-to      | Gmail, Google Calendar, Slack, Notion, HubSpot OAuth setup       |
+| [SMB Intake Widget](docs/howto-smb-intake.md)              | How-to      | Deploy a public lead-capture chat widget for a business client   |
+| [Add Billing](docs/howto-add-billing.md)                   | How-to      | LemonSqueezy setup, webhooks, plan feature gating                |
+| [Chat History](docs/howto-chat-history.md)                 | How-to      | Enable persistent conversation history across page reloads       |
+| [API Reference](docs/reference-api.md)                     | Reference   | Every API route — auth, request body, response shape             |
+| [Environment Variables](docs/reference-env-vars.md)        | Reference   | Full env var table with how-to-get instructions                  |
+| [Plans & Limits](docs/reference-plans.md)                  | Reference   | Token budgets, feature flags, multi-window enforcement           |
+| [Architecture](docs/explanation-architecture.md)           | Explanation | Chat pipeline, two-block system prompt, prompt caching design    |
+| [Security](docs/explanation-security.md)                   | Explanation | Prompt injection defense, AES-256-GCM field encryption           |
+| [Autonomous Agent](docs/explanation-agent.md)              | Explanation | Agent loop, autonomy tiers, tool risk levels                     |
 
 ## Getting Help
 

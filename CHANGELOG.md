@@ -4,6 +4,14 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ---
 
+## [0.5.1.1] - 2026-05-27
+
+### Changed
+
+- **CLAUDE.md / README.md — docs accuracy pass** — corrected stale "multi-window" references to "5-hour rolling window", updated `vision` and `emotion` route descriptions from "Claude" to "OpenRouter", extended public path list with `/register` and `/intake/` to match `src/proxy.ts`.
+
+---
+
 ## [0.5.1.0] - 2026-05-27
 
 ### Fixed
