@@ -8,11 +8,13 @@
  *
  * Usage:
  *   NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
- *     npx tsx scripts/backfill-waitlist-approved.ts
+ *     npx tsx scripts/backfill-waitlist-approved.ts [--dry-run]
+ *
+ * --dry-run  Preview which users would be stamped without writing anything.
  *
  * Or load from .env.local first (bash):
  *   set -a && source .env.local && set +a
- *   npx tsx scripts/backfill-waitlist-approved.ts
+ *   npx tsx scripts/backfill-waitlist-approved.ts [--dry-run]
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -25,9 +27,12 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
+const DRY_RUN = process.argv.includes("--dry-run");
+
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 async function run() {
+  if (DRY_RUN) console.log("⚠️  DRY RUN — no writes will be made\n");
   console.log("Fetching converted waitlist entries…");
 
   let offset = 0;
@@ -86,6 +91,12 @@ async function run() {
         continue;
       }
 
+      if (DRY_RUN) {
+        console.log(`  DRY-RUN  ${email} — would stamp waitlist_approved=true`);
+        totalStamped++;
+        continue;
+      }
+
       const { error: updateErr } = await supabase.auth.admin.updateUserById(authUser.id, {
         app_metadata: { waitlist_approved: true },
       });
@@ -103,19 +114,24 @@ async function run() {
     offset += PAGE;
   }
 
-  console.log("\n── Backfill complete ──────────────────────────────────");
-  console.log(`  Stamped:  ${totalStamped}`);
+  const label = DRY_RUN ? "── Dry run complete ──" : "── Backfill complete ──";
+  console.log(`\n${label}─────────────────────────────────`);
+  console.log(`  ${DRY_RUN ? "Would stamp" : "Stamped"}:  ${totalStamped}`);
   console.log(`  Skipped:  ${totalSkipped}`);
-  console.log(`  Failed:   ${totalFailed}`);
+  if (!DRY_RUN) console.log(`  Failed:   ${totalFailed}`);
 
-  if (totalFailed > 0) {
+  if (!DRY_RUN && totalFailed > 0) {
     console.log("\nSome users failed — re-run the script to retry.");
     process.exit(1);
   }
 
-  console.log(
-    "\nBackfill complete. The waitlist_approved flag is now stamped on all converted users."
-  );
+  if (DRY_RUN) {
+    console.log("\nDry run complete. Run without --dry-run to apply changes.");
+  } else {
+    console.log(
+      "\nBackfill complete. The waitlist_approved flag is now stamped on all converted users."
+    );
+  }
 }
 
 run().catch((err) => {
