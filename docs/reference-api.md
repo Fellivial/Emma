@@ -13,6 +13,7 @@ Main chat endpoint. Streams SSE deltas to the client.
 **Auth:** Required (Supabase session)
 
 **Request body:**
+
 ```typescript
 {
   message: string;           // User's message (sanitised server-side)
@@ -27,6 +28,7 @@ Main chat endpoint. Streams SSE deltas to the client.
 ```
 
 **Response:** SSE stream. Each event is `data: <json>\n\n`. Event types:
+
 - `delta` — partial text chunk
 - `tool_start` — tool call beginning (name, inputs)
 - `tool_result` — tool execution result
@@ -46,6 +48,7 @@ Returns the authenticated user's last 50 chat messages, ordered chronologically.
 **Auth:** Required
 
 **Response:**
+
 ```json
 {
   "messages": [
@@ -68,10 +71,18 @@ Saves one or more messages. Upserts on `id` — idempotent.
 **Auth:** Required
 
 **Request body:** Single message object or array:
+
 ```json
 [
   { "id": "uuid", "role": "user", "content": "...", "display": "...", "timestamp": 1234567890 },
-  { "id": "uuid", "role": "assistant", "content": "...[emotion: warm]", "display": "...", "expression": "warm", "timestamp": 1234567890 }
+  {
+    "id": "uuid",
+    "role": "assistant",
+    "content": "...[emotion: warm]",
+    "display": "...",
+    "expression": "warm",
+    "timestamp": 1234567890
+  }
 ]
 ```
 
@@ -86,6 +97,7 @@ Returns all memories for the authenticated user.
 **Auth:** Required
 
 **Query params:**
+
 - `category` (optional) — filter by `preference | fact | habit | goal | relationship`
 
 **Response:** `{ memories: MemoryEntry[] }`
@@ -97,6 +109,7 @@ Creates or updates a memory entry.
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "action": "extract" | "add" | "update" | "delete",
@@ -117,10 +130,11 @@ Analyzes a screenshot using Claude Sonnet vision. Returns a scene description su
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "imageBase64": "data:image/png;base64,...",
-  "question": "What is the user working on?"  // Optional focus hint
+  "question": "What is the user working on?" // Optional focus hint
 }
 ```
 
@@ -137,6 +151,7 @@ Detects emotional state from voice transcription or text. Uses Claude Haiku.
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "text": "I'm really stressed about this deadline",
@@ -145,6 +160,7 @@ Detects emotional state from voice transcription or text. Uses Claude Haiku.
 ```
 
 **Response:**
+
 ```json
 {
   "emotion": {
@@ -168,6 +184,7 @@ Returns token and message usage for all three windows.
 **Auth:** Required
 
 **Response:**
+
 ```json
 {
   "windows": [
@@ -213,6 +230,7 @@ Lists autonomous tasks for the authenticated user.
 **Auth:** Required
 
 **Query params:**
+
 - `status` — filter by `pending | running | completed | failed`
 
 ### `POST /api/emma/tasks`
@@ -222,11 +240,12 @@ Creates a new autonomous task.
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "title": "Research competitors",
   "description": "Find the top 5 competitors...",
-  "schedule": "2026-05-24T09:00:00Z"  // Optional; null = run immediately
+  "schedule": "2026-05-24T09:00:00Z" // Optional; null = run immediately
 }
 ```
 
@@ -249,6 +268,7 @@ Executes a single step of the autonomous agent loop. Called internally by the ta
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "taskId": "uuid",
@@ -296,11 +316,12 @@ Generates speech audio from text.
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "text": "...",
-  "voice_id": "...",   // ElevenLabs voice ID
-  "api_key": "..."     // User's ElevenLabs API key (BYOK)
+  "voice_id": "...", // ElevenLabs voice ID
+  "api_key": "..." // User's ElevenLabs API key (BYOK)
 }
 ```
 
@@ -323,11 +344,12 @@ Adds a new MCP server.
 **Auth:** Required
 
 **Request body:**
+
 ```json
 {
   "name": "My GitHub MCP",
   "url": "https://github-mcp.example.com/mcp",
-  "auth_token": "bearer-token"  // Optional; stored encrypted
+  "auth_token": "bearer-token" // Optional; stored encrypted
 }
 ```
 
@@ -346,6 +368,7 @@ Returns connection status for all integrations.
 **Auth:** Required
 
 **Response:**
+
 ```json
 {
   "gmail": "connected",
@@ -405,6 +428,7 @@ Handles a chat message for the intake widget. No auth required.
 **Rate limit:** 20 messages/minute per IP+slug (in-memory).
 
 **Request body:**
+
 ```json
 {
   "message": "...",
@@ -419,6 +443,7 @@ Handles a chat message for the intake widget. No auth required.
 Submits a completed intake form directly (non-chat path).
 
 **Request body:**
+
 ```json
 {
   "name": "Jane Smith",
@@ -443,12 +468,12 @@ Returns aggregate usage stats and user list.
 
 All cron routes are authenticated via `Authorization: Bearer <CRON_SECRET>` header.
 
-| Route | Schedule | Purpose |
-|-------|----------|---------|
-| `POST /api/emma/cron/scheduled-tasks` | every minute | Runs pending scheduled tasks |
-| `POST /api/emma/cron/pattern-detection` | daily | Analyzes usage patterns, generates suggestions |
-| `POST /api/emma/cron/email-sequences` | hourly | Sends drip email sequences |
-| `POST /api/emma/cron/leads-cleanup` | daily | Purges stale leads |
+| Route                                   | Schedule     | Purpose                                        |
+| --------------------------------------- | ------------ | ---------------------------------------------- |
+| `POST /api/emma/cron/scheduled-tasks`   | every minute | Runs pending scheduled tasks                   |
+| `POST /api/emma/cron/pattern-detection` | daily        | Analyzes usage patterns, generates suggestions |
+| `POST /api/emma/cron/email-sequences`   | hourly       | Sends drip email sequences                     |
+| `POST /api/emma/cron/leads-cleanup`     | daily        | Purges stale leads                             |
 
 ---
 
@@ -474,11 +499,62 @@ LemonSqueezy webhook receiver. Verifies HMAC signature before processing.
 
 ## Waitlist
 
+### `GET /api/waitlist`
+
+Returns current spot availability. Public endpoint.
+
+**Response:**
+
+```json
+{
+  "spotsRemaining": 3,
+  "totalSpots": 10,
+  "activeUsers": 7,
+  "waitlistCount": 42
+}
+```
+
 ### `POST /api/waitlist`
 
-Adds an email to the waitlist. Public endpoint.
+Joins the waitlist or claims an immediate spot if one is available. Public endpoint.
 
-**Request body:** `{ "email": "..." }`
+**Request body (full):**
+
+```json
+{
+  "action": "join",
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "industry": "Healthcare",
+  "message": "Optional note",
+  "referralSource": "Twitter"
+}
+```
+
+**Request body (legacy — email only):** `{ "email": "..." }`
+
+When a spot is available, the user's auth account is stamped with `app_metadata.waitlist_approved = true` and a magic-link welcome email is sent via Resend.
+
+**Response variants:** `{ "result": "accepted" | "waitlisted" | "already_active" | "already_waitlisted", ... }`
+
+---
+
+## Waitlist Management (Admin)
+
+### `POST /api/emma/waitlist-manage`
+
+Admin-only endpoint for managing the waitlist. Caller must be authenticated and their email must be in `EMMA_ADMIN_EMAILS`.
+
+**Auth:** Required + `EMMA_ADMIN_EMAILS`
+
+**Actions:**
+
+| `action`    | Additional fields    | Description                                                                                                                |
+| ----------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `"list"`    | —                    | Returns all `waitlist_v2` entries                                                                                          |
+| `"invite"`  | `waitlistId: string` | Moves entry to `invited`, stamps `waitlist_approved` on their auth account, sends magic-link invite email (48-hour expiry) |
+| `"set_cap"` | `maxUsers: number`   | Updates `max_active_users` in `global_config`                                                                              |
+| `"stats"`   | —                    | Returns seat counts: `maxSpots`, `activeUsers`, `spotsRemaining`, `waiting`, `invited`                                     |
 
 ---
 

@@ -74,6 +74,8 @@ All routes are under `src/app/api/`:
 
 `src/proxy.ts` gates all routes via Supabase SSR. Public paths: `/login`, `/register`, `/auth/callback`, `/landing`, `/api/waitlist`, `/api/emma/webhook`, `/waitlist`, `/api/emma/unsubscribe`, `/intake/`. API routes authenticate inside each handler. When `NEXT_PUBLIC_SUPABASE_URL` is not set (local dev), middleware is a no-op.
 
+Authenticated users are also checked against a waitlist gate: if `user.app_metadata.waitlist_approved !== true` and the user's email is not in `EMMA_ADMIN_EMAILS`, they are redirected to `/waitlist`. This gate runs on all non-public, non-API routes.
+
 ### Personas
 
 Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teasing) and `neutral`. The system prompt is assembled from the persona base + routine list + memories + optional vision context + optional emotion state. Emma appends `[emotion: <expression>]` to every response; this tag is stripped before display and used to drive the avatar.
@@ -96,7 +98,7 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `RESEND_API_KEY`                            | Email sequences + intake lead notifications                                                                |
 | `EMAIL_FROM`                                | Sender address for Resend emails                                                                           |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail + Google Calendar OAuth                                                                              |
-| `EMMA_ADMIN_EMAILS`                         | Comma-separated emails allowed into `/admin`                                                               |
+| `EMMA_ADMIN_EMAILS`                         | Comma-separated emails allowed into `/admin` and bypassed past the waitlist gate                           |
 | `CRON_SECRET`                               | Authenticates Vercel cron calls to `/api/emma/cron/*` routes                                               |
 | `LEMONSQUEEZY_API_KEY`                      | Billing — checkout + subscription management                                                               |
 | `LEMONSQUEEZY_STORE_ID`                     | Billing — checkout session creation                                                                        |
