@@ -41,16 +41,47 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (user) {
-        // Convert invited waitlist entries to active on first sign-in
         const admin = getAdminClient();
+
+        // ── Waitlist gate ────────────────────────────────────────────
         if (admin && user.email) {
-          await admin
-            .from("waitlist_v2")
-            .update({ status: "converted" })
-            .eq("email", user.email)
-            .eq("status", "invited")
-            .gt("invite_expires_at", new Date().toISOString());
+          const approved = user.app_metadata?.waitlist_approved === true;
+          if (!approved) {
+            const { data: entry } = await admin
+              .from("waitlist_v2")
+              .select("status, invite_expires_at")
+              .eq("email", user.email.toLowerCase())
+              .single();
+
+            const inviteValid =
+              entry?.status === "invited" &&
+              entry.invite_expires_at &&
+              new Date(entry.invite_expires_at) > new Date();
+
+            const isApproved = entry?.status === "converted" || inviteValid;
+
+            if (!isApproved) {
+              await supabase.auth.signOut();
+              return NextResponse.redirect(`${origin}/waitlist?blocked=1`);
+            }
+
+            // Convert invited → converted on first sign-in
+            if (inviteValid) {
+              await admin
+                .from("waitlist_v2")
+                .update({ status: "converted" })
+                .eq("email", user.email)
+                .eq("status", "invited")
+                .gt("invite_expires_at", new Date().toISOString());
+            }
+
+            // Stamp the flag so future sessions skip this check
+            await admin.auth.admin.updateUserById(user.id, {
+              app_metadata: { waitlist_approved: true },
+            });
+          }
         }
+        // ────────────────────────────────────────────────────────────
 
         // Route new users through onboarding
         const { data: profile } = await supabase

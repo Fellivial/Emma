@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
           if (linkData?.properties?.action_link) {
             claimUrl = linkData.properties.action_link;
           }
+          if (linkData?.user?.id) {
+            await supabase.auth.admin.updateUserById(linkData.user.id, {
+              app_metadata: { waitlist_approved: true },
+            });
+          }
 
           await resend.emails.send({
             from: process.env.EMAIL_FROM ?? "noreply@example.com",

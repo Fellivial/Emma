@@ -71,6 +71,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // ── Waitlist gate ────────────────────────────────────────────────────────
+  if (user && !isPublic && !isApi) {
+    const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase());
+    const isAdmin = adminEmails.includes(user.email?.toLowerCase() ?? "");
+
+    const approved = user.app_metadata?.waitlist_approved === true;
+    if (!isAdmin && !approved) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/waitlist";
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // Authenticated user hitting public UI routes → redirect to app
   const isPublicUiRoute =
     request.nextUrl.pathname === "/login" ||

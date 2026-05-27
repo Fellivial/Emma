@@ -26,11 +26,8 @@ export async function GET(req: NextRequest) {
   // ── Cron authentication ───────────────────────────────────────────
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
-  const isLocalhost =
-    req.headers.get("host")?.includes("localhost") ||
-    req.headers.get("host")?.includes("127.0.0.1");
 
-  if (!isLocalhost) {
+  if (process.env.NODE_ENV !== "development") {
     if (!cronSecret) {
       console.error("[CRON] CRON_SECRET is not set — rejecting request");
       return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
@@ -172,7 +169,7 @@ export async function GET(req: NextRequest) {
           .eq("id", row.id);
 
         sent++;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         // ── 7. Mark failed ────────────────────────────────────────────
         console.error(`[Cron:Email] Failed ${row.id}:`, err);

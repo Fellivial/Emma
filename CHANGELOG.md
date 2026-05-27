@@ -4,6 +4,26 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ---
 
+## [0.5.2.0] - 2026-05-27
+
+### Fixed
+
+- **Waitlist gate in middleware** — authenticated-but-unapproved users are now redirected to `/waitlist`; admin emails bypass the gate via `EMMA_ADMIN_EMAILS`.
+- **OAuth/OTP sign-in blocked for unapproved users** — `/auth/callback` checks `waitlist_approved` flag and `waitlist_v2` status before allowing the session; blocked users are signed out and redirected to `/waitlist?blocked=1`.
+- **Approval flag stamped at invite time** — both the admin waitlist-manage route and the public waitlist route now stamp `app_metadata.waitlist_approved = true` when a magic-link invite is generated.
+- **Orphaned `/api/waitlist/quick-access` route removed** — the endpoint was unreachable and granted unapproved access; deleted.
+- **Cron host-header bypass closed** — all three cron routes replaced the spoofable `isLocalhost` host-header check with `NODE_ENV !== "development"`.
+- **Brain route waitlist gate** — `/api/emma` now returns 403 for authenticated users without `waitlist_approved`, closing the API bypass gap.
+- **Email case normalization in callback gate** — waitlist lookup now uses `user.email.toLowerCase()` to prevent case-mismatch false blocks.
+- **Next.js 16 async `searchParams`** — `/register` page updated to correctly forward the `?plan=` parameter.
+- **Backfill script** — one-shot script to stamp `waitlist_approved` on all existing converted users.
+
+### Added
+
+- 29 new unit tests covering proxy waitlist gate, cron auth hardening, auth callback gate, and approval stamp logic.
+
+---
+
 ## [0.5.1.1] - 2026-05-27
 
 ### Changed

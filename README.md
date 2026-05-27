@@ -122,42 +122,44 @@ Public widget deployed at `/intake/[slug]` for any `clients` record in the datab
 
 `src/proxy.ts` gates all routes via Supabase SSR and handles subdomain routing. Public paths:
 
-- `/login`, `/auth/callback`
+- `/login`, `/register`, `/auth/callback`
 - `/landing`, `/waitlist`
 - `/intake/*`
 - `/api/waitlist`, `/api/emma/webhook`, `/api/emma/unsubscribe`
+
+Authenticated users are also checked against a waitlist gate: if `user.app_metadata.waitlist_approved !== true` and the user's email is not in `EMMA_ADMIN_EMAILS`, they are redirected to `/waitlist`. This gate applies to all non-public, non-API routes. Admins in `EMMA_ADMIN_EMAILS` bypass this check.
 
 When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev without Supabase).
 
 ## Environment Variables
 
-| Variable                                    | Required | Purpose                                                                        |
-| ------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
-| `OPENROUTER_API_KEY`                        | ✅       | All LLM calls (brain, vision, memory, emotion) — get key at openrouter.ai/keys |
-| `NEXT_PUBLIC_SUPABASE_URL`                  | ✅       | Auth + DB                                                                      |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | ✅       | Client-side auth                                                               |
-| `SUPABASE_SERVICE_ROLE_KEY`                 | ✅       | Server-side DB (bypasses RLS)                                                  |
-| `EMMA_ENCRYPTION_KEY`                       | ✅       | AES-256 field encryption (`openssl rand -hex 32`)                              |
-| `NEXT_PUBLIC_APP_URL`                       | ✅       | Base URL for OG images and email links                                         |
-| `RESEND_API_KEY`                            | —        | Email sequences + intake lead notifications                                    |
-| `EMAIL_FROM`                                | —        | Sender address for Resend                                                      |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | —        | Gmail + Google Calendar OAuth                                                  |
-| `EMMA_ADMIN_EMAILS`                         | —        | Comma-separated emails allowed into `/admin`                                   |
-| `CRON_SECRET`                               | —        | Authenticates Vercel cron calls                                                |
-| `LEMONSQUEEZY_API_KEY`                      | —        | Billing checkout + subscription management                                     |
-| `LEMONSQUEEZY_STORE_ID`                     | —        | Billing checkout session creation                                              |
-| `LEMONSQUEEZY_WEBHOOK_SECRET`               | —        | Webhook signature verification                                                 |
-| `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | —        | LemonSqueezy variant ID for the Starter plan ($29/mo)                          |
-| `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | —        | LemonSqueezy variant ID for the Pro plan ($79/mo)                              |
-| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | —        | Variant ID for the $9 Extra Response Pack                                      |
-| `NEXT_PUBLIC_SMB_DOMAIN`                    | —        | Subdomain routing — e.g. `intake.yourdomain.com`                               |
-| `GOOGLE_SHEETS_SA_KEY`                      | —        | GCP service account JSON for Google Sheets lead appending                      |
-| `HUBSPOT_API_KEY`                           | —        | HubSpot private app token for deal/contact sync                                |
-| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | —        | Notion OAuth app credentials                                                   |
-| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | —        | Slack OAuth v2 app credentials                                                 |
-| `SENTRY_ORG`                                | —        | Sentry org slug for source map uploads at build time                           |
-| `SENTRY_PROJECT`                            | —        | Sentry project slug                                                            |
-| `SENTRY_AUTH_TOKEN`                         | —        | Sentry auth token for source map uploads (build only)                          |
+| Variable                                    | Required | Purpose                                                                          |
+| ------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`                        | ✅       | All LLM calls (brain, vision, memory, emotion) — get key at openrouter.ai/keys   |
+| `NEXT_PUBLIC_SUPABASE_URL`                  | ✅       | Auth + DB                                                                        |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | ✅       | Client-side auth                                                                 |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | ✅       | Server-side DB (bypasses RLS)                                                    |
+| `EMMA_ENCRYPTION_KEY`                       | ✅       | AES-256 field encryption (`openssl rand -hex 32`)                                |
+| `NEXT_PUBLIC_APP_URL`                       | ✅       | Base URL for OG images and email links                                           |
+| `RESEND_API_KEY`                            | —        | Email sequences + intake lead notifications                                      |
+| `EMAIL_FROM`                                | —        | Sender address for Resend                                                        |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | —        | Gmail + Google Calendar OAuth                                                    |
+| `EMMA_ADMIN_EMAILS`                         | —        | Comma-separated emails allowed into `/admin` and bypassed past the waitlist gate |
+| `CRON_SECRET`                               | —        | Authenticates Vercel cron calls                                                  |
+| `LEMONSQUEEZY_API_KEY`                      | —        | Billing checkout + subscription management                                       |
+| `LEMONSQUEEZY_STORE_ID`                     | —        | Billing checkout session creation                                                |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`               | —        | Webhook signature verification                                                   |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | —        | LemonSqueezy variant ID for the Starter plan ($29/mo)                            |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | —        | LemonSqueezy variant ID for the Pro plan ($79/mo)                                |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | —        | Variant ID for the $9 Extra Response Pack                                        |
+| `NEXT_PUBLIC_SMB_DOMAIN`                    | —        | Subdomain routing — e.g. `intake.yourdomain.com`                                 |
+| `GOOGLE_SHEETS_SA_KEY`                      | —        | GCP service account JSON for Google Sheets lead appending                        |
+| `HUBSPOT_API_KEY`                           | —        | HubSpot private app token for deal/contact sync                                  |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | —        | Notion OAuth app credentials                                                     |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | —        | Slack OAuth v2 app credentials                                                   |
+| `SENTRY_ORG`                                | —        | Sentry org slug for source map uploads at build time                             |
+| `SENTRY_PROJECT`                            | —        | Sentry project slug                                                              |
+| `SENTRY_AUTH_TOKEN`                         | —        | Sentry auth token for source map uploads (build only)                            |
 
 ## Database
 
