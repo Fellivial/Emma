@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
             const { data: entry } = await admin
               .from("waitlist_v2")
               .select("status, invite_expires_at")
-              .eq("email", user.email)
+              .eq("email", user.email.toLowerCase())
               .single();
 
             const inviteValid =

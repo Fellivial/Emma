@@ -76,6 +76,18 @@ export async function POST(req: NextRequest) {
           headers: { "Content-Type": "application/json" },
         });
       }
+      // ── Waitlist gate ────────────────────────────────────────────────────
+      const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase());
+      const isAdmin = adminEmails.includes(sessionUser.email?.toLowerCase() ?? "");
+      if (!isAdmin && sessionUser.app_metadata?.waitlist_approved !== true) {
+        return new Response(JSON.stringify({ error: "Waitlist approval required" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      // ────────────────────────────────────────────────────────────────────
       sessionUserId = sessionUser.id;
     }
 
