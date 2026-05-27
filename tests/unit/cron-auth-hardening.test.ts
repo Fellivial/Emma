@@ -11,6 +11,8 @@ const cronRoutes = [
   "src/app/api/emma/cron/approvals-expiry/route.ts",
   "src/app/api/emma/cron/email-sequences/route.ts",
   "src/app/api/emma/cron/scheduled-tasks/route.ts",
+  "src/app/api/emma/cron/pattern-detection/route.ts",
+  "src/app/api/emma/cron/leads-cleanup/route.ts",
 ];
 
 describe("cron routes — NODE_ENV auth guard (replaces localhost bypass)", () => {
