@@ -113,10 +113,9 @@ async function run() {
     process.exit(1);
   }
 
-  console.log("\nNext step: remove the grace condition from src/proxy.ts.");
-  console.log("Delete the inner `if (!approved)` block that queries waitlist_v2,");
-  console.log("and replace with a direct redirect:");
-  console.log("  if (!isAdmin && !approved) { redirect to /waitlist }");
+  console.log(
+    "\nBackfill complete. The waitlist_approved flag is now stamped on all converted users."
+  );
 }
 
 run().catch((err) => {
