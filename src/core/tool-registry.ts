@@ -18,7 +18,7 @@ function getSupabaseAdmin() {
  * - inputSchema: JSON schema for parameters (used in Claude's tool_use)
  * - riskLevel: "safe" | "moderate" | "dangerous"
  *   - safe: executes immediately, no approval needed
- *   - moderate: logged prominently, auto-approved after 5min if no rejection
+ *   - moderate: logged immediately, executed without approval or delay (no review window)
  *   - dangerous: ALWAYS pauses for explicit human approval
  * - handler: async function that executes the tool
  */
@@ -1348,7 +1348,7 @@ registerTool({
       query = query.eq("client_id", context.clientId);
     }
 
-    if (input.unprocessed_only) {
+    if (input.unprocessed_only === true) {
       query = query.eq("processed", false);
     }
 
@@ -1468,15 +1468,18 @@ registerTool({
     additionalProperties: false,
   },
   riskLevel: "safe",
-  handler: async (input) => {
+  handler: async (input, context) => {
     if (input.document_id) {
       const supabase = getSupabaseAdmin();
       if (!supabase) return { success: false, output: "Database not configured." };
-      const { data, error } = await supabase
+      let docQuery = supabase
         .from("ingested_documents")
         .select("extracted_text, character_count, label")
-        .eq("id", input.document_id as string)
-        .single();
+        .eq("id", input.document_id as string);
+      if (context.clientId) {
+        docQuery = docQuery.eq("client_id", context.clientId);
+      }
+      const { data, error } = await docQuery.single();
       if (error || !data)
         return { success: false, output: `Document not found: ${input.document_id}` };
       return {
@@ -1498,7 +1501,7 @@ registerTool({
         return { success: false, output: "Invalid image URL." };
       }
       const privateRange =
-        /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|::1$)/i;
+        /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|0\.0\.0\.0|::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|::ffff:)/i;
       if (privateRange.test(hostname)) {
         return { success: false, output: "image_url must point to a public host." };
       }

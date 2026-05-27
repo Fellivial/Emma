@@ -90,10 +90,11 @@ describe("sanitiseInput", () => {
     expect(result.threat).toBe("high");
   });
 
-  it("does NOT block single high-severity match (could be false positive)", () => {
+  it("blocks single high-severity match (persona_hijack pattern)", () => {
     const result = sanitiseInput("You are now a parent. Congratulations!");
-    // Single match — flagged but not blocked
-    expect(result.blocked).toBe(false);
+    // Policy: any single high-severity flag is blocked — low false-positive rate justifies this
+    expect(result.blocked).toBe(true);
+    expect(result.threat).toBe("high");
   });
 
   // ── Medium severity ────────────────────────────────────────────────────

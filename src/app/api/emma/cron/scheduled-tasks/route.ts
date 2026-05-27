@@ -162,8 +162,9 @@ function calculateNextRun(cronExpression: string): string {
     const targetMinute = parseInt(minute, 10);
     const next = new Date(now);
     next.setHours(targetHour, targetMinute, 0, 0);
-    const daysUntil = (targetDay - now.getDay() + 7) % 7 || 7;
-    next.setDate(next.getDate() + (next <= now ? daysUntil : daysUntil === 7 ? 7 : daysUntil));
+    const daysUntil = (targetDay - now.getDay() + 7) % 7;
+    next.setDate(next.getDate() + daysUntil);
+    if (next <= now) next.setDate(next.getDate() + 7);
     return next.toISOString();
   }
 
@@ -179,6 +180,10 @@ function calculateNextRun(cronExpression: string): string {
     return next.toISOString();
   }
 
-  // Fallback — 1 hour from now
+  // Fallback — unsupported expression, default to 1 hour from now
+  console.warn(
+    "[scheduled-tasks] Unsupported cron expression, falling back to 1h interval:",
+    cronExpression
+  );
   return new Date(now.getTime() + 3_600_000).toISOString();
 }

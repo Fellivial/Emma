@@ -147,10 +147,10 @@ export function sanitiseInput(input: string): SanitisationResult {
   }
 
   // ── Decision: block or pass ────────────────────────────────────────────
-  // Only block on HIGH threat with multiple flags (single pattern could be false positive)
+  // Block on any single HIGH-severity flag — jailbreak/injection patterns have low false-positive rates
   if (
     threat === "high" &&
-    flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 2
+    flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 1
   ) {
     blocked = true;
   }

@@ -47,7 +47,17 @@ export async function POST(req: NextRequest) {
   const hmac = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   const hmacBuf = Buffer.from(hmac);
   const sigBuf = Buffer.from(signature);
-  if (hmacBuf.length !== sigBuf.length || !crypto.timingSafeEqual(hmacBuf, sigBuf)) {
+  if (hmacBuf.length !== sigBuf.length) {
+    console.error(
+      "[Lemon] Webhook signature length mismatch:",
+      hmacBuf.length,
+      "vs",
+      sigBuf.length,
+      "— possible format change"
+    );
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+  if (!crypto.timingSafeEqual(hmacBuf, sigBuf)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -114,8 +124,19 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // ── Subscription Cancelled / Expired ────────────────────────────────
-      case "subscription_cancelled":
+      // ── Subscription Cancelled ──────────────────────────────────────────
+      // Subscription remains active until billing period ends — do not downgrade here.
+      // Actual downgrade fires on subscription_expired.
+      case "subscription_cancelled": {
+        console.warn(
+          "[Lemon Webhook] subscription_cancelled for user",
+          userId,
+          "— awaiting subscription_expired to downgrade"
+        );
+        break;
+      }
+
+      // ── Subscription Expired ────────────────────────────────────────────
       case "subscription_expired": {
         const { data: membership } = await supabase
           .from("client_members")
