@@ -39,20 +39,20 @@ The brain route streams SSE deltas to the client. After the full response is col
 
 All engines are React hooks or plain modules in `src/core/`:
 
-| Engine                              | Purpose                                                                                       |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| `personas.ts`                       | Builds the full system prompt: persona + memories + vision context + emotion state + routines |
-| `models.ts`                         | Single source of truth for OpenRouter model IDs (brain/utility/vision)                        |
-| `memory-engine.ts` / `memory-db.ts` | In-memory store + Supabase persistence with AES-256-GCM field encryption                      |
-| `client-config.ts`                  | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`        |
-| `usage-enforcer.ts`                 | 5-hour single-window token/message metering; must fail-open (never block on DB errors)        |
-| `avatar-engine.ts`                  | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip)                |
-| `emotion-engine.ts`                 | Detects user emotional state from voice/text; feeds into system prompt                        |
-| `autonomy-engine.ts`                | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                         |
-| `routines-engine.ts`                | Workflow routines — built-in and user-defined                                                 |
-| `integrations/adapter.ts`           | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot      |
-| `security/sanitise.ts`              | Prompt injection detection and input cleaning                                                 |
-| `security/encryption.ts`            | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                             |
+| Engine                    | Purpose                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `personas.ts`             | Builds the full system prompt: persona + memories + vision context + emotion state + routines |
+| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision)                        |
+| `memory-db.ts`            | In-memory store + Supabase persistence with AES-256-GCM field encryption                      |
+| `client-config.ts`        | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`        |
+| `usage-enforcer.ts`       | 5-hour single-window token/message metering; must fail-open (never block on DB errors)        |
+| `avatar-engine.ts`        | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip)                |
+| `emotion-engine.ts`       | Detects user emotional state from voice/text; feeds into system prompt                        |
+| `autonomy-engine.ts`      | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                         |
+| `routines-engine.ts`      | Workflow routines — built-in and user-defined                                                 |
+| `integrations/adapter.ts` | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot      |
+| `security/sanitise.ts`    | Prompt injection detection and input cleaning                                                 |
+| `security/encryption.ts`  | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                             |
 
 ### API Routes
 
@@ -114,6 +114,11 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `SENTRY_ORG`                                | Sentry org slug for source map uploads at build time                                                       |
 | `SENTRY_PROJECT`                            | Sentry project slug                                                                                        |
 | `SENTRY_AUTH_TOKEN`                         | Sentry auth token for source map uploads (build only)                                                      |
+| `WHATSAPP_ACCESS_TOKEN`                     | WhatsApp Cloud API access token (Meta for Developers → App → WhatsApp → API Setup)                         |
+| `WHATSAPP_PHONE_NUMBER_ID`                  | WhatsApp Cloud API phone number ID (same dashboard as above)                                               |
+| `WHATSAPP_VERIFY_TOKEN`                     | Webhook verify token for WhatsApp ingest endpoint (`/api/emma/ingest/whatsapp`)                            |
+| `WHATSAPP_APP_SECRET`                       | Meta app secret used for HMAC signature validation on incoming WhatsApp webhooks                           |
+| `INGEST_EMAIL_WEBHOOK_SECRET`               | Shared secret for authenticating inbound email webhook calls to `/api/emma/ingest/email`                   |
 
 ## Database Setup
 
