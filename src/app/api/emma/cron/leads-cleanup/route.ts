@@ -35,19 +35,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "DB not configured" }, { status: 501 });
   }
 
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
 
-  const { count, error } = await supabase
-    .from("leads")
-    .delete({ count: "exact" })
-    .lt("created_at", cutoff.toISOString());
+    const { count, error } = await supabase
+      .from("leads")
+      .delete({ count: "exact" })
+      .lt("created_at", cutoff.toISOString());
 
-  if (error) {
-    console.error("[leads-cleanup] Delete error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[leads-cleanup] Delete error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    console.warn(`[leads-cleanup] Deleted ${count ?? 0} leads older than 90 days`);
+    return NextResponse.json({ deleted: count ?? 0, cutoff: cutoff.toISOString() });
+  } catch (err) {
+    console.error("[leads-cleanup] Unexpected error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  console.warn(`[leads-cleanup] Deleted ${count ?? 0} leads older than 90 days`);
-  return NextResponse.json({ deleted: count ?? 0, cutoff: cutoff.toISOString() });
 }
