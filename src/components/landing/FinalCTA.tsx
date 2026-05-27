@@ -102,7 +102,7 @@ export default function FinalCTA() {
           style={{ display: "inline-block" }}
         >
           <Link
-            href="/register"
+            href="/waitlist"
             className="l-interactive"
             style={{
               display: "block",
@@ -118,7 +118,7 @@ export default function FinalCTA() {
               borderRadius: 0,
             }}
           >
-            Request Early Access ↵
+            Request to Join Waitlist.
           </Link>
         </motion.div>
       </div>

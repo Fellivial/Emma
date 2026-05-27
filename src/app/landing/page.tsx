@@ -6,7 +6,6 @@ import Capabilities from "@/components/landing/Capabilities";
 import StatsStrip from "@/components/landing/StatsStrip";
 import TerminalShowcase from "@/components/landing/TerminalShowcase";
 import Pricing from "@/components/landing/Pricing";
-import Waitlist from "@/components/landing/Waitlist";
 import FAQ from "@/components/landing/FAQ";
 import FinalCTA from "@/components/landing/FinalCTA";
 import Footer from "@/components/landing/Footer";
@@ -22,7 +21,6 @@ export default function LandingPage() {
       <TerminalShowcase />
       <StatsStrip />
       <Pricing />
-      <Waitlist />
       <FAQ />
       <FinalCTA />
       <Footer />
