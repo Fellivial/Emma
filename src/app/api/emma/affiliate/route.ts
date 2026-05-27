@@ -45,8 +45,9 @@ export async function POST(req: NextRequest) {
 
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
-        .map((e) => e.trim().toLowerCase());
-      if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (adminEmails.length === 0 || !adminEmails.includes(user.email?.toLowerCase() ?? "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 
@@ -95,8 +96,9 @@ export async function POST(req: NextRequest) {
 
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
-        .map((e) => e.trim().toLowerCase());
-      if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (adminEmails.length === 0 || !adminEmails.includes(user.email?.toLowerCase() ?? "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 
@@ -192,7 +194,7 @@ export async function POST(req: NextRequest) {
         .from("affiliates")
         .update({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
+          total_referrals: ((currentAff as any)?.total_referrals || 0) + 1,
         })
         .eq("id", affiliate.id);
 
@@ -205,8 +207,9 @@ export async function POST(req: NextRequest) {
       if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
-        .map((e) => e.trim().toLowerCase());
-      if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (adminEmails.length === 0 || !adminEmails.includes(user.email?.toLowerCase() ?? "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 

@@ -13,8 +13,9 @@ function getSupabase() {
 function isAdmin(email: string | undefined): boolean {
   const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
     .split(",")
-    .map((e) => e.trim().toLowerCase());
-  return adminEmails.includes(email?.toLowerCase() || "");
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return adminEmails.length > 0 && adminEmails.includes(email?.toLowerCase() ?? "");
 }
 
 /**

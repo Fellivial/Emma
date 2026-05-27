@@ -75,8 +75,9 @@ export async function proxy(request: NextRequest) {
   if (user && !isPublic && !isApi) {
     const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
       .split(",")
-      .map((e) => e.trim().toLowerCase());
-    const isAdmin = adminEmails.includes(user.email?.toLowerCase() ?? "");
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const isAdmin = adminEmails.length > 0 && adminEmails.includes(user.email?.toLowerCase() ?? "");
 
     const approved = user.app_metadata?.waitlist_approved === true;
     if (!isAdmin && !approved) {
