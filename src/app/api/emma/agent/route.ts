@@ -6,6 +6,8 @@ import { getTool } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { audit } from "@/core/security/audit";
 import { getClientIp } from "@/lib/get-client-ip";
+import { checkAutonomousAccess } from "@/core/addon-enforcer";
+import { loadClientConfigForUser } from "@/core/client-config";
 
 interface AgentRequest {
   action: "create" | "approve" | "reject" | "status" | "history";
@@ -36,6 +38,14 @@ export async function POST(req: NextRequest) {
       case "create": {
         if (!body.goal) {
           return NextResponse.json({ error: "No goal provided" }, { status: 400 });
+        }
+
+        // Plan-tier gate — loadClientConfigForUser always returns (falls back to DEFAULT_CONFIG)
+        // so no try/catch needed; let checkAutonomousAccess errors surface as 500.
+        const config = await loadClientConfigForUser(userId);
+        const access = await checkAutonomousAccess(config.id, config.planId, "autonomous");
+        if (!access.allowed) {
+          return NextResponse.json({ error: access.reason }, { status: 403 });
         }
 
         // Create task record

@@ -13,7 +13,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MODEL_BRAIN, MODEL_UTILITY } from "@/core/models";
+import { MODEL_BRAIN } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
@@ -115,7 +115,7 @@ function handleMemoryOp(files: Map<string, string>, input: Record<string, unknow
       const text = files.get(path);
       if (text === undefined) return `Error: ${path} not found`;
       const lines = text.split("\n");
-      const at = Math.min(((input.insert_line as number) ?? lines.length), lines.length);
+      const at = Math.min((input.insert_line as number) ?? lines.length, lines.length);
       lines.splice(at, 0, (input.content as string) || "");
       files.set(path, lines.join("\n"));
       return `Inserted at line ${at} in ${path}`;
@@ -228,12 +228,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           method: "POST",
           headers: openRouterHeaders(),
           body: JSON.stringify({
-            model: step < task.maxSteps ? MODEL_UTILITY : MODEL_BRAIN,
+            model: MODEL_BRAIN,
             max_tokens: step < task.maxSteps ? 512 : 1024,
-            messages: [
-              { role: "system", content: AGENT_SYSTEM },
-              ...messages,
-            ],
+            messages: [{ role: "system", content: AGENT_SYSTEM }, ...messages],
             tools,
           }),
         },
@@ -270,7 +267,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         }>;
         usage?: { prompt_tokens: number; completion_tokens: number };
       };
-      const data = await res.json() as OpenRouterData;
+      const data = (await res.json()) as OpenRouterData;
       const inputTokens = data.usage?.prompt_tokens || 0;
       const outputTokens = data.usage?.completion_tokens || 0;
       totalTokens += inputTokens + outputTokens;
@@ -281,6 +278,16 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       const finishReason = choice?.finish_reason;
       let hasToolUse = false;
 
+      // Push the assistant turn once — OpenRouter requires exactly one assistant
+      // message per group of tool results, not one per tool call.
+      if (toolCalls.length > 0) {
+        messages.push({
+          role: "assistant",
+          content: assistantMessage?.content ?? null,
+          tool_calls: toolCalls,
+        });
+      }
+
       for (const toolCall of toolCalls) {
         if (toolCall.type === "function") {
           hasToolUse = true;
@@ -288,18 +295,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           let toolInput: Record<string, unknown> = {};
           try {
             toolInput = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-          } catch { /* leave empty */ }
+          } catch {
+            /* leave empty */
+          }
           const toolId = toolCall.id;
 
           // Handle the native memory tool before the registry lookup.
           // Operations run against the in-session scratchpad Map.
           if (toolName === "memory") {
             const memOut = handleMemoryOp(memoryFiles, toolInput);
-            messages.push({
-              role: "assistant",
-              content: assistantMessage?.content ?? null,
-              tool_calls: toolCalls,
-            });
             messages.push({ role: "tool", tool_call_id: toolId, content: memOut });
             steps.push({
               step,
@@ -329,11 +333,6 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             };
             steps.push(stepResult);
 
-            messages.push({
-              role: "assistant",
-              content: assistantMessage?.content ?? null,
-              tool_calls: toolCalls,
-            });
             messages.push({
               role: "tool",
               tool_call_id: toolId,
@@ -483,15 +482,12 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           if (toolName === "complete_task") {
             taskCompleted = true;
             taskSummary = toolResult.output;
+            // Push the tool result before breaking so step_transcript is complete.
+            messages.push({ role: "tool", tool_call_id: toolId, content: toolResult.output });
             break;
           }
 
           // Feed result back for next iteration
-          messages.push({
-            role: "assistant",
-            content: assistantMessage?.content ?? null,
-            tool_calls: toolCalls,
-          });
           messages.push({ role: "tool", tool_call_id: toolId, content: toolResult.output });
 
           // Compress history: replace everything except the last exchange with a
@@ -629,7 +625,11 @@ async function createApproval(
 
 // ─── Action Logging ──────────────────────────────────────────────────────────
 
-async function logAction(supabase: SupabaseClient | null, taskId: string, step: AgentStepResult): Promise<void> {
+async function logAction(
+  supabase: SupabaseClient | null,
+  taskId: string,
+  step: AgentStepResult
+): Promise<void> {
   if (!supabase) return;
 
   await supabase.from("action_log").insert({

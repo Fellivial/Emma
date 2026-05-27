@@ -7,7 +7,12 @@ const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 // Short-lived cache so repeated TTS calls don't re-query Supabase on every message.
-interface TtsCacheEntry { apiKey: string; voiceId: string | null; clientId: string; ts: number }
+interface TtsCacheEntry {
+  apiKey: string;
+  voiceId: string | null;
+  clientId: string;
+  ts: number;
+}
 const ttsCache = new Map<string, TtsCacheEntry>();
 const TTS_CACHE_TTL = 60_000; // 60 s
 
@@ -66,7 +71,14 @@ export async function POST(req: NextRequest) {
           if (decrypted && !decrypted.startsWith("[")) {
             apiKey = decrypted;
             storedVoiceId = (data?.metadata?.voiceId as string | null) || null;
-            ttsCache.set(sessionUser.id, { apiKey: decrypted, voiceId: storedVoiceId, clientId: resolvedClientId!, ts: Date.now() });
+            ttsCache.set(sessionUser.id, {
+              apiKey: decrypted,
+              voiceId: storedVoiceId,
+              clientId: resolvedClientId!,
+              ts: Date.now(),
+            });
+          } else if (decrypted?.startsWith("[")) {
+            console.error("[EMMA TTS] ElevenLabs key decrypt error for user", sessionUser.id);
           }
         }
       }

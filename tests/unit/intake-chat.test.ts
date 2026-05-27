@@ -148,8 +148,8 @@ describe("POST /api/intake/[slug]/chat", () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        content: [{ type: "text", text: "Hello, how can I help?" }],
-        usage: { input_tokens: 10, output_tokens: 8 },
+        choices: [{ message: { content: "Hello, how can I help?" } }],
+        usage: { prompt_tokens: 10, completion_tokens: 8 },
       }),
     } as Response);
 
@@ -162,5 +162,73 @@ describe("POST /api/intake/[slug]/chat", () => {
     );
 
     expect(checkUsage).toHaveBeenCalledWith(null, "starter", "UTC", 1, "acme");
+  });
+
+  it("parses OpenRouter response format (choices[0].message.content)", async () => {
+    vi.mocked(loadClientConfigOrNull).mockResolvedValueOnce(MOCK_CONFIG);
+    vi.mocked(checkUsage).mockResolvedValueOnce(OK_USAGE);
+
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Welcome to Acme! How can I help you today?" } }],
+        usage: { prompt_tokens: 15, completion_tokens: 12 },
+      }),
+    } as Response);
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "hello" }],
+        sessionId: "s2",
+      }),
+      { params: Promise.resolve({ slug: "acme" }) }
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.reply).toBe("Welcome to Acme! How can I help you today?");
+  });
+
+  it("returns 502 when OpenRouter returns a non-ok response", async () => {
+    vi.mocked(loadClientConfigOrNull).mockResolvedValueOnce(MOCK_CONFIG);
+    vi.mocked(checkUsage).mockResolvedValueOnce(OK_USAGE);
+
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    } as Response);
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "hello" }],
+        sessionId: "s3",
+      }),
+      { params: Promise.resolve({ slug: "acme" }) }
+    );
+    expect(res.status).toBe(502);
+  });
+
+  it("returns 429 when DB-backed rate limit is exhausted", async () => {
+    vi.mocked(loadClientConfigOrNull).mockResolvedValueOnce(MOCK_CONFIG);
+
+    // Spy on the rate-limiter to simulate exhausted limit
+    const rateLimiterMod = await import("@/core/rate-limiter");
+    const spy = vi.spyOn(rateLimiterMod, "checkRateLimit").mockResolvedValueOnce({
+      allowed: false,
+      reason: "task_limit",
+      current: { tasks: 20, tokens: 0 },
+      limits: { tasks: 20, tokens: 60_000 },
+      resetsAt: Date.now() + 60_000,
+    });
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "hi" }],
+        sessionId: "s4",
+      }),
+      { params: Promise.resolve({ slug: "acme" }) }
+    );
+    expect(res.status).toBe(429);
+    spy.mockRestore();
   });
 });
