@@ -169,14 +169,79 @@ The `#waitlist` anchor was removed from the landing page in commit `743bcb8`. Th
 
 **Fix:** Change to `redirect("/waitlist")`. One-line change, no risk.
 
+### Gap 8 — Pricing card CTAs link to `/register?plan=X` (broken)
+
+**File:** `src/lib/constants/landing.ts`
+
+The three paid pricing plan CTAs point to `/register`, `/register?plan=starter`, and `/register?plan=pro`. These currently redirect to `/landing#waitlist` (the broken anchor from Gap 7). The plan param is also lost in the redirect since `register/page.tsx` calls a bare `redirect("/landing#waitlist")` with no param forwarding.
+
+**Fix:** Convert `src/app/register/page.tsx` from a static redirect to a server component that reads the `?plan=` search param and forwards it:
+
+```ts
+// src/app/register/page.tsx
+import { redirect } from "next/navigation";
+
+export default function RegisterPage({ searchParams }: { searchParams: { plan?: string } }) {
+  const plan = searchParams.plan;
+  redirect(plan ? `/waitlist?plan=${plan}` : "/waitlist");
+}
+```
+
+This makes all three pricing CTAs work without touching `landing/constants.ts`.
+
+---
+
+### Gap 9 — Admin users would be locked out by the Gap 1 middleware fix
+
+**File:** `src/proxy.ts`
+
+Admin users (emails in `EMMA_ADMIN_EMAILS`) are not necessarily in `waitlist_v2`. When the middleware check from Gap 1 is added, any admin whose email lacks `app_metadata.waitlist_approved` and is absent from `waitlist_v2` will be redirected to `/waitlist` on every protected route — including `/admin`.
+
+**Fix:** Add an admin bypass before the waitlist check in the middleware:
+
+```ts
+const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase());
+const isAdmin = adminEmails.includes(user.email?.toLowerCase() ?? "");
+
+if (!isAdmin && !approved) {
+  // ... waitlist check
+}
+```
+
+Alternatively, ensure all admin emails are inserted into `waitlist_v2` as `converted` during setup.
+
+---
+
+### Gap 10 — Cron auth bypass via spoofable `Host` header
+
+**Files:** `src/app/api/emma/cron/approvals-expiry/route.ts`, `src/app/api/emma/cron/email-sequences/route.ts`, `src/app/api/emma/cron/scheduled-tasks/route.ts`
+
+Three of the five cron routes skip `CRON_SECRET` verification when the `Host` header contains `localhost` or `127.0.0.1`. The `Host` header is client-controlled and can be spoofed in HTTP/1.1, meaning anyone can bypass cron auth by sending `Host: localhost`.
+
+`leads-cleanup` and `pattern-detection` correctly use `process.env.NODE_ENV !== "development"` instead, which is not client-controllable.
+
+**Fix:** Replace the `Host`-based check with `NODE_ENV` in the three affected routes:
+
+```ts
+// Replace this:
+const isLocalhost = req.headers.get("host")?.includes("localhost") ...
+if (!isLocalhost) { /* auth check */ }
+
+// With this:
+if (process.env.NODE_ENV !== "development") { /* auth check */ }
+```
+
 ---
 
 ## Implementation order
 
-1. **Gap 7** — one-line fix, unblocks broken UX immediately, no risk
+1. **Gap 7 + Gap 8** — fix `/register` redirect to forward plan param to `/waitlist`; unblocks broken pricing CTAs immediately, no risk
 2. **Gap 4** — stamp `app_metadata.waitlist_approved` in all three approval routes
 3. **Gap 2** — add waitlist check + sign-out in `/auth/callback`
 4. **Gap 3** — disable email signups in Supabase dashboard
-5. **Gap 6** — delete `/api/waitlist/quick-access`
-6. **Gap 1** — add middleware check (deploy after Gaps 2 + 4 are live so existing users get their flag stamped before the hard gate lands)
-7. **Backfill** — run a script to stamp `app_metadata.waitlist_approved = true` on all Supabase auth users whose email is in `waitlist_v2` with `status = 'converted'`, then remove the grace condition from the middleware
+5. **Gap 10** — replace `Host` header check with `NODE_ENV` in three cron routes
+6. **Gap 6** — delete `/api/waitlist/quick-access`
+7. **Gap 1 + Gap 9** — add middleware check with admin bypass (deploy after Gaps 2 + 4 are live so existing users get their flag stamped before the hard gate lands)
+8. **Backfill** — run a script to stamp `app_metadata.waitlist_approved = true` on all Supabase auth users whose email is in `waitlist_v2` with `status = 'converted'`, then remove the grace condition from the middleware
