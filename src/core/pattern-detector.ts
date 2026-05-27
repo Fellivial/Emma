@@ -72,7 +72,9 @@ async function generateSuggestion(
       return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
     const data = await res.json();
     return (
-      (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content?.trim() ?? ""
+      (
+        data as { choices?: Array<{ message?: { content?: string } }> }
+      ).choices?.[0]?.message?.content?.trim() ?? ""
     );
   } catch {
     return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
@@ -156,15 +158,28 @@ export async function generateSuggestionsViaBatch(
     exampleGoals: string[];
   }>
 ): Promise<Map<string, string>> {
+  if (!process.env.OPENROUTER_API_KEY) return new Map();
+
   const out = new Map<string, string>();
-  for (const p of patterns) {
-    try {
-      const text = await generateSuggestion(p.patternType, p.description, p.exampleGoals);
-      if (text) out.set(p.id, text);
-    } catch {
-      // continue generating for other patterns
+  const CONCURRENCY = 5;
+
+  for (let i = 0; i < patterns.length; i += CONCURRENCY) {
+    const chunk = patterns.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (p) => {
+        try {
+          const text = await generateSuggestion(p.patternType, p.description, p.exampleGoals);
+          return { id: p.id, text };
+        } catch {
+          return { id: p.id, text: "" };
+        }
+      })
+    );
+    for (const { id, text } of results) {
+      if (text) out.set(id, text);
     }
   }
+
   return out;
 }
 
@@ -217,7 +232,11 @@ export async function detectPatterns(
     if (recentDays.size >= 5) {
       const suggestion = skipSuggestions
         ? undefined
-        : await generateSuggestion("daily", rep, items.map((i) => i.goal));
+        : await generateSuggestion(
+            "daily",
+            rep,
+            items.map((i) => i.goal)
+          );
       patterns.push({
         userId,
         patternType: "daily",
@@ -243,7 +262,11 @@ export async function detectPatterns(
     if (weeksWithActivity >= 3) {
       const suggestion = skipSuggestions
         ? undefined
-        : await generateSuggestion("weekly", rep, items.map((i) => i.goal));
+        : await generateSuggestion(
+            "weekly",
+            rep,
+            items.map((i) => i.goal)
+          );
       patterns.push({
         userId,
         patternType: "weekly",

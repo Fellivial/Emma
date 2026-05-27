@@ -212,7 +212,9 @@ export async function POST(req: NextRequest) {
         return { role: m.role, content: m.content };
       }
       // Map Anthropic content blocks → OpenAI content parts
-      type OAIPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+      type OAIPart =
+        | { type: "text"; text: string }
+        | { type: "image_url"; image_url: { url: string } };
       const parts: OAIPart[] = [];
       for (const block of m.content as ApiMessageContent[]) {
         const src = block.source as Record<string, unknown> | undefined;
@@ -229,22 +231,31 @@ export async function POST(req: NextRequest) {
           parts.push({ type: "text", text: block.text || "" });
         }
       }
-      return { role: m.role, content: parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts };
+      return {
+        role: m.role,
+        content: parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts,
+      };
     });
 
     // Inject PDF URLs and search results as text into the last user message
     if (hasDocuments) {
       const last = apiMessages[apiMessages.length - 1];
       if (last?.role === "user") {
-        const baseText = typeof last.content === "string" ? last.content : "";
+        const baseText =
+          typeof last.content === "string"
+            ? last.content
+            : Array.isArray(last.content)
+              ? (last.content as Array<{ type?: string; text?: string }>)
+                  .filter((p) => p.type === "text")
+                  .map((p) => p.text || "")
+                  .join(" ")
+              : "";
         const extras: string[] = [];
         if (pdfUrls?.length) extras.push(`[Attached PDFs: ${pdfUrls.join(", ")}]`);
         if (searchResults?.length) {
           extras.push(
             "[Search results]\n" +
-              searchResults
-                .map((r) => `Source: ${r.source}\n${r.content}`)
-                .join("\n\n")
+              searchResults.map((r) => `Source: ${r.source}\n${r.content}`).join("\n\n")
           );
         }
         apiMessages[apiMessages.length - 1] = {
@@ -264,10 +275,7 @@ export async function POST(req: NextRequest) {
           model: MODEL_BRAIN,
           max_tokens: detectMaxTokens(messages, hasDocuments),
           stream: true,
-          messages: [
-            { role: "system", content: systemPromptText },
-            ...apiMessages,
-          ],
+          messages: [{ role: "system", content: systemPromptText }, ...apiMessages],
         }),
       },
       { maxRetries: 2, connectionTimeoutMs: 30_000 }
@@ -279,12 +287,17 @@ export async function POST(req: NextRequest) {
       console.error(`[EMMA] OpenRouter API error ${status}:`, upstreamBody.slice(0, 500));
       const errMsg = getPersonaErrorMessage(status);
       const code =
-        status === 400 ? "BAD_REQUEST" :
-        status === 401 ? "AUTH_ERROR" :
-        status === 429 ? "RATE_LIMIT" :
-        status === 529 ? "OVERLOADED" :
-        status === 504 ? "TIMEOUT" :
-        "UPSTREAM_ERROR";
+        status === 400
+          ? "BAD_REQUEST"
+          : status === 401
+            ? "AUTH_ERROR"
+            : status === 429
+              ? "RATE_LIMIT"
+              : status === 529
+                ? "OVERLOADED"
+                : status === 504
+                  ? "TIMEOUT"
+                  : "UPSTREAM_ERROR";
       return new Response(JSON.stringify({ error: errMsg, status, code }), {
         status: 502,
         headers: { "Content-Type": "application/json" },
@@ -307,6 +320,7 @@ export async function POST(req: NextRequest) {
         let buffer = "";
         let inputTokens = 0;
         let outputTokens = 0;
+        let finishReason: string | null = null;
 
         try {
           while (true) {
@@ -325,11 +339,13 @@ export async function POST(req: NextRequest) {
               try {
                 const chunk = JSON.parse(raw);
 
-                // Capture usage from the last chunk (OpenRouter appends usage to the final chunk)
+                // Capture usage and finish_reason from the last chunk
                 if (chunk.usage) {
                   inputTokens = chunk.usage.prompt_tokens || 0;
                   outputTokens = chunk.usage.completion_tokens || 0;
                 }
+                const fr = chunk.choices?.[0]?.finish_reason;
+                if (fr) finishReason = fr;
 
                 // Stream text delta to client
                 const delta = chunk.choices?.[0]?.delta?.content;
@@ -362,6 +378,8 @@ export async function POST(req: NextRequest) {
             commands,
             routineId: routineId || null,
             expression: expression || null,
+            refused: finishReason === "content_filter",
+            contextWindowExceeded: finishReason === "length",
             usage: { inputTokens, outputTokens, cacheReadTokens: 0, cacheCreationTokens: 0 },
             enforcement: enforcementResult
               ? {

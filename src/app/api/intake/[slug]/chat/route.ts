@@ -71,7 +71,7 @@ export async function POST(
     "unknown";
 
   const rateLimitKey = `ip:${ip}:${slug}`;
-  const rateCheck = await checkRateLimit(rateLimitKey, 20, 1_000_000);
+  const rateCheck = await checkRateLimit(rateLimitKey, 20, 60_000);
   if (!rateCheck.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
