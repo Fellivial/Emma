@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
@@ -70,6 +71,43 @@ export async function proxy(request: NextRequest) {
     redirectUrl.pathname = "/login";
     return NextResponse.redirect(redirectUrl);
   }
+
+  // ── Waitlist gate ────────────────────────────────────────────────────────
+  if (user && !isPublic && !isApi) {
+    const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase());
+    const isAdmin = adminEmails.includes(user.email?.toLowerCase() ?? "");
+
+    if (!isAdmin) {
+      const approved = user.app_metadata?.waitlist_approved === true;
+      if (!approved) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (supabaseUrl && serviceKey) {
+          const adminClient = createClient(supabaseUrl, serviceKey);
+          const { data: wlEntry } = await adminClient
+            .from("waitlist_v2")
+            .select("status")
+            .eq("email", user.email)
+            .in("status", ["converted", "invited"])
+            .single();
+
+          if (!wlEntry) {
+            const redirectUrl = request.nextUrl.clone();
+            redirectUrl.pathname = "/waitlist";
+            return NextResponse.redirect(redirectUrl);
+          }
+
+          // Backfill the flag so this DB round-trip does not repeat
+          await adminClient.auth.admin.updateUserById(user.id, {
+            app_metadata: { waitlist_approved: true },
+          });
+        }
+      }
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   // Authenticated user hitting public UI routes → redirect to app
   const isPublicUiRoute =

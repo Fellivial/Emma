@@ -147,6 +147,11 @@ export async function POST(req: NextRequest) {
               type: "magiclink",
               email: email.toLowerCase().trim(),
             });
+            if (linkData?.user?.id) {
+              await supabase.auth.admin.updateUserById(linkData.user.id, {
+                app_metadata: { waitlist_approved: true },
+              });
+            }
             const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://emma.ai";
             const loginUrl = linkData?.properties?.action_link ?? `${appUrl}/login`;
             const resend = new Resend(process.env.RESEND_API_KEY);
