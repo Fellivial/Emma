@@ -251,21 +251,6 @@ export default function ProfilePage() {
         </Field>
       </Section>
 
-      {/* ── Voice ────────────────────────────────────────────────────────── */}
-      <Section title="Voice">
-        <Field
-          label="ElevenLabs Voice ID"
-          sub="Override the default voice — or configure fully via Integrations"
-        >
-          <input
-            value={config.voiceId}
-            onChange={(e) => setConfig({ ...config, voiceId: e.target.value })}
-            className="settings-input font-mono text-xs"
-            placeholder="21m00Tcm4TlvDq8ikWAM"
-          />
-        </Field>
-      </Section>
-
       {/* ── Save ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 mt-8 pb-6">
         <button
