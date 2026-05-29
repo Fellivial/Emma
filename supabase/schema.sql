@@ -426,7 +426,7 @@ create table if not exists public.oauth_states (
 
 create table if not exists public.usage_windows (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references public.profiles on delete cascade not null,
+  user_id text not null,
   window_type text not null check (window_type in ('daily','weekly','monthly')),
   window_start timestamptz not null,
   tokens_used bigint not null default 0,
@@ -636,7 +636,7 @@ create policy "Users manage own oauth states" on public.oauth_states for all usi
 
 -- Usage Windows
 drop policy if exists "Users own usage windows" on public.usage_windows;
-create policy "Users own usage windows" on public.usage_windows for all using (auth.uid() = user_id);
+create policy "Users own usage windows" on public.usage_windows for all using (auth.uid()::text = user_id);
 
 -- Extra Packs
 drop policy if exists "Users own extra packs" on public.extra_packs;
@@ -759,7 +759,7 @@ end;
 $$ language plpgsql;
 
 create or replace function public.increment_usage_window(
-  p_user_id uuid,
+  p_user_id text,
   p_window_type text,
   p_window_start timestamptz,
   p_tokens bigint,
