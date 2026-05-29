@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
       activeUser,
       emotionState,
       vertical,
+      customRoutines: clientConfigForPrompt?.customRoutines ?? [],
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
