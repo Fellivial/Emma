@@ -94,9 +94,7 @@ export async function GET(req: NextRequest) {
         // Track consumption
         await consumeRateLimit(scheduled.client_id, 1, result.totalTokens);
 
-        // Update last_run_at (next_run_at calculation requires a cron parser —
-        // for now set it to null so it doesn't re-fire until manually reset
-        // or a cron parser library is added)
+        // Update last_run_at and schedule the next run
         await supabase
           .from("scheduled_tasks")
           .update({
