@@ -70,6 +70,16 @@ if not os.path.exists(ref_path):
     )
 print(f"[voice] Voice reference: {ref_path}")
 
+# Optional emotion reference — controls warmth/expressiveness independently of voice identity.
+# Record yourself speaking in Emma's tone and save to voices/emma_emotion_ref.wav.
+emo_path_cfg = vs_cfg.get("emotion_audio", "")
+emo_path = os.path.join(base_dir, emo_path_cfg) if emo_path_cfg else None
+if emo_path and os.path.exists(emo_path):
+    print(f"[voice] Emotion reference: {emo_path}")
+else:
+    emo_path = None
+    print("[voice] No emotion reference — delivery will be flat. Record voices/emma_emotion_ref.wav for warmth.")
+
 
 # ── Request / response ───────────────────────────────────────────────────────
 
@@ -105,9 +115,10 @@ def tts(req: TTSRequest):
 
     try:
         tts_model.infer(
-            spk_audio_prompt=ref_path,  # ← your voice — this is what clones it
+            spk_audio_prompt=ref_path,      # ← your voice identity
             text=text,
             output_path=out_path,
+            emo_audio_prompt=emo_path,      # ← emotional delivery (None = flat default)
         )
         with open(out_path, "rb") as f:
             audio_bytes = f.read()

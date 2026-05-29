@@ -5,6 +5,10 @@ voice_service:
   reference_audio: "voices/emma_ref.wav"
   # Emma persona style (0-2 scale; 1.0 = warm/natural, >1 = more expressive)
   exaggeration: 1.0
+  # Emotion reference audio — controls HOW Emma speaks (warmth, expressiveness).
+  # Record yourself speaking in Emma's warm/playful tone for 30-60s, save here.
+  # Leave empty to let the model use its default (flat/neutral delivery).
+  emotion_audio: "voices/emma_emotion_ref.wav"
   # After fine-tuning, set this to the checkpoint path e.g. checkpoints/emma/best.pt
   # Leave empty to use base model weights (zero-shot mode).
   finetuned_checkpoint: ""
