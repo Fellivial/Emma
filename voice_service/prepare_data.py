@@ -13,7 +13,6 @@ Outputs:
 import os
 import yaml
 import soundfile as sf
-import numpy as np
 import librosa
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
@@ -28,7 +27,11 @@ def process_file(
     path: str, clips_dir: str, sr: int, min_s: float, max_s: float
 ) -> list[tuple[str, float]]:
     """Split a single WAV into clips. Returns list of (clip_path, duration_seconds)."""
-    audio, _ = librosa.load(path, sr=sr, mono=True)
+    try:
+        audio, _ = librosa.load(path, sr=sr, mono=True)
+    except Exception as exc:
+        print(f"  [skip] {os.path.basename(path)}: {exc}")
+        return []
     total = len(audio)
     clip_len = int(max_s * sr)
     stride = int(10 * sr)  # 10s stride
@@ -95,9 +98,12 @@ def main():
         )
         audio, _ = librosa.load(longest, sr=sr, mono=True)
         # Skip first 2s (often quiet/noise at recording start), take next 10s
-        ref_audio = audio[2 * sr : 12 * sr]
+        end = min(12 * sr, len(audio))
+        ref_audio = audio[2 * sr : end]
+        if len(ref_audio) < 5 * sr:
+            print(f"  [warn] Reference clip is only {len(ref_audio)/sr:.1f}s — consider using a longer recording")
         sf.write(ref_path, ref_audio, sr)
-        print(f"Reference audio saved: {ref_path}")
+        print(f"Reference audio saved: {ref_path} ({len(ref_audio)/sr:.1f}s)")
     else:
         print(f"Reference audio already exists: {ref_path}")
 
