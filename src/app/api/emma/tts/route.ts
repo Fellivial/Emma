@@ -16,28 +16,6 @@ interface TtsCacheEntry {
 const ttsCache = new Map<string, TtsCacheEntry>();
 const TTS_CACHE_TTL = 60_000; // 60 s
 
-const VOICE_SERVICE_URL = process.env.VOICE_SERVICE_URL?.replace(/\/$/, "");
-
-async function callLocalVoiceService(text: string): Promise<ArrayBuffer | null> {
-  if (!VOICE_SERVICE_URL) return null;
-  try {
-    const res = await fetch(`${VOICE_SERVICE_URL}/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 2000) }), // matches local service's own 2000-char limit
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      console.error("[EMMA TTS] Local voice service error:", res.status);
-      return null;
-    }
-    return res.arrayBuffer();
-  } catch (err) {
-    console.error("[EMMA TTS] Local voice service unreachable:", err);
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
   const sessionUser = await getUser();
   if (!sessionUser) {
@@ -49,21 +27,6 @@ export async function POST(req: NextRequest) {
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
-    }
-
-    // ── Fast path: local voice service (skip DB entirely when healthy) ───
-    if (VOICE_SERVICE_URL) {
-      const localAudio = await callLocalVoiceService(text);
-      if (localAudio) {
-        return new NextResponse(localAudio, {
-          status: 200,
-          headers: {
-            "Content-Type": "audio/wav", // differs from ElevenLabs (audio/mpeg) — both play fine via new Audio(objectURL)
-            "Content-Length": localAudio.byteLength.toString(),
-          },
-        });
-      }
-      // local service unreachable — fall through to ElevenLabs
     }
 
     // ── Resolve ElevenLabs API key via session user ─────────────────────

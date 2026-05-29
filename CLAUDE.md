@@ -96,7 +96,6 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `EMMA_UNSUBSCRIBE_SECRET`                   | HMAC key for unsubscribe link tokens — decoupled from `EMMA_ENCRYPTION_KEY` so key rotation doesn't break sent links (`openssl rand -hex 32`) |
 | `NEXT_PUBLIC_APP_URL`                       | Base URL for OG images and email links (e.g. `https://yourapp.com`)                                                                           |
 | `ELEVENLABS_API_KEY`                        | Not a server var — users connect their own key via Settings → Integrations                                                                    |
-| `VOICE_SERVICE_URL`                         | Base URL of the local IndexTTS-2 voice service (e.g. `http://localhost:8000`). When set, Emma uses it for TTS instead of ElevenLabs.          |
 | `RESEND_API_KEY`                            | Email sequences + intake lead notifications                                                                                                   |
 | `EMAIL_FROM`                                | Sender address for Resend emails                                                                                                              |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail + Google Calendar OAuth                                                                                                                 |

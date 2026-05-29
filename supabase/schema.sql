@@ -547,6 +547,7 @@ alter table public.extra_packs enable row level security;
 alter table public.agent_task_summaries enable row level security;
 alter table public.pattern_detections enable row level security;
 alter table public.provenance_chains enable row level security;
+alter table public.global_config enable row level security;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -652,6 +653,13 @@ create policy "Members manage patterns" on public.pattern_detections for all usi
 -- Provenance Chains
 drop policy if exists "Users read own provenance" on public.provenance_chains;
 create policy "Users read own provenance" on public.provenance_chains for select using (auth.uid() = user_id);
+
+-- Global Config (service-role only — deny all direct access)
+drop policy if exists "Deny all direct access to global_config" on public.global_config;
+create policy "Deny all direct access to global_config"
+  on public.global_config
+  for all
+  using (false);
 
 -- Storage: task-documents
 -- Users can only read files in their own folder ({user_id}/...).
