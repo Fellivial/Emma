@@ -795,7 +795,7 @@ begin
   select id, tokens_remaining
     into v_pack_id, v_remaining
     from public.extra_packs
-   where user_id::text = p_user_id
+   where user_id = p_user_id::uuid
      and valid_until > now()
      and tokens_remaining > 0
    order by created_at asc
