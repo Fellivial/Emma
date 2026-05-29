@@ -25,6 +25,9 @@ from transformers import AutoModel, AutoProcessor
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 
+# IndexTTS-2 decoder output sample rate (matches model card specification)
+SYNTHESIS_SAMPLE_RATE = 24_000
+
 
 def load_config():
     with open(CONFIG_PATH) as f:
@@ -76,6 +79,13 @@ class TTSRequest(BaseModel):
     cfg_weight: float = 0.5
 
 
+def _to_device(obj, dev: str):
+    """Move processor output to device — works for both BatchEncoding and plain dicts."""
+    if hasattr(obj, "to"):
+        return obj.to(dev)
+    return {k: v.to(dev) if isinstance(v, torch.Tensor) else v for k, v in obj.items()}
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 
@@ -93,12 +103,15 @@ def tts(req: TTSRequest):
         raise HTTPException(status_code=400, detail="text exceeds 2000 chars")
 
     try:
-        inputs = processor(
-            text=text,
-            audio=ref_audio,
-            sampling_rate=ref_sr,
-            return_tensors="pt",
-        ).to(device)
+        inputs = _to_device(
+            processor(
+                text=text,
+                audio=ref_audio,
+                sampling_rate=ref_sr,
+                return_tensors="pt",
+            ),
+            device,
+        )
 
         with torch.no_grad():
             # NOTE: Update generate() call signature if IndexTTS-2 uses a custom pipeline
@@ -108,9 +121,11 @@ def tts(req: TTSRequest):
                 cfg_weight=req.cfg_weight,
             )
 
-        audio_np = output.squeeze().cpu().numpy()
+        audio_np = output.squeeze(0).cpu().numpy()
+        if audio_np.ndim == 2:
+            audio_np = audio_np.mean(axis=0)
         buf = io.BytesIO()
-        sf.write(buf, audio_np, samplerate=24000, format="WAV")
+        sf.write(buf, audio_np, samplerate=SYNTHESIS_SAMPLE_RATE, format="WAV")
         buf.seek(0)
 
         return StreamingResponse(
