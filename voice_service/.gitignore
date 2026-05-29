@@ -1,0 +1,10 @@
+voices/raw/**
+voices/clips/**
+checkpoints/**
+*.wav
+*.mp3
+*.pt
+__pycache__/
+*.pyc
+.venv/
+test_output.wav
