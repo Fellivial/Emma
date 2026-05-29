@@ -54,6 +54,7 @@ create table if not exists public.clients (
   vertical_id text default null,
   autonomy_tier integer not null default 2,
   proactive_vision boolean not null default false,
+  custom_routines jsonb default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -62,6 +63,7 @@ alter table public.clients add column if not exists plan_id text not null defaul
 alter table public.clients add column if not exists vertical_id text default null;
 alter table public.clients add column if not exists autonomy_tier integer not null default 2;
 alter table public.clients add column if not exists proactive_vision boolean not null default false;
+alter table public.clients add column if not exists custom_routines jsonb default '[]'::jsonb;
 
 create table if not exists public.client_members (
   client_id uuid references public.clients on delete cascade,
