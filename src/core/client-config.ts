@@ -60,7 +60,7 @@ const DEFAULT_CONFIG: ClientConfig = {
   tokenBudgetDaily: 50_000,
   messageLimitDaily: 50,
   planId: "free",
-  autonomyTier: 2,
+  autonomyTier: 3,
   proactiveVision: false,
   verticalId: null,
   formSteps: null,
