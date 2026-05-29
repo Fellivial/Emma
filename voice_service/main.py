@@ -5,28 +5,27 @@ Start:
     cd voice_service
     uvicorn main:app --host 0.0.0.0 --port 8000
 
+Prerequisites (one-time setup):
+    pip install -r requirements.txt
+    huggingface-cli download IndexTeam/IndexTTS-2 --local-dir checkpoints
+
 POST /tts
-    Body: { "text": "...", "exaggeration": 1.0, "cfg_weight": 0.5 }
-    Returns: audio/wav
+    Body: { "text": "..." }
+    Returns: audio/wav synthesised in your voice (from voices/emma_ref.wav)
 
 GET /health
-    Returns: { "status": "ok", "model": "...", "mode": "zero-shot"|"finetuned", "device": "cpu"|"cuda" }
+    Returns: { "status": "ok", "ref_audio": "...", "fp16": bool }
 """
 import io
 import os
+import tempfile
 
-import soundfile as sf
-import torch
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from transformers import AutoModel, AutoProcessor
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
-
-# IndexTTS-2 decoder output sample rate (matches model card specification)
-SYNTHESIS_SAMPLE_RATE = 24_000
 
 
 def load_config():
@@ -36,54 +35,47 @@ def load_config():
 
 cfg = load_config()
 vs_cfg = cfg["voice_service"]
+base_dir = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Emma Voice Service")
 
-# ── Model loading (once at startup) ─────────────────────────────────────────
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"[voice] Loading IndexTTS-2 on {device}…")
+# ── Load IndexTTS-2 using the official API ───────────────────────────────────
+checkpoints_dir = os.path.join(base_dir, "checkpoints")
+checkpoints_cfg = os.path.join(checkpoints_dir, "config.yaml")
 
-processor = AutoProcessor.from_pretrained(vs_cfg["model_id"])
-model = AutoModel.from_pretrained(vs_cfg["model_id"]).to(device)
+if not os.path.exists(checkpoints_cfg):
+    raise RuntimeError(
+        f"IndexTTS-2 model weights not found at {checkpoints_dir}.\n"
+        "Run once: huggingface-cli download IndexTeam/IndexTTS-2 --local-dir voice_service/checkpoints"
+    )
 
-checkpoint = vs_cfg.get("finetuned_checkpoint", "")
-if checkpoint and os.path.exists(checkpoint):
-    state = torch.load(checkpoint, map_location=device)
-    model.load_state_dict(state["model_state_dict"])
-    MODE = "finetuned"
-    print(f"[voice] Fine-tuned checkpoint loaded: {checkpoint}")
-else:
-    MODE = "zero-shot"
-    print("[voice] Running in zero-shot mode")
+import torch  # noqa: E402
+from indextts.infer_v2 import IndexTTS2  # noqa: E402
 
-model.eval()
+use_fp16 = torch.cuda.is_available()  # fp16 requires CUDA; CPU runs in fp32
+tts_model = IndexTTS2(
+    cfg_path=checkpoints_cfg,
+    model_dir=checkpoints_dir,
+    use_fp16=use_fp16,
+    use_cuda_kernel=False,  # set True only if you built the CUDA kernel extension
+)
+print(f"[voice] IndexTTS-2 ready (fp16={use_fp16})")
 
-# Pre-load reference audio for zero-shot cloning
-ref_path = os.path.join(os.path.dirname(__file__), vs_cfg["reference_audio"])
+# Verify reference audio exists — created by prepare_data.py
+ref_path = os.path.join(base_dir, vs_cfg["reference_audio"])
 if not os.path.exists(ref_path):
     raise RuntimeError(
-        f"Reference audio not found at {ref_path}. Run prepare_data.py first."
+        f"Reference audio not found at {ref_path}.\n"
+        "Run: python prepare_data.py"
     )
-ref_audio, ref_sr = sf.read(ref_path)
-if ref_audio.ndim > 1:
-    ref_audio = ref_audio.mean(axis=1)  # stereo → mono
-print(f"[voice] Reference audio: {ref_path} ({len(ref_audio) / ref_sr:.1f}s)")
+print(f"[voice] Voice reference: {ref_path}")
 
 
-# ── Request schema ───────────────────────────────────────────────────────────
+# ── Request / response ───────────────────────────────────────────────────────
 
 
 class TTSRequest(BaseModel):
     text: str
-    exaggeration: float = vs_cfg.get("exaggeration", 1.0)
-    cfg_weight: float = 0.5
-
-
-def _to_device(obj, dev: str):
-    """Move processor output to device — works for both BatchEncoding and plain dicts."""
-    if hasattr(obj, "to"):
-        return obj.to(dev)
-    return {k: v.to(dev) if isinstance(v, torch.Tensor) else v for k, v in obj.items()}
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -91,7 +83,12 @@ def _to_device(obj, dev: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": vs_cfg["model_id"], "mode": MODE, "device": device}
+    return {
+        "status": "ok",
+        "model": "IndexTeam/IndexTTS-2",
+        "ref_audio": ref_path,
+        "fp16": use_fp16,
+    }
 
 
 @app.post("/tts")
@@ -102,37 +99,23 @@ def tts(req: TTSRequest):
     if len(text) > 2000:
         raise HTTPException(status_code=400, detail="text exceeds 2000 chars")
 
+    # IndexTTS-2 writes output to a file; use a temp file and stream it back
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        out_path = tmp.name
+
     try:
-        inputs = _to_device(
-            processor(
-                text=text,
-                audio=ref_audio,
-                sampling_rate=ref_sr,
-                return_tensors="pt",
-            ),
-            device,
+        tts_model.infer(
+            spk_audio_prompt=ref_path,  # ← your voice — this is what clones it
+            text=text,
+            output_path=out_path,
         )
-
-        with torch.no_grad():
-            # NOTE: Update generate() call signature if IndexTTS-2 uses a custom pipeline
-            output = model.generate(
-                **inputs,
-                exaggeration=req.exaggeration,
-                cfg_weight=req.cfg_weight,
-            )
-
-        audio_np = output.squeeze(0).cpu().numpy()
-        if audio_np.ndim == 2:
-            audio_np = audio_np.mean(axis=0)
-        buf = io.BytesIO()
-        sf.write(buf, audio_np, samplerate=SYNTHESIS_SAMPLE_RATE, format="WAV")
-        buf.seek(0)
-
-        return StreamingResponse(
-            buf,
-            media_type="audio/wav",
-            headers={"X-Voice-Mode": MODE},
-        )
+        with open(out_path, "rb") as f:
+            audio_bytes = f.read()
     except Exception as exc:
-        print(f"[voice] TTS synthesis error: {exc}")
+        print(f"[voice] TTS error: {exc}")
         raise HTTPException(status_code=500, detail="TTS synthesis failed") from exc
+    finally:
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+
+    return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/wav")
