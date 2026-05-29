@@ -18,7 +18,7 @@ function getSupabaseAdmin() {
  * - inputSchema: JSON schema for parameters (used in Claude's tool_use)
  * - riskLevel: "safe" | "moderate" | "dangerous"
  *   - safe: executes immediately, no approval needed
- *   - moderate: logged immediately, executed without approval or delay (no review window)
+ *   - moderate: logged; execution depends on autonomy_tier (tier 1 = skip, tier 2-3 = execute)
  *   - dangerous: ALWAYS pauses for explicit human approval
  * - handler: async function that executes the tool
  */

@@ -34,6 +34,8 @@ import {
   loadContext,
 } from "@/core/task-context";
 import { summarizeTask } from "@/core/task-summarizer";
+import { loadClientConfigForUser } from "@/core/client-config";
+import type { AutonomyTier } from "@/types/emma";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +180,14 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     if (integrationRows) {
       connectedIntegrations = new Set(integrationRows.map((r: { service: string }) => r.service));
     }
+  }
+
+  // Resolve the client's autonomy tier so moderate-tool gating works correctly.
+  // Default to 3 (execute) so behavior is unchanged when no client config is found.
+  let autonomyTier: AutonomyTier = 3;
+  {
+    const clientCfg = await loadClientConfigForUser(task.userId);
+    autonomyTier = clientCfg.autonomyTier ?? 3;
   }
 
   const tools = getToolsForClaude(connectedIntegrations);
@@ -346,8 +356,9 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 
           // ── Check risk level → approval gate ──────────────────────────
 
-          // Moderate tools: log prominently but execute immediately.
-          // Future: add per-user tier config to require approval here.
+          // Moderate tools: gate on autonomy_tier.
+          // Tier 1 → log as skipped, return informational result, skip execution.
+          // Tier 2-3 (or default) → log as executed, fall through to execution.
           if (toolDef.riskLevel === "moderate") {
             if (supabase) {
               await supabase.from("action_log").insert({
@@ -355,12 +366,34 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 step_number: step,
                 action: toolName,
                 input: toolInput,
-                status: "moderate_auto_approved",
+                status: autonomyTier === 1 ? "skipped_low_autonomy" : "moderate_executed",
                 risk_level: "moderate",
-                reason: `Moderate tool "${toolName}" auto-approved`,
+                reason:
+                  autonomyTier === 1
+                    ? `Moderate tool "${toolName}" skipped — autonomy tier 1`
+                    : `Moderate tool "${toolName}" auto-approved`,
               });
             }
-            // Falls through to execution below — no pause
+            if (autonomyTier === 1) {
+              // Skip execution — return an informational result so the LLM gets a response.
+              messages.push({
+                role: "tool",
+                tool_call_id: toolId,
+                content: `Action logged but not executed: "${toolName}" requires manual approval (autonomy tier 1).`,
+              });
+              steps.push({
+                step,
+                toolName,
+                input: resolvedInput,
+                output: `Action logged but not executed: "${toolName}" requires manual approval (autonomy tier 1).`,
+                riskLevel: toolDef.riskLevel,
+                status: "failed",
+                tokenCost: inputTokens + outputTokens,
+                durationMs: Date.now() - stepStart,
+              });
+              continue; // skip to next tool call
+            }
+            // tier 2 or 3: fall through to execution below
           }
 
           if (toolDef.riskLevel === "dangerous") {
