@@ -56,6 +56,26 @@ class VoiceDataset(Dataset):
         return self.processor(audio=audio, sampling_rate=self.sr, return_tensors="pt")
 
 
+def make_collate_fn(processor, sr: int):
+    """Collate a list of raw numpy audio arrays into a padded batch."""
+    def collate(batch_items):
+        # Each item is a single-sample BatchEncoding; extract the raw numpy array
+        # by re-running processor on the batch for correct padding across samples.
+        # batch_items is a list of dicts/BatchEncodings with shape [1, seq_len] tensors.
+        # We extract the underlying numpy and re-process as a batch.
+        arrays = []
+        for item in batch_items:
+            # input_values shape: [1, seq_len] → squeeze to [seq_len]
+            arrays.append(item["input_values"].squeeze(0).numpy())
+        return processor(
+            audio=arrays,
+            sampling_rate=sr,
+            return_tensors="pt",
+            padding=True,
+        )
+    return collate
+
+
 def _save_checkpoint(path: str, epoch: int, model: torch.nn.Module, loss: float) -> None:
     torch.save(
         {"epoch": epoch, "model_state_dict": model.state_dict(), "loss": loss},
@@ -89,11 +109,13 @@ def main() -> None:
 
     print(f"[finetune] {len(dataset)} clips loaded")
 
+    collate_fn = make_collate_fn(processor, cfg["data"]["sample_rate"])
     loader = DataLoader(
         dataset,
         batch_size=cfg["training"]["batch_size"],
         shuffle=True,
         num_workers=0,
+        collate_fn=collate_fn,
     )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["training"]["learning_rate"])
@@ -113,17 +135,26 @@ def main() -> None:
         epoch_loss = 0.0
 
         for batch in loader:
-            batch = {k: v.squeeze(1).to(device) for k, v in batch.items()}
+            optimizer.zero_grad()
+            batch = {k: v.to(device) for k, v in batch.items()}
+            # NOTE: The correct `labels` argument depends on IndexTTS-2's fine-tuning API.
+            # For TTS models, labels are typically target mel spectrograms or codec tokens,
+            # NOT the raw input waveform. Update this line once the model's training
+            # interface is confirmed from the model card or source code.
             outputs = model(**batch, labels=batch.get("input_values"))
             loss = outputs.loss
+            if loss is None:
+                raise RuntimeError(
+                    "Model returned no loss. The `labels` argument may be incorrect "
+                    "for this model — see NOTE above and update accordingly."
+                )
             loss.backward()
             optimizer.step()
             scheduler.step()
-            optimizer.zero_grad()
             epoch_loss += loss.item()
 
         avg = epoch_loss / len(loader)
-        print(f"Epoch {epoch}/{epochs} -- loss: {avg:.4f}")
+        print(f"Epoch {epoch}/{cfg['training']['epochs']} — loss: {avg:.4f}")
 
         if avg < best_loss:
             best_loss = avg
