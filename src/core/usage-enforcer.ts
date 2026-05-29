@@ -126,9 +126,7 @@ export async function checkUsage(
     ];
 
     const allWindows: WindowUsage[] = windowDefs.map((def) => {
-      const row = (rows || []).find(
-      (r: Record<string, unknown>) => r.window_type === def.type
-    );
+      const row = (rows || []).find((r: Record<string, unknown>) => r.window_type === def.type);
 
       const tokensUsed = row?.tokens_used || 0;
       const messagesUsed = row?.messages_used || 0;
@@ -226,21 +224,13 @@ export async function recordUsage(
         .single();
 
       if (windowRow && windowRow.tokens_used > plan.tokenBudgetDaily) {
-        const { data: packs } = await supabase
-          .from("extra_packs")
-          .select("id, tokens_remaining")
-          .eq("user_id", effectiveId)
-          .gt("valid_until", new Date().toISOString())
-          .gt("tokens_remaining", 0)
-          .order("created_at", { ascending: true })
-          .limit(1);
+        const { error: deductError } = await supabase.rpc("deduct_extra_pack_tokens", {
+          p_user_id: effectiveId,
+          p_deduct: Number(total),
+        });
 
-        if (packs && packs.length > 0) {
-          const deduct = Math.min(packs[0].tokens_remaining, Number(total));
-          await supabase
-            .from("extra_packs")
-            .update({ tokens_remaining: Math.max(0, packs[0].tokens_remaining - deduct) })
-            .eq("id", packs[0].id);
+        if (deductError) {
+          console.error("[UsageEnforcer] Failed to deduct extra pack tokens:", deductError);
         }
       }
     }
