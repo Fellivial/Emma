@@ -24,7 +24,7 @@ async function callLocalVoiceService(text: string): Promise<ArrayBuffer | null> 
     const res = await fetch(`${VOICE_SERVICE_URL}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 2000) }),
+      body: JSON.stringify({ text: text.slice(0, 2000) }), // matches local service's own 2000-char limit
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse(localAudio, {
         status: 200,
         headers: {
-          "Content-Type": "audio/wav",
+          "Content-Type": "audio/wav", // differs from ElevenLabs (audio/mpeg) — both play fine via new Audio(objectURL)
           "Content-Length": localAudio.byteLength.toString(),
         },
       });
