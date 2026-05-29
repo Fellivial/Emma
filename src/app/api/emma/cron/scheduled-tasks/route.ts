@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { CronExpressionParser } from "cron-parser";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 
@@ -118,72 +119,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * Simple next-run calculator for common cron patterns.
- * For production, use a library like `cron-parser`.
- */
 function calculateNextRun(cronExpression: string): string {
-  const now = new Date();
-
-  // Parse simple patterns: "0 8 * * *" = daily at 8am
-  const parts = cronExpression.trim().split(/\s+/);
-  if (parts.length !== 5) {
-    // Unknown format — default to 1 hour from now
-    return new Date(now.getTime() + 3_600_000).toISOString();
+  try {
+    const interval = CronExpressionParser.parse(cronExpression, { tz: "UTC" });
+    return interval.next().toISOString() ?? new Date(Date.now() + 3_600_000).toISOString();
+  } catch {
+    console.warn(
+      "[scheduled-tasks] Invalid cron expression, falling back to 1h interval:",
+      cronExpression
+    );
+    return new Date(Date.now() + 3_600_000).toISOString();
   }
-
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
-
-  // Every minute: "* * * * *"
-  if (minute === "*" && hour === "*") {
-    return new Date(now.getTime() + 60_000).toISOString();
-  }
-
-  // Every N minutes: "*/N * * * *"
-  if (minute.startsWith("*/") && hour === "*") {
-    const interval = parseInt(minute.slice(2), 10) || 5;
-    return new Date(now.getTime() + interval * 60_000).toISOString();
-  }
-
-  // Daily at specific time: "M H * * *"
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
-    const targetHour = parseInt(hour, 10);
-    const targetMinute = parseInt(minute, 10);
-    const next = new Date(now);
-    next.setHours(targetHour, targetMinute, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    return next.toISOString();
-  }
-
-  // Weekly: "M H * * N" (specific day of week)
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek !== "*") {
-    const targetDay = parseInt(dayOfWeek, 10);
-    const targetHour = parseInt(hour, 10);
-    const targetMinute = parseInt(minute, 10);
-    const next = new Date(now);
-    next.setHours(targetHour, targetMinute, 0, 0);
-    const daysUntil = (targetDay - now.getDay() + 7) % 7;
-    next.setDate(next.getDate() + daysUntil);
-    if (next <= now) next.setDate(next.getDate() + 7);
-    return next.toISOString();
-  }
-
-  // Monthly: "M H D * *" (specific day of month)
-  if (dayOfMonth !== "*" && month === "*" && dayOfWeek === "*") {
-    const targetDay = parseInt(dayOfMonth, 10);
-    const targetHour = parseInt(hour, 10);
-    const targetMinute = parseInt(minute, 10);
-    const next = new Date(now);
-    next.setDate(targetDay);
-    next.setHours(targetHour, targetMinute, 0, 0);
-    if (next <= now) next.setMonth(next.getMonth() + 1);
-    return next.toISOString();
-  }
-
-  // Fallback — unsupported expression, default to 1 hour from now
-  console.warn(
-    "[scheduled-tasks] Unsupported cron expression, falling back to 1h interval:",
-    cronExpression
-  );
-  return new Date(now.getTime() + 3_600_000).toISOString();
 }
