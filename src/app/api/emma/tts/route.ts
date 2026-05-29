@@ -16,6 +16,28 @@ interface TtsCacheEntry {
 const ttsCache = new Map<string, TtsCacheEntry>();
 const TTS_CACHE_TTL = 60_000; // 60 s
 
+const VOICE_SERVICE_URL = process.env.VOICE_SERVICE_URL?.replace(/\/$/, "");
+
+async function callLocalVoiceService(text: string): Promise<ArrayBuffer | null> {
+  if (!VOICE_SERVICE_URL) return null;
+  try {
+    const res = await fetch(`${VOICE_SERVICE_URL}/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.slice(0, 2000) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      console.error("[EMMA TTS] Local voice service error:", res.status);
+      return null;
+    }
+    return res.arrayBuffer();
+  } catch (err) {
+    console.error("[EMMA TTS] Local voice service unreachable:", err);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const sessionUser = await getUser();
   if (!sessionUser) {
@@ -82,6 +104,18 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+    }
+
+    // ── Local voice service (self-hosted IndexTTS-2) ─────────────────────
+    const localAudio = await callLocalVoiceService(text);
+    if (localAudio) {
+      return new NextResponse(localAudio, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "Content-Length": localAudio.byteLength.toString(),
+        },
+      });
     }
 
     // No key available — signal client to use Web Speech (204 = silent, not an error)
