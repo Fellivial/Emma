@@ -51,6 +51,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
+    // ── Fast path: local voice service (skip DB entirely when healthy) ───
+    if (VOICE_SERVICE_URL) {
+      const localAudio = await callLocalVoiceService(text);
+      if (localAudio) {
+        return new NextResponse(localAudio, {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/wav", // differs from ElevenLabs (audio/mpeg) — both play fine via new Audio(objectURL)
+            "Content-Length": localAudio.byteLength.toString(),
+          },
+        });
+      }
+      // local service unreachable — fall through to ElevenLabs
+    }
+
     // ── Resolve ElevenLabs API key via session user ─────────────────────
     // Look up the client's ElevenLabs integration using the authenticated session.
     // No clientId needed from the request body — session cookie is sufficient.
@@ -104,18 +119,6 @@ export async function POST(req: NextRequest) {
           }
         }
       }
-    }
-
-    // ── Local voice service (self-hosted IndexTTS-2) ─────────────────────
-    const localAudio = await callLocalVoiceService(text);
-    if (localAudio) {
-      return new NextResponse(localAudio, {
-        status: 200,
-        headers: {
-          "Content-Type": "audio/wav", // differs from ElevenLabs (audio/mpeg) — both play fine via new Audio(objectURL)
-          "Content-Length": localAudio.byteLength.toString(),
-        },
-      });
     }
 
     // No key available — signal client to use Web Speech (204 = silent, not an error)

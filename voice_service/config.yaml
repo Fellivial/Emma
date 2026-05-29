@@ -17,6 +17,7 @@ data:
   sample_rate: 16000
   min_clip_seconds: 5
   max_clip_seconds: 15
+  clip_stride_seconds: 15
 
 training:
   output_dir: "checkpoints/emma"

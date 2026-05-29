@@ -1,5 +1,7 @@
 voices/raw/**
+!voices/raw/.gitkeep
 voices/clips/**
+!voices/clips/.gitkeep
 checkpoints/**
 *.wav
 *.mp3

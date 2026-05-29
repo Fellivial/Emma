@@ -134,4 +134,5 @@ def tts(req: TTSRequest):
             headers={"X-Voice-Mode": MODE},
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        print(f"[voice] TTS synthesis error: {exc}")
+        raise HTTPException(status_code=500, detail="TTS synthesis failed") from exc

@@ -24,7 +24,7 @@ def load_config():
 
 
 def process_file(
-    path: str, clips_dir: str, sr: int, min_s: float, max_s: float
+    path: str, clips_dir: str, sr: int, min_s: float, max_s: float, stride_s: float | None = None
 ) -> list[tuple[str, float]]:
     """Split a single WAV into clips. Returns list of (clip_path, duration_seconds)."""
     try:
@@ -34,7 +34,7 @@ def process_file(
         return []
     total = len(audio)
     clip_len = int(max_s * sr)
-    stride = int(10 * sr)  # 10s stride
+    stride = int((stride_s if stride_s is not None else max_s) * sr)
     clips: list[tuple[str, float]] = []
     i = 0
     clip_idx = 0
@@ -73,10 +73,11 @@ def main():
         return
 
     print(f"Processing {len(wav_files)} recording(s)...")
+    stride_s = cfg["data"].get("clip_stride_seconds", max_s)
     all_clips: list[tuple[str, float]] = []
     for fname in sorted(wav_files):
         fpath = os.path.join(raw_dir, fname)
-        clips = process_file(fpath, clips_dir, sr, min_s, max_s)
+        clips = process_file(fpath, clips_dir, sr, min_s, max_s, stride_s)
         total_dur = sum(d for _, d in clips)
         print(f"  {fname}: {len(clips)} clips, {total_dur:.1f}s total")
         all_clips.extend(clips)
