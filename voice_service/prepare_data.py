@@ -12,8 +12,10 @@ Outputs:
 """
 import os
 import yaml
+import numpy as np
 import soundfile as sf
-import librosa
+import torchaudio
+import torchaudio.transforms as T
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 
@@ -28,7 +30,14 @@ def process_file(
 ) -> list[tuple[str, float]]:
     """Split a single WAV into clips. Returns list of (clip_path, duration_seconds)."""
     try:
-        audio, _ = librosa.load(path, sr=sr, mono=True)
+        waveform, orig_sr = torchaudio.load(path)
+        # stereo → mono
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        # resample to target sr if needed
+        if orig_sr != sr:
+            waveform = T.Resample(orig_sr, sr)(waveform)
+        audio = waveform.squeeze(0).numpy()
     except Exception as exc:
         print(f"  [skip] {os.path.basename(path)}: {exc}")
         return []
@@ -97,7 +106,12 @@ def main():
             [os.path.join(raw_dir, f) for f in wav_files],
             key=lambda p: sf.info(p).duration,
         )
-        audio, _ = librosa.load(longest, sr=sr, mono=True)
+        waveform, orig_sr = torchaudio.load(longest)
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        if orig_sr != sr:
+            waveform = T.Resample(orig_sr, sr)(waveform)
+        audio = waveform.squeeze(0).numpy()
         # Skip first 2s (often quiet/noise at recording start), take next 10s
         end = min(12 * sr, len(audio))
         ref_audio = audio[2 * sr : end]

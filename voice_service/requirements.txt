@@ -5,7 +5,6 @@ torchaudio>=2.3.0
 # Official IndexTTS-2 package — includes the indextts.infer_v2.IndexTTS2 class
 indextts @ git+https://github.com/index-tts/index-tts.git
 soundfile==0.12.1
-librosa==0.10.2
 numpy>=1.26.0
 pyyaml==6.0.2
 huggingface_hub>=0.24.0
