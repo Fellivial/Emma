@@ -15,7 +15,7 @@ npm run dev
 ```bash
 npm run lint      # 0 warnings required
 npx tsc --noEmit  # 0 TypeScript errors required
-npm test          # all 136 tests must pass
+npm test          # all tests must pass
 ```
 
 ## Branch naming
@@ -35,6 +35,7 @@ Conventional commits: `feat(scope): ...`, `fix(scope): ...`, `chore: ...`, `docs
 ## Adding tools
 
 Register new autonomous tools in `src/core/tool-registry.ts`. Set `riskLevel` honestly:
+
 - `safe` — read-only, no external side effects
 - `moderate` — writes to internal state, logged but auto-approved
 - `dangerous` — external side effects (email, booking, deletion) — always pauses for human approval

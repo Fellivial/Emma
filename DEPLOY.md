@@ -11,11 +11,11 @@ hotfix/*   → PR → main (emergency)
 
 ## Environments
 
-| Environment | Branch | URL | Database |
-|---|---|---|---|
-| Production | `main` | emma.yourdomain.com | Supabase production project |
-| Staging | `dev` | staging-emma.vercel.app | Supabase staging project |
-| Local | any | localhost:3000 | No Supabase (dev mode) |
+| Environment | Branch | URL                     | Database                    |
+| ----------- | ------ | ----------------------- | --------------------------- |
+| Production  | `main` | emma.yourdomain.com     | Supabase production project |
+| Staging     | `dev`  | staging-emma.vercel.app | Supabase staging project    |
+| Local       | any    | localhost:3000          | No Supabase (dev mode)      |
 
 ## First-Time Setup
 
@@ -187,28 +187,34 @@ vercel logs emma.yourdomain.com --follow
 
 ## Environment Variable Reference
 
-| Variable | Required | Where |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | All LLM calls (brain, vision, memory, emotion, summarize) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Auth, DB |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Client-side auth |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side DB operations |
-| `EMMA_ENCRYPTION_KEY` | Yes (prod) | AES-256 field encryption |
-| `RESEND_API_KEY` | For email | Intake lead notifications + invite emails |
-| `EMAIL_FROM` | For email | Sender address for Resend |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | For integrations | Gmail + Google Calendar OAuth |
-| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | For integrations | Notion OAuth |
-| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | For integrations | Slack OAuth v2 |
-| `GOOGLE_SHEETS_SA_KEY` | For SMB | GCP service account JSON for Sheets lead appending |
-| `HUBSPOT_API_KEY` | For SMB | HubSpot private app token |
-| `LEMONSQUEEZY_API_KEY` | For billing | Checkout, subscription management |
-| `LEMONSQUEEZY_STORE_ID` | For billing | Checkout session creation |
-| `LEMONSQUEEZY_WEBHOOK_SECRET` | For billing | Webhook signature verification |
-| `NEXT_PUBLIC_LEMON_VARIANT_STARTER` | For billing | Starter plan variant ID |
-| `NEXT_PUBLIC_LEMON_VARIANT_PRO` | For billing | Pro plan variant ID |
-| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK` | For billing | Extra Response Pack variant ID |
-| `NEXT_PUBLIC_SMB_DOMAIN` | For SMB | Subdomain routing base domain |
-| `EMMA_ADMIN_EMAILS` | For admin | Comma-separated emails allowed into `/admin` |
-| `CRON_SECRET` | For cron | Authenticates Vercel cron calls |
-| `ELEVENLABS_API_KEY` | Optional | Premium TTS (BYOK — users set their own key) |
-| `EMMA_FF_*` | Optional | Feature flag overrides (see `src/core/feature-flags.ts`) |
+| Variable                                    | Required         | Where                                                                             |
+| ------------------------------------------- | ---------------- | --------------------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`                        | Yes              | All LLM calls (brain, vision, memory, emotion, summarize)                         |
+| `NEXT_PUBLIC_SUPABASE_URL`                  | Yes              | Auth, DB                                                                          |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | Yes              | Client-side auth                                                                  |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | Yes              | Server-side DB operations                                                         |
+| `EMMA_ENCRYPTION_KEY`                       | Yes (prod)       | AES-256 field encryption                                                          |
+| `EMMA_UNSUBSCRIBE_SECRET`                   | Yes (prod)       | HMAC key for unsubscribe tokens — rotate independently from `EMMA_ENCRYPTION_KEY` |
+| `RESEND_API_KEY`                            | For email        | Intake lead notifications + invite emails                                         |
+| `EMAIL_FROM`                                | For email        | Sender address for Resend                                                         |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | For integrations | Gmail + Google Calendar OAuth                                                     |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | For integrations | Notion OAuth                                                                      |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | For integrations | Slack OAuth v2                                                                    |
+| `GOOGLE_SHEETS_SA_KEY`                      | For SMB          | GCP service account JSON for Sheets lead appending                                |
+| `HUBSPOT_API_KEY`                           | For SMB          | HubSpot private app token                                                         |
+| `LEMONSQUEEZY_API_KEY`                      | For billing      | Checkout, subscription management                                                 |
+| `LEMONSQUEEZY_STORE_ID`                     | For billing      | Checkout session creation                                                         |
+| `LEMONSQUEEZY_WEBHOOK_SECRET`               | For billing      | Webhook signature verification                                                    |
+| `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | For billing      | Starter plan variant ID                                                           |
+| `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | For billing      | Pro plan variant ID                                                               |
+| `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | For billing      | Extra Response Pack variant ID                                                    |
+| `NEXT_PUBLIC_SMB_DOMAIN`                    | For SMB          | Subdomain routing base domain                                                     |
+| `WHATSAPP_ACCESS_TOKEN`                     | For WhatsApp     | Meta permanent access token                                                       |
+| `WHATSAPP_PHONE_NUMBER_ID`                  | For WhatsApp     | WhatsApp Business phone number ID                                                 |
+| `WHATSAPP_VERIFY_TOKEN`                     | For WhatsApp     | Webhook subscription verification token                                           |
+| `WHATSAPP_APP_SECRET`                       | For WhatsApp     | Meta app secret for HMAC signature validation on incoming webhooks                |
+| `INGEST_EMAIL_WEBHOOK_SECRET`               | For ingest       | Authenticates inbound email webhook calls to `/api/emma/ingest/email`             |
+| `EMMA_ADMIN_EMAILS`                         | For admin        | Comma-separated emails allowed into `/admin`                                      |
+| `CRON_SECRET`                               | For cron         | Authenticates Vercel cron calls                                                   |
+| `ELEVENLABS_API_KEY`                        | Optional         | Premium TTS (BYOK — users set their own key)                                      |
+| `EMMA_FF_*`                                 | Optional         | Feature flag overrides (see `src/core/feature-flags.ts`)                          |
