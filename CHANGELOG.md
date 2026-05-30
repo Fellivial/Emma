@@ -8,8 +8,6 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ### Added
 
-- **Local voice cloning** — IndexTTS-2 zero-shot inference FastAPI server routes Emma's TTS through a local model with ElevenLabs as fallback, keeping voice data off third-party servers
-- **Voice fine-tuning pipeline** — audio preprocessing, clip splitting, and fine-tuning script for training custom IndexTTS-2 voice models; emotional delivery control via `emo_audio_prompt`
 - **Custom routines from DB** — `clients.custom_routines` column is now loaded per request and merged with built-in routines in the system prompt, surviving serverless cold starts (previously module-level state was lost on cold start)
 - **`--dry-run` flag for backfill script** — `scripts/backfill-waitlist-approved.ts` now previews which users would be stamped without making changes
 - **Autonomy tier gating** — agent loop enforces `autonomy_tier` per client config; tier 1 clients skip moderate-risk tool execution entirely (logs `skipped_low_autonomy` instead of executing)
