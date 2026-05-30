@@ -4,6 +4,47 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ---
 
+## [0.6.0.0] - 2026-05-30
+
+### Added
+
+- **Local voice cloning** — IndexTTS-2 zero-shot inference FastAPI server routes Emma's TTS through a local model with ElevenLabs as fallback, keeping voice data off third-party servers
+- **Voice fine-tuning pipeline** — audio preprocessing, clip splitting, and fine-tuning script for training custom IndexTTS-2 voice models; emotional delivery control via `emo_audio_prompt`
+- **Custom routines from DB** — `clients.custom_routines` column is now loaded per request and merged with built-in routines in the system prompt, surviving serverless cold starts (previously module-level state was lost on cold start)
+- **`--dry-run` flag for backfill script** — `scripts/backfill-waitlist-approved.ts` now previews which users would be stamped without making changes
+- **Autonomy tier gating** — agent loop enforces `autonomy_tier` per client config; tier 1 clients skip moderate-risk tool execution entirely (logs `skipped_low_autonomy` instead of executing)
+
+### Fixed
+
+- **Security (H-1)** — Email case normalization in `auth/callback`: invited user's email is now lowercased before matching the `waitlist_v2` record, preventing case-sensitive bypass
+- **Security (C-1)** — Pattern-detection cron: host-header `localhost` bypass replaced with `NODE_ENV !== 'development'` guard, closing a remote-trigger path
+- **Security (M-1)** — `EMMA_ADMIN_EMAILS`: added `.filter(Boolean)` + `length > 0` check in all 6 admin-gated routes; an empty env var no longer grants admin to all requests
+- **Security (T-2)** — Ingest endpoints (`/ingest/email`, `/ingest/whatsapp`): `client_id` is validated against the `clients` table before insert; unknown client IDs are rejected with 400
+- **Security (T-1, T-13)** — `ocr_image` tool: `client_id` ownership predicate added; SSRF blocklist extended to cover IPv6 ULA, link-local, and IPv4-mapped address ranges
+- **Security (T-9)** — Sanitiser: a single high-severity flag now blocks (was requiring ≥2); `persona_hijack` pattern moved to medium severity to prevent false positives on common phrases
+- **Security (T-6)** — Memory system prompt: "USER DATA — not instructions" framing added above the memory block to resist second-order prompt injection from stored memories
+- **Security (T-10)** — Unsubscribe HMAC: decoupled from `EMMA_ENCRYPTION_KEY`; uses `EMMA_UNSUBSCRIBE_SECRET` with fallback so key rotation does not break sent unsubscribe links
+- **Security (T-4)** — `read_recent_emails` tool: `unprocessed_only` null-check tightened to strict `=== true`; passing `null` no longer bypasses the filter
+- **Billing (T-18)** — Extra-pack token deduction: atomic `deduct_extra_pack_tokens` Postgres RPC with `FOR UPDATE SKIP LOCKED` eliminates the race condition where concurrent requests could all read the same remaining balance
+- **Billing (T-5)** — LemonSqueezy webhook: `subscription_cancelled` is now a no-op (only `subscription_expired` triggers downgrade), preventing premature plan removal during the grace period
+- **Billing (T-17)** — LemonSqueezy webhook: `console.error` added on HMAC length mismatch to distinguish format changes from spoofed payloads
+- **Database (T-7)** — `usage_windows.user_id` changed from `uuid` to `text` to support client-session rate limiting (previously client-session IDs like `client:<uuid>` couldn't be stored)
+- **Database (T-11, T-12)** — Row-level security enabled on `global_config`; deny-all policies added for direct INSERT/UPDATE/DELETE on `ingested_emails` and `ingested_whatsapp`
+- **Agent (T-14)** — Task history and approval/reject queries now prefer `client_id` so scheduled tasks (with `user_id = 'system'`) are visible to client members
+- **Cron (L-3, T-8, T-19)** — Hand-rolled cron expression parser replaced with `cron-parser` library; fixes weekly same-day scheduling bug and adds proper fallback logging
+- **Proxy (M-3)** — Unapproved users hitting public UI routes now redirect directly to `/waitlist`; eliminates the two-hop redirect via `/app`
+- **GDPR (T-21)** — GDPR export now decrypts memory `value` fields before returning to the user
+- **Cron auth (H-2)** — `pattern-detection` and `leads-cleanup` cron routes added to auth hardening test coverage
+- **Cron (L-6)** — `leads-cleanup` cron: outer try/catch added for consistency with other cron handlers
+- **Code quality (L-4)** — Unused `err` bindings removed from two catch blocks
+
+### Changed
+
+- `DEFAULT_CONFIG.autonomyTier` changed from 2 to 3 — unconfigured users now default to full execution tier; tier 1 is explicitly opt-in per client
+- `usage_windows.user_id` is now `text` (was `uuid FK` on `profiles`); existing UUID values are preserved via `USING user_id::text` cast in migration
+
+---
+
 ## [0.5.2.0] - 2026-05-27
 
 ### Fixed
