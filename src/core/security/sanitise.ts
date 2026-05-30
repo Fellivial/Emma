@@ -48,7 +48,7 @@ const INJECTION_PATTERNS: Array<{
     severity: "medium",
     label: "memory_wipe_attempt",
   },
-  { pattern: /you\s+are\s+now\s+(a|an)\s+/i, severity: "high", label: "persona_hijack" },
+  { pattern: /you\s+are\s+now\s+(a|an)\s+/i, severity: "medium", label: "persona_hijack" },
   { pattern: /new\s+instructions?\s*:/i, severity: "high", label: "instruction_inject" },
   { pattern: /system\s*:\s*you\s+are/i, severity: "high", label: "system_prompt_inject" },
   { pattern: /\[system\]/i, severity: "medium", label: "system_tag_inject" },
@@ -147,10 +147,10 @@ export function sanitiseInput(input: string): SanitisationResult {
   }
 
   // ── Decision: block or pass ────────────────────────────────────────────
-  // Only block on HIGH threat with multiple flags (single pattern could be false positive)
+  // Block on any single HIGH-severity flag — jailbreak/injection patterns have low false-positive rates
   if (
     threat === "high" &&
-    flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 2
+    flags.filter((f) => f !== "truncated" && f !== "control_chars_stripped").length >= 1
   ) {
     blocked = true;
   }

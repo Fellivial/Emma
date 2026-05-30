@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
+import { decrypt } from "@/core/security/encryption";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -73,7 +74,19 @@ export async function POST(req: NextRequest) {
         exportedAt: new Date().toISOString(),
         user: { id: user.id, email: user.email },
         profile,
-        memories: memories || [],
+        memories: (memories || []).map((m: Record<string, unknown>) => ({
+          ...m,
+          value:
+            typeof m.value === "string" && m.value.startsWith("enc:v1:")
+              ? (() => {
+                  try {
+                    return decrypt(m.value as string);
+                  } catch {
+                    return m.value;
+                  }
+                })()
+              : m.value,
+        })),
         conversations: conversations || [],
         messages: messages || [],
         usage: usage || [],

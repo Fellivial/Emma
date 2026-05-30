@@ -33,6 +33,18 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as AgentRequest;
     const supabase = getSupabaseAdmin();
 
+    // Resolve clientId for task queries — scheduled tasks have user_id="system" but a
+    // valid client_id, so querying by client_id makes all tasks visible regardless of origin.
+    let clientId: string | null = null;
+    if (supabase) {
+      const { data: membership } = await supabase
+        .from("client_members")
+        .select("client_id")
+        .eq("user_id", userId)
+        .single();
+      clientId = membership?.client_id ?? null;
+    }
+
     switch (body.action) {
       // ── Create + run a new task ──────────────────────────────────────
       case "create": {
@@ -88,13 +100,16 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
 
-        // Get approval record with task transcript for full-context resume
-        const { data: approval } = await supabase
+        // Get approval record with task transcript for full-context resume.
+        // Prefer client_id so scheduled-task approvals (user_id="system") are visible;
+        // fall back to user_id when clientId is not yet resolved.
+        const approvalQuery = supabase
           .from("approvals")
           .select("*, action_log(*), tasks(*, step_transcript)")
-          .eq("id", body.approvalId)
-          .eq("user_id", userId)
-          .single();
+          .eq("id", body.approvalId);
+        const { data: approval } = await (
+          clientId ? approvalQuery.eq("client_id", clientId) : approvalQuery.eq("user_id", userId)
+        ).single();
 
         if (!approval || approval.status !== "pending") {
           return NextResponse.json(
@@ -185,23 +200,25 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
 
-        // Fetch approval first to get action_log_id and task_id for downstream updates
-        const { data: approval } = await supabase
+        // Fetch approval first to get action_log_id and task_id for downstream updates.
+        // Prefer client_id so scheduled-task rejections are also reachable by client members.
+        const rejectQuery = supabase
           .from("approvals")
           .select("action_log_id, task_id")
-          .eq("id", body.approvalId)
-          .eq("user_id", userId)
-          .single();
+          .eq("id", body.approvalId);
+        const { data: approval } = await (
+          clientId ? rejectQuery.eq("client_id", clientId) : rejectQuery.eq("user_id", userId)
+        ).single();
 
-        await supabase
+        const rejectBase = supabase
           .from("approvals")
           .update({
             status: "rejected",
             decided_by: userId,
             decided_at: new Date().toISOString(),
           })
-          .eq("id", body.approvalId)
-          .eq("user_id", userId);
+          .eq("id", body.approvalId);
+        await (clientId ? rejectBase.eq("client_id", clientId) : rejectBase.eq("user_id", userId));
 
         audit({
           userId,
@@ -242,12 +259,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing taskId" }, { status: 400 });
         }
 
-        const { data: task } = await supabase
-          .from("tasks")
-          .select("*, action_log(*)")
-          .eq("id", body.taskId)
-          .eq("user_id", userId)
-          .single();
+        const taskQuery = supabase.from("tasks").select("*, action_log(*)").eq("id", body.taskId);
+        // Prefer client_id so scheduled tasks (user_id="system") are visible;
+        // fall back to user_id when clientId is not yet resolved.
+        const { data: task } = await (
+          clientId ? taskQuery.eq("client_id", clientId) : taskQuery.eq("user_id", userId)
+        ).single();
 
         return NextResponse.json({ task });
       }
@@ -259,22 +276,27 @@ export async function POST(req: NextRequest) {
         }
 
         const limit = body.limit || 20;
-        const { data: tasks } = await supabase
+        const tasksBase = supabase
           .from("tasks")
           .select(
             "id, trigger_type, trigger_source, goal, status, result, steps_taken, token_cost, created_at, completed_at"
-          )
-          .eq("user_id", userId)
+          );
+        // Prefer client_id so scheduled tasks (user_id="system") are visible;
+        // fall back to user_id when clientId is not yet resolved.
+        const { data: tasks } = await (
+          clientId ? tasksBase.eq("client_id", clientId) : tasksBase.eq("user_id", userId)
+        )
           .order("created_at", { ascending: false })
           .limit(limit);
 
-        // Get pending approvals
-        const { data: approvals } = await supabase
+        // Get pending approvals — same client_id-first logic
+        const approvalsBase = supabase
           .from("approvals")
           .select("id, task_id, action, input, risk_level, reason, created_at, expires_at")
-          .eq("user_id", userId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false });
+          .eq("status", "pending");
+        const { data: approvals } = await (
+          clientId ? approvalsBase.eq("client_id", clientId) : approvalsBase.eq("user_id", userId)
+        ).order("created_at", { ascending: false });
 
         return NextResponse.json({ tasks: tasks || [], approvals: approvals || [] });
       }

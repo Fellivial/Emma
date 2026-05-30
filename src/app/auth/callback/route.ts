@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
               await admin
                 .from("waitlist_v2")
                 .update({ status: "converted" })
-                .eq("email", user.email)
+                .eq("email", user.email.toLowerCase())
                 .eq("status", "invited")
                 .gt("invite_expires_at", new Date().toISOString());
             }

@@ -53,6 +53,24 @@ CREATE POLICY "Users read own ingested emails"
   FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Deny direct insert on ingested_emails" ON ingested_emails;
+CREATE POLICY "Deny direct insert on ingested_emails"
+  ON ingested_emails
+  FOR INSERT
+  WITH CHECK (false);
+
+DROP POLICY IF EXISTS "Deny direct update on ingested_emails" ON ingested_emails;
+CREATE POLICY "Deny direct update on ingested_emails"
+  ON ingested_emails
+  FOR UPDATE
+  USING (false);
+
+DROP POLICY IF EXISTS "Deny direct delete on ingested_emails" ON ingested_emails;
+CREATE POLICY "Deny direct delete on ingested_emails"
+  ON ingested_emails
+  FOR DELETE
+  USING (false);
+
 -- ─── ingested_whatsapp ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS ingested_whatsapp (
@@ -72,3 +90,21 @@ CREATE POLICY "Users read own whatsapp messages"
   ON ingested_whatsapp
   FOR SELECT
   USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Deny direct insert on ingested_whatsapp" ON ingested_whatsapp;
+CREATE POLICY "Deny direct insert on ingested_whatsapp"
+  ON ingested_whatsapp
+  FOR INSERT
+  WITH CHECK (false);
+
+DROP POLICY IF EXISTS "Deny direct update on ingested_whatsapp" ON ingested_whatsapp;
+CREATE POLICY "Deny direct update on ingested_whatsapp"
+  ON ingested_whatsapp
+  FOR UPDATE
+  USING (false);
+
+DROP POLICY IF EXISTS "Deny direct delete on ingested_whatsapp" ON ingested_whatsapp;
+CREATE POLICY "Deny direct delete on ingested_whatsapp"
+  ON ingested_whatsapp
+  FOR DELETE
+  USING (false);

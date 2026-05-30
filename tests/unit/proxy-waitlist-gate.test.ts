@@ -33,7 +33,7 @@ describe("proxy.ts — waitlist gate structure", () => {
     // The gate must check !isApi so API routes are not caught in the redirect loop
     const gateBlock = proxySrc.slice(
       proxySrc.indexOf("Waitlist gate"),
-      proxySrc.indexOf("Waitlist gate") + 400
+      proxySrc.indexOf("Waitlist gate") + 700
     );
     expect(gateBlock).toContain("!isApi");
     expect(gateBlock).toContain("!isPublic");

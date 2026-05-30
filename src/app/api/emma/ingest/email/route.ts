@@ -38,6 +38,18 @@ export async function POST(req: NextRequest) {
     const clientId = new URL(req.url).searchParams.get("client_id") || null;
 
     const supabase = getSupabaseAdmin();
+
+    if (clientId && supabase) {
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("id", clientId)
+        .single();
+      if (!clientRow) {
+        return NextResponse.json({ error: "Invalid client_id" }, { status: 400 });
+      }
+    }
+
     if (supabase) {
       await supabase.from("ingested_emails").insert({
         from_address: parsed.from,

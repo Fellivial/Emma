@@ -72,22 +72,24 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── Waitlist gate ────────────────────────────────────────────────────────
-  if (user && !isPublic && !isApi) {
-    const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase());
-    const isAdmin = adminEmails.includes(user.email?.toLowerCase() ?? "");
+  const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const isAdmin = user
+    ? adminEmails.length > 0 && adminEmails.includes(user.email?.toLowerCase() ?? "")
+    : false;
+  const approved = user?.app_metadata?.waitlist_approved === true;
+  const isWaitlisted = !!user && !isAdmin && !approved;
 
-    const approved = user.app_metadata?.waitlist_approved === true;
-    if (!isAdmin && !approved) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/waitlist";
-      return NextResponse.redirect(redirectUrl);
-    }
+  if (isWaitlisted && !isPublic && !isApi) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/waitlist";
+    return NextResponse.redirect(redirectUrl);
   }
   // ────────────────────────────────────────────────────────────────────────
 
-  // Authenticated user hitting public UI routes → redirect to app
+  // Authenticated user hitting public UI routes → redirect to app (or /waitlist if unapproved)
   const isPublicUiRoute =
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/" ||
@@ -96,7 +98,7 @@ export async function proxy(request: NextRequest) {
 
   if (user && isPublicUiRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/app";
+    redirectUrl.pathname = isWaitlisted ? "/waitlist" : "/app";
     return NextResponse.redirect(redirectUrl);
   }
 

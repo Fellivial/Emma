@@ -47,8 +47,20 @@ export async function POST(req: NextRequest) {
     // Clients configure their webhook URL as /api/emma/ingest/whatsapp?client_id=<uuid>
     const clientId = new URL(req.url).searchParams.get("client_id") || null;
 
+    const supabase = getSupabaseAdmin();
+
+    if (clientId && supabase) {
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("id", clientId)
+        .single();
+      if (!clientRow) {
+        return NextResponse.json({ error: "Invalid client_id" }, { status: 400 });
+      }
+    }
+
     if (message) {
-      const supabase = getSupabaseAdmin();
       if (supabase) {
         await supabase.from("ingested_whatsapp").upsert(
           {

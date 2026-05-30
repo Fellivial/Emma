@@ -8,7 +8,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import type { AutonomyTier } from "@/types/emma";
+import type { AutonomyTier, Routine } from "@/types/emma";
 
 export interface FormField {
   id: string;
@@ -44,6 +44,7 @@ export interface ClientConfig {
   formSteps: FormStep[] | null;
   ownerEmail: string | null;
   sheetsId: string | null;
+  customRoutines: Routine[];
 }
 
 const DEFAULT_CONFIG: ClientConfig = {
@@ -59,12 +60,13 @@ const DEFAULT_CONFIG: ClientConfig = {
   tokenBudgetDaily: 50_000,
   messageLimitDaily: 50,
   planId: "free",
-  autonomyTier: 2,
+  autonomyTier: 3,
   proactiveVision: false,
   verticalId: null,
   formSteps: null,
   ownerEmail: null,
   sheetsId: null,
+  customRoutines: [],
 };
 
 function getSupabase() {
@@ -108,6 +110,7 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       formSteps: (data.form_steps as FormStep[] | null) ?? null,
       ownerEmail: data.owner_email ?? null,
       sheetsId: data.sheets_id ?? null,
+      customRoutines: (data.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -147,6 +150,7 @@ export async function loadClientConfigOrNull(slug: string): Promise<ClientConfig
       formSteps: (data.form_steps as FormStep[] | null) ?? null,
       ownerEmail: data.owner_email ?? null,
       sheetsId: data.sheets_id ?? null,
+      customRoutines: (data.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
     return null;
@@ -189,6 +193,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       form_steps: FormStep[] | null;
       owner_email: string | null;
       sheets_id: string | null;
+      custom_routines: Routine[] | null;
     };
     return {
       id: c.id,
@@ -209,6 +214,7 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       formSteps: (c.form_steps as FormStep[] | null) ?? null,
       ownerEmail: c.owner_email ?? null,
       sheetsId: c.sheets_id ?? null,
+      customRoutines: (c.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
     return DEFAULT_CONFIG;

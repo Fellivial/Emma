@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         emotion: { primary: "neutral", confidence: 0.1, valence: 0, arousal: 0.3 },
       });
     }
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Emotion analysis failed" }, { status: 500 });
   }
 }

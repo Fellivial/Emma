@@ -167,8 +167,9 @@ export async function POST(req: NextRequest) {
       // Only admin or system can apply rewards
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
-        .map((e) => e.trim().toLowerCase());
-      if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (adminEmails.length === 0 || !adminEmails.includes(user.email?.toLowerCase() ?? "")) {
         return NextResponse.json({ error: "Admin only" }, { status: 403 });
       }
 

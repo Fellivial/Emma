@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Verify HMAC
-  const key = process.env.EMMA_ENCRYPTION_KEY;
+  // Verify HMAC — uses EMMA_UNSUBSCRIBE_SECRET if set, falls back to EMMA_ENCRYPTION_KEY
+  const key = process.env.EMMA_UNSUBSCRIBE_SECRET ?? process.env.EMMA_ENCRYPTION_KEY;
   if (!key) {
     return new Response(
       renderPage("Configuration Error", "The server is not configured correctly."),

@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Request failed" }, { status: 500 });
   }
 }

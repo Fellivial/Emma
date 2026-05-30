@@ -54,6 +54,7 @@ create table if not exists public.clients (
   vertical_id text default null,
   autonomy_tier integer not null default 2,
   proactive_vision boolean not null default false,
+  custom_routines jsonb default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -62,6 +63,7 @@ alter table public.clients add column if not exists plan_id text not null defaul
 alter table public.clients add column if not exists vertical_id text default null;
 alter table public.clients add column if not exists autonomy_tier integer not null default 2;
 alter table public.clients add column if not exists proactive_vision boolean not null default false;
+alter table public.clients add column if not exists custom_routines jsonb default '[]'::jsonb;
 
 create table if not exists public.client_members (
   client_id uuid references public.clients on delete cascade,
@@ -426,7 +428,7 @@ create table if not exists public.oauth_states (
 
 create table if not exists public.usage_windows (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references public.profiles on delete cascade not null,
+  user_id text not null,
   window_type text not null check (window_type in ('daily','weekly','monthly')),
   window_start timestamptz not null,
   tokens_used bigint not null default 0,
@@ -547,6 +549,7 @@ alter table public.extra_packs enable row level security;
 alter table public.agent_task_summaries enable row level security;
 alter table public.pattern_detections enable row level security;
 alter table public.provenance_chains enable row level security;
+alter table public.global_config enable row level security;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -635,7 +638,7 @@ create policy "Users manage own oauth states" on public.oauth_states for all usi
 
 -- Usage Windows
 drop policy if exists "Users own usage windows" on public.usage_windows;
-create policy "Users own usage windows" on public.usage_windows for all using (auth.uid() = user_id);
+create policy "Users own usage windows" on public.usage_windows for all using (auth.uid()::text = user_id);
 
 -- Extra Packs
 drop policy if exists "Users own extra packs" on public.extra_packs;
@@ -652,6 +655,13 @@ create policy "Members manage patterns" on public.pattern_detections for all usi
 -- Provenance Chains
 drop policy if exists "Users read own provenance" on public.provenance_chains;
 create policy "Users read own provenance" on public.provenance_chains for select using (auth.uid() = user_id);
+
+-- Global Config (service-role only — deny all direct access)
+drop policy if exists "Deny all direct access to global_config" on public.global_config;
+create policy "Deny all direct access to global_config"
+  on public.global_config
+  for all
+  using (false);
 
 -- Storage: task-documents
 -- Users can only read files in their own folder ({user_id}/...).
@@ -751,7 +761,7 @@ end;
 $$ language plpgsql;
 
 create or replace function public.increment_usage_window(
-  p_user_id uuid,
+  p_user_id text,
   p_window_type text,
   p_window_start timestamptz,
   p_tokens bigint,
@@ -769,6 +779,41 @@ begin
     updated_at = now();
 end;
 $$ language plpgsql;
+
+create or replace function public.deduct_extra_pack_tokens(
+  p_user_id text,
+  p_deduct bigint
+) returns bigint
+language plpgsql
+security definer
+as $$
+declare
+  v_pack_id uuid;
+  v_remaining bigint;
+begin
+  -- Select the oldest valid pack with tokens remaining, lock it for update
+  select id, tokens_remaining
+    into v_pack_id, v_remaining
+    from public.extra_packs
+   where user_id = p_user_id::uuid
+     and valid_until > now()
+     and tokens_remaining > 0
+   order by created_at asc
+   limit 1
+   for update skip locked;
+
+  if v_pack_id is null then
+    return 0; -- no pack available
+  end if;
+
+  -- Atomically deduct, floor at 0
+  update public.extra_packs
+     set tokens_remaining = greatest(0, tokens_remaining - p_deduct)
+   where id = v_pack_id;
+
+  return greatest(0, v_remaining - p_deduct);
+end;
+$$;
 
 
 -- ─── Deprecation Notes ────────────────────────────────────────────────────────

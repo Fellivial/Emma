@@ -79,8 +79,10 @@ export async function POST(req: NextRequest) {
       // ── Waitlist gate ────────────────────────────────────────────────────
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
-        .map((e) => e.trim().toLowerCase());
-      const isAdmin = adminEmails.includes(sessionUser.email?.toLowerCase() ?? "");
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isAdmin =
+        adminEmails.length > 0 && adminEmails.includes(sessionUser.email?.toLowerCase() ?? "");
       if (!isAdmin && sessionUser.app_metadata?.waitlist_approved !== true) {
         return new Response(JSON.stringify({ error: "Waitlist approval required" }), {
           status: 403,
@@ -136,6 +138,7 @@ export async function POST(req: NextRequest) {
       activeUser,
       emotionState,
       vertical,
+      customRoutines: clientConfigForPrompt?.customRoutines ?? [],
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
