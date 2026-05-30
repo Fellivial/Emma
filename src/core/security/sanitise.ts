@@ -48,7 +48,7 @@ const INJECTION_PATTERNS: Array<{
     severity: "medium",
     label: "memory_wipe_attempt",
   },
-  { pattern: /you\s+are\s+now\s+(a|an)\s+/i, severity: "high", label: "persona_hijack" },
+  { pattern: /you\s+are\s+now\s+(a|an)\s+/i, severity: "medium", label: "persona_hijack" },
   { pattern: /new\s+instructions?\s*:/i, severity: "high", label: "instruction_inject" },
   { pattern: /system\s*:\s*you\s+are/i, severity: "high", label: "system_prompt_inject" },
   { pattern: /\[system\]/i, severity: "medium", label: "system_tag_inject" },
