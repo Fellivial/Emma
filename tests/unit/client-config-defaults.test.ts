@@ -48,12 +48,7 @@ vi.mock("@supabase/supabase-js", () => ({
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test.supabase.co");
 vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-key");
 
-import {
-  DEFAULT_CONFIG,
-  loadClientConfigOrNull,
-  loadClientConfigForUser,
-  loadClientConfig,
-} from "@/core/client-config";
+import { DEFAULT_CONFIG, loadClientConfigForUser, loadClientConfig } from "@/core/client-config";
 
 // ── Shared fixture ────────────────────────────────────────────────────────────
 
@@ -120,34 +115,6 @@ describe("loadClientConfig — fallback", () => {
   it("returns DEFAULT_CONFIG when slug is 'default'", async () => {
     const result = await loadClientConfig("default");
     expect(result.id).toBe("default");
-  });
-});
-
-// ── loadClientConfigOrNull — customRoutines mapping (T-15) ───────────────────
-
-describe("loadClientConfigOrNull — customRoutines", () => {
-  it("maps custom_routines: null → customRoutines: []", async () => {
-    mockSingle.mockResolvedValueOnce({ data: { ...BASE_ROW, custom_routines: null }, error: null });
-    const result = await loadClientConfigOrNull("acme");
-    expect(result).not.toBeNull();
-    expect(result!.customRoutines).toEqual([]);
-  });
-
-  it("maps custom_routines: [] → customRoutines: []", async () => {
-    mockSingle.mockResolvedValueOnce({ data: { ...BASE_ROW, custom_routines: [] }, error: null });
-    const result = await loadClientConfigOrNull("acme");
-    expect(result!.customRoutines).toEqual([]);
-  });
-
-  it("maps custom_routines: [{...}] → customRoutines: [{...}]", async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { ...BASE_ROW, custom_routines: [CUSTOM_ROUTINE] },
-      error: null,
-    });
-    const result = await loadClientConfigOrNull("acme");
-    expect(result!.customRoutines).toHaveLength(1);
-    expect(result!.customRoutines[0].id).toBe("custom-r1");
-    expect(result!.customRoutines[0].name).toBe("Daily Briefing");
   });
 });
 

@@ -4,6 +4,20 @@ All notable changes are documented here. Format: date, what changed, migration s
 
 ---
 
+## [0.6.1.0] - 2026-05-31
+
+### Removed
+
+- **SMB intake widget** — deleted `src/app/intake/`, `src/app/api/intake/`, `src/app/business/`, `src/app/api/business/`, and `docs/howto-smb-intake.md`; the feature had zero demand and carried a live persona-safety risk (default mommy persona would fire on business chat routes)
+- **SMB subdomain routing** — removed `{slug}.SMB_DOMAIN → /intake/{slug}` rewrite block from `src/proxy.ts` and `/intake/` public path entry; `NEXT_PUBLIC_SMB_DOMAIN` and `GOOGLE_SHEETS_SA_KEY` env vars are now unused
+- **`loadClientConfigOrNull`** — removed slug-based anonymous config lookup from `src/core/client-config.ts`; only `loadClientConfigForUser` (auth-gated) remains
+
+### Added
+
+- **Consumer niche definition** — `docs/niche.md` establishes Emma's target user: emotionally underserved people who want an AI companion that feels genuinely present and can help with real-world tasks, replacing the fuzzy "anyone who wants AI" positioning
+
+---
+
 ## [0.6.0.0] - 2026-05-30
 
 ### Added
