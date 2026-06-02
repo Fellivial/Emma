@@ -117,6 +117,8 @@ interface PromptContext {
   vertical?: VerticalConfig;
   /** Per-request custom routines loaded from DB — overrides module-level state. */
   customRoutines?: Routine[];
+  /** LLM-generated summary of prior conversation session(s), injected for cross-session continuity. */
+  previousContext?: string;
 }
 
 export interface SystemBlock {
@@ -192,6 +194,14 @@ Integration tools only work if the user has connected the relevant service. Do n
 ${ctx.vertical.personaPrompt}
 
 Pay special attention to: ${ctx.vertical.memoryFocusAreas.join(", ")}`;
+  }
+
+  if (ctx.previousContext) {
+    stable += `
+
+## Previous Session Context
+The following is a summary of earlier conversations with this user. Use it to maintain continuity — reference relevant context naturally without saying "according to my summary":
+${ctx.previousContext}`;
   }
 
   if (ctx.memories && ctx.memories.length > 0) {

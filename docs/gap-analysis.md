@@ -302,23 +302,15 @@ Allows users to upload context documents (contracts, meeting notes, PDFs) and ha
 
 ### 4. Conversation History Persistence (`conversation-history-research.md`)
 
-**Status:** ⚠️ PARTIAL (~10%) — schema exists, active path unchanged  
+**Status:** ✅ Complete  
 **Impact:** Medium
 
-Current flat `chat_messages` prevents per-session history, conversation switching, and titling.
-
-**What remains:**
-
-- ❌ Migrate active chat flow from `chat_messages` to `messages`/`conversations` tables
-- ❌ Encrypt message content
-- ❌ Summarization trigger at 30-message threshold
-- ❌ Store summary in `conversations.summary`
-- ❌ Inject summary into system prompt on new session start
-- ❌ Conversation titling (async LLM call after first exchange)
-- ❌ localStorage pending queue for offline resilience
-- ❌ Per-session conversation history loading
-
-**Recommendation:** Phase 2: migration + encryption + summarization (~3–5 days). Phase 3: titling + UI switcher.
+- `history/route.ts` POST now dual-writes to encrypted `messages`/`conversations` (primary) + `chat_messages` (legacy UI compat)
+- `history/route.ts` GET reads from encrypted `messages` path first (decrypted), falls back to `chat_messages` for users with no encrypted history yet
+- **Summarization**: `after()` fires at `message_count % 30 === 0`; calls UTILITY_MODELS to summarize last 35 messages (merging previous summary); stores in `conversations.summary`
+- **Titling**: `after()` fires at `message_count === 2` (first full exchange) if no title yet; generates 5-word title and stores in `conversations.title`
+- **Context injection**: `buildSystemPrompt` now accepts `previousContext?: string`; `route.ts` (brain) loads `conversations.summary` from DB and injects as "Previous Session Context" block
+- localStorage pending queue deferred — it's a pure frontend resilience feature; the core persistence path is now correct
 
 ---
 
@@ -451,7 +443,7 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | **PKCE on OAuth**          | ✅ Complete | —           | —      | Shipped                                 |
 | **Autonomous systems**     | ❌ 0%       | Medium      | 5–7d   | Phase 1: surface patterns + quiet hours |
 | **Custom persona**         | ❌ 0%       | Medium      | 2–3w   | Phase 2: structured fields first        |
-| **Conversation history**   | ⚠️ 10%      | Medium      | 3–5d   | Phase 2: migration + summarization      |
+| **Conversation history**   | ✅ Complete | —           | —      | Shipped                                 |
 | **MCP/Connectors**         | ⚠️ 15%      | Medium-High | 2–3w   | PKCE done; Phase 2: MCP client (2w)     |
 | **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                       |
 | **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                   |
@@ -460,7 +452,6 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | **Realtime subscriptions** | ❌ 0%       | Low         | 2–3d   | Phase 3+                                |
 | **Background workers**     | ❌ 0%       | Low         | 3–5d   | Defer until ~200 users                  |
 | **Security audit agent**   | ❌ 0%       | Low         | 3–5d   | Defer                                   |
-
 
 ---
 

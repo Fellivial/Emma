@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
-import { getMemoriesForUser, incrementUsage } from "@/core/memory-db";
+import { getMemoriesForUser, incrementUsage, getLatestConversationSummary } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
@@ -136,6 +136,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Load conversation summary for cross-session context injection (fail-open)
+    let conversationSummary: string | undefined;
+    if (userId) {
+      try {
+        const convo = await getLatestConversationSummary(userId);
+        conversationSummary = convo?.summary ?? undefined;
+      } catch {
+        // continue without summary
+      }
+    }
+
     // Load per-client config and resolve vertical (fail-open)
     let clientConfigForPrompt = null;
     if (userId) {
@@ -158,6 +169,7 @@ export async function POST(req: NextRequest) {
       emotionState,
       vertical,
       customRoutines: clientConfigForPrompt?.customRoutines ?? [],
+      previousContext: conversationSummary,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
