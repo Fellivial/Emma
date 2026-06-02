@@ -203,7 +203,9 @@ export class NotionAdapter implements IntegrationAdapter {
 
           if (!patchRes.ok) {
             const errText = await patchRes.text();
-            await markIntegrationError(clientId, "notion", new Error(errText));
+            if (patchRes.status !== 401) {
+              await markIntegrationError(clientId, "notion", new Error(errText));
+            }
             throw Object.assign(new Error(`Notion API error: ${patchRes.status}`), {
               status: patchRes.status,
             });
@@ -227,7 +229,9 @@ export class NotionAdapter implements IntegrationAdapter {
 
           if (!blockRes.ok) {
             const errText = await blockRes.text();
-            await markIntegrationError(clientId, "notion", new Error(errText));
+            if (blockRes.status !== 401) {
+              await markIntegrationError(clientId, "notion", new Error(errText));
+            }
             throw Object.assign(new Error(`Notion block error: ${blockRes.status}`), {
               status: blockRes.status,
             });

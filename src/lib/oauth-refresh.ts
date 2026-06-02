@@ -18,6 +18,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { encrypt, decrypt } from "@/core/security/encryption";
+import { markIntegrationExpired, type IntegrationService } from "@/core/integrations/adapter";
 
 // ─── Error Types ─────────────────────────────────────────────────────────────
 
@@ -54,9 +55,9 @@ const REFRESH_CONFIGS: Record<string, RefreshConfig> = {
 };
 
 // ─── Providers that get proactive refresh (short-lived tokens) ────────────────
-// HubSpot OAuth tokens expire in 30 min, but this codebase uses HubSpot API keys.
-// Listed here for forward-compatibility if HubSpot OAuth is added later.
-const PROACTIVE_REFRESH_PROVIDERS = new Set(["hubspot"]);
+// Notion OAuth tokens expire in ~1 hour; proactive refresh avoids mid-request expiry.
+// HubSpot uses API keys (no expiresAt), so proactive refresh never applies to it.
+const PROACTIVE_REFRESH_PROVIDERS = new Set(["notion"]);
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
 
@@ -75,23 +76,6 @@ export function isAuthError(err: unknown): boolean {
   const e = err as Record<string, unknown>;
   const status = (e.status ?? e.statusCode ?? e.httpStatus) as number | undefined;
   return status === 401;
-}
-
-/**
- * Mark an integration as expired so the user knows re-authorization is needed.
- * Sets status = "auth_expired" in a single atomic update.
- */
-export async function markIntegrationExpired(clientId: string, provider: string): Promise<void> {
-  const supabase = getSupabase();
-  if (!supabase) return;
-  await supabase
-    .from("client_integrations")
-    .update({
-      status: "auth_expired",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("client_id", clientId)
-    .eq("service", provider);
 }
 
 // ─── Token Row (raw from DB) ─────────────────────────────────────────────────
@@ -307,46 +291,70 @@ export async function callWithTokenRefresh<T>(
     }
   }
 
-  // 3. Attempt the API call
+  // 3. Attempt the API call.
+  // IMPORTANT: fetch resolves (does NOT throw) on 401 — we must check the
+  // Response status explicitly. Non-fetch errors (network, JSON parse, etc.)
+  // can still throw and are caught below.
+  let firstResult: T;
+  let caughtAuthError = false;
+
   try {
-    return await apiCall(accessToken);
+    firstResult = await apiCall(accessToken);
   } catch (err) {
     if (!isAuthError(err)) throw err;
-
-    // 4. Got 401 — try to refresh
-    if (!tokens.refreshToken) {
-      await markIntegrationExpired(clientId, provider);
-      throw new IntegrationExpiredError(provider);
-    }
-
-    const refreshed = await refreshProviderToken(provider, tokens.refreshToken);
-    if (!refreshed) {
-      await markIntegrationExpired(clientId, provider);
-      throw new IntegrationExpiredError(provider);
-    }
-
-    const config = REFRESH_CONFIGS[provider];
-    const stored = await storeRefreshedTokens(
-      clientId,
-      provider,
-      refreshed,
-      config?.rotatesRefreshToken ?? false
-    );
-    if (!stored) {
-      // Write failed — mark expired to force re-auth
-      await markIntegrationExpired(clientId, provider);
-      throw new IntegrationExpiredError(provider);
-    }
-
-    // 5. Retry once with the new token
-    try {
-      return await apiCall(refreshed.accessToken);
-    } catch (retryErr) {
-      if (isAuthError(retryErr)) {
-        await markIntegrationExpired(clientId, provider);
-        throw new IntegrationExpiredError(provider);
-      }
-      throw retryErr;
-    }
+    // A thrown auth error (e.g. from a non-fetch library) — fall through to refresh.
+    caughtAuthError = true;
+    firstResult = undefined as T; // will be overwritten after refresh
   }
+
+  // Check for 401 returned as a resolved Response (the common fetch case).
+  const is401Response = firstResult instanceof Response && firstResult.status === 401;
+
+  if (!is401Response && !caughtAuthError) {
+    return firstResult;
+  }
+
+  // 4. Got 401 (either as a Response or as a thrown error) — try to refresh.
+  if (!tokens.refreshToken) {
+    await markIntegrationExpired(clientId, provider as IntegrationService);
+    throw new IntegrationExpiredError(provider);
+  }
+
+  const refreshed = await refreshProviderToken(provider, tokens.refreshToken);
+  if (!refreshed) {
+    await markIntegrationExpired(clientId, provider as IntegrationService);
+    throw new IntegrationExpiredError(provider);
+  }
+
+  const config = REFRESH_CONFIGS[provider];
+  const stored = await storeRefreshedTokens(
+    clientId,
+    provider,
+    refreshed,
+    config?.rotatesRefreshToken ?? false
+  );
+  if (!stored) {
+    // Write failed — mark expired to force re-auth
+    await markIntegrationExpired(clientId, provider as IntegrationService);
+    throw new IntegrationExpiredError(provider);
+  }
+
+  // 5. Retry once with the new token.
+  let retryResult: T;
+  try {
+    retryResult = await apiCall(refreshed.accessToken);
+  } catch (retryErr) {
+    if (isAuthError(retryErr)) {
+      await markIntegrationExpired(clientId, provider as IntegrationService);
+      throw new IntegrationExpiredError(provider);
+    }
+    throw retryErr;
+  }
+
+  if (retryResult instanceof Response && retryResult.status === 401) {
+    await markIntegrationExpired(clientId, provider as IntegrationService);
+    throw new IntegrationExpiredError(provider);
+  }
+
+  return retryResult;
 }
