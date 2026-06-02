@@ -3,7 +3,7 @@
  * task using Haiku, then stores it in agent_task_summaries.
  */
 
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import type { TaskContext } from "@/core/task-context";
 import { fetchWithRetry } from "@/lib/errors";
@@ -58,7 +58,7 @@ export async function summarizeTask(
         method: "POST",
         headers: openRouterHeaders(),
         body: JSON.stringify({
-          model: MODEL_UTILITY,
+          models: UTILITY_MODELS,
           max_tokens: 256,
           messages: [
             { role: "system", content: SUMMARIZER_SYSTEM },
@@ -73,7 +73,9 @@ export async function summarizeTask(
 
     const data = await res.json();
     const summary: string =
-      (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content?.trim() ?? "";
+      (
+        data as { choices?: Array<{ message?: { content?: string } }> }
+      ).choices?.[0]?.message?.content?.trim() ?? "";
 
     if (summary) {
       await persistSummary(taskId, summary, ctx);

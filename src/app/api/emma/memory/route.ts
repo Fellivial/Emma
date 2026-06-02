@@ -1,4 +1,4 @@
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { MemoryApiRequest, MemoryApiResponse, MemoryEntry } from "@/types/emma";
 import {
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: openRouterHeaders(),
           body: JSON.stringify({
-            model: MODEL_UTILITY,
+            models: UTILITY_MODELS,
             max_tokens: 512,
             messages: [
               { role: "system", content: MEMORY_EXTRACTION_PROMPT },

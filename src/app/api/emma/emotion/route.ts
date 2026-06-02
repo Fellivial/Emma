@@ -1,4 +1,4 @@
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: openRouterHeaders(),
       body: JSON.stringify({
-        model: MODEL_UTILITY,
+        models: UTILITY_MODELS,
         max_tokens: 256,
         messages: [
           { role: "system", content: EMOTION_VISION_PROMPT },

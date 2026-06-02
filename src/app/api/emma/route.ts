@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { MODEL_BRAIN } from "@/core/models";
+import { BRAIN_MODELS } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
@@ -306,7 +306,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: openRouterHeaders(),
         body: JSON.stringify({
-          model: MODEL_BRAIN,
+          models: BRAIN_MODELS,
           max_tokens: detectMaxTokens(messages, hasDocuments),
           stream: true,
           messages: [{ role: "system", content: systemPromptText }, ...apiMessages],

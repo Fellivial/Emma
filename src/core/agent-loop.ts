@@ -13,7 +13,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MODEL_BRAIN } from "@/core/models";
+import { BRAIN_MODELS } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
@@ -238,7 +238,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           method: "POST",
           headers: openRouterHeaders(),
           body: JSON.stringify({
-            model: MODEL_BRAIN,
+            models: BRAIN_MODELS,
             max_tokens: step < task.maxSteps ? 512 : 1024,
             messages: [{ role: "system", content: AGENT_SYSTEM }, ...messages],
             tools,

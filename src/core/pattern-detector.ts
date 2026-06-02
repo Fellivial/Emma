@@ -11,7 +11,7 @@
  * in Emma's voice, then upserts to pattern_detections.
  */
 
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
@@ -54,7 +54,7 @@ async function generateSuggestion(
         method: "POST",
         headers: openRouterHeaders(),
         body: JSON.stringify({
-          model: MODEL_UTILITY,
+          models: UTILITY_MODELS,
           max_tokens: 80,
           messages: [
             { role: "system", content: SUGGESTION_SYSTEM },

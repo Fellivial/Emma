@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 function getSupabaseAdmin() {
@@ -153,7 +153,7 @@ registerTool({
       method: "POST",
       headers: openRouterHeaders(),
       body: JSON.stringify({
-        model: MODEL_UTILITY,
+        models: UTILITY_MODELS,
         max_tokens: 512,
         messages: [
           {
