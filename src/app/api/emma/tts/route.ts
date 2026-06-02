@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { decrypt } from "@/core/security/encryption";
 import { getUser } from "@/lib/supabase/server";
+import type { AvatarExpression } from "@/types/emma";
 
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 const EXPRESSION_VOICE_SETTINGS: Record<
-  string,
+  AvatarExpression,
   { stability: number; similarity_boost: number; style: number; speed: number }
 > = {
   neutral: { stability: 0.55, similarity_boost: 0.75, style: 0.0, speed: 1.0 },
@@ -109,7 +110,8 @@ export async function POST(req: NextRequest) {
     // Priority: request voiceId → stored voice_id → Rachel default
     const voice = voiceId || storedVoiceId || DEFAULT_VOICE_ID;
     const voiceSettings =
-      EXPRESSION_VOICE_SETTINGS[expression ?? "neutral"] ?? EXPRESSION_VOICE_SETTINGS.neutral;
+      EXPRESSION_VOICE_SETTINGS[(expression as AvatarExpression) ?? "neutral"] ??
+      EXPRESSION_VOICE_SETTINGS.neutral;
 
     const res = await fetch(`${ELEVENLABS_API}/text-to-speech/${voice}`, {
       method: "POST",
@@ -120,7 +122,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         text: text.slice(0, 1000),
         model_id: "eleven_turbo_v2_5",
-        voice_settings: voiceSettings,
+        voice_settings: { ...voiceSettings, use_speaker_boost: true },
       }),
     });
 
