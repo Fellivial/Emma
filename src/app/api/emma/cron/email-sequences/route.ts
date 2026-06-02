@@ -138,9 +138,19 @@ export async function GET(req: NextRequest) {
         // ── 3. Build context ──────────────────────────────────────────
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name")
+          .select("name, email_unsubscribed")
           .eq("id", row.user_id)
           .single();
+
+        // Skip suppressed users
+        if (profile?.email_unsubscribed) {
+          await supabase
+            .from("email_sequences")
+            .update({ status: "skipped", error_detail: "User unsubscribed" })
+            .eq("id", row.id);
+          skipped++;
+          continue;
+        }
 
         const context: EmailContext = {
           name: profile?.name || "there",
@@ -159,6 +169,10 @@ export async function GET(req: NextRequest) {
           subject: rendered.subject,
           html: rendered.html,
           text: rendered.text,
+          headers: {
+            "List-Unsubscribe": `<${context.unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          },
         });
 
         // ── 6. Mark sent ──────────────────────────────────────────────

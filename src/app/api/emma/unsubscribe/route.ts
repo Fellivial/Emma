@@ -65,11 +65,15 @@ export async function GET(req: NextRequest) {
   // Cancel all pending/sending emails for this user
   const supabase = getSupabase();
   if (supabase) {
+    // Cancel pending/sending emails
     await supabase
       .from("email_sequences")
       .update({ status: "skipped", error_detail: "User unsubscribed" }, { count: "exact" })
       .eq("user_id", uid)
       .in("status", ["pending", "sending"]);
+
+    // Set permanent suppression flag — prevents future sends even if new rows are inserted
+    await supabase.from("profiles").update({ email_unsubscribed: true }).eq("id", uid);
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

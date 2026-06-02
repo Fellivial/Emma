@@ -98,6 +98,10 @@ function wrapHtml(body: string, ctx: EmailContext): string {
       <p style="color:#4a3f4e;font-size:11px;margin:0 0 8px;">
         EMMA — Environment-Managing Modular Agent
       </p>
+      <!-- CAN-SPAM physical address -->
+      <p style="color:#4a3f4e;font-size:11px;margin:4px 0 8px;">
+        Emma Inc., 548 Market St PMB 12345, San Francisco, CA 94104
+      </p>
       <a href="${ctx.unsubscribeUrl}" style="color:#4a3f4e;font-size:11px;text-decoration:underline;">
         Unsubscribe
       </a>
