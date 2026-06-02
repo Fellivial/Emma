@@ -14,6 +14,8 @@ import {
   type DetectedPattern,
 } from "@/core/pattern-detector";
 
+export const maxDuration = 300;
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

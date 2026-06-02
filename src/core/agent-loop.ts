@@ -273,7 +273,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             tools,
           }),
         },
-        { maxRetries: 2 }
+        { maxRetries: 2, connectionTimeoutMs: 30_000 }
       );
 
       if (!res.ok) {
