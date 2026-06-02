@@ -36,8 +36,8 @@ Confidence scale:
   0.85–1.0  Direct, explicit statement ("I love jazz")
   0.65–0.75 Clearly implied but not stated outright
   0.45–0.60 Reasonable inference from context
-  0.20–0.40 Weak inference or speculation
-  < 0.40    Do not extract
+  0.20–0.49 Weak inference or speculation — usually not worth storing
+  < 0.50    Do not extract
 
 Do NOT extract:
   - Transient states: "I'm tired," "I'm hungry right now," "I'm in a rush"
@@ -56,9 +56,9 @@ Extract:
 User: "Do you know any good Italian restaurants?"
 Extract: []
 
-User: "I have a presentation tomorrow, I'm really stressed."
+User: "I've been working remotely for two years now and I actually love it."
 Extract:
-  { "category": "context", "key": "presentation_stress", "value": "stressed about upcoming presentation", "confidence": 0.5 }
+  { "category": "context", "key": "work_arrangement", "value": "remote worker, prefers remote work", "confidence": 0.9 }
 
 User: "I'm vegetarian and my partner Alex is vegan."
 Extract:

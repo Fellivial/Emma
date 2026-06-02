@@ -79,7 +79,7 @@ create table if not exists public.client_members (
 create table if not exists public.memories (
   id text primary key,
   user_id uuid references public.profiles on delete cascade not null,
-  category text not null check (category in ('preference', 'routine', 'personal', 'episodic', 'environment')),
+  category text not null check (category in ('preference', 'habit', 'personal', 'goal', 'relationship', 'context', 'constraint')),
   key text not null,
   value text not null,
   confidence real not null default 0.8,

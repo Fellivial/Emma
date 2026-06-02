@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
               { role: "system", content: MEMORY_EXTRACTION_PROMPT },
               {
                 role: "user",
-                content: `Extract memories from this conversation:\n\n${body.conversationText}`,
+                content: body.conversationText,
               },
             ],
             response_format: {
