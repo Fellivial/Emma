@@ -18,6 +18,7 @@ import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { brainRatelimit } from "@/lib/ratelimit";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -108,6 +109,25 @@ export async function POST(req: NextRequest) {
 
     // Use session-verified ID for data operations; fall back to body for dev mode
     const userId = sessionUserId ?? activeUser?.id;
+
+    // ── Rate limit by userId (sliding window, fail-open) ────────────────────
+    if (userId) {
+      const { success, limit, remaining, reset } = await brainRatelimit.limit(userId);
+      if (!success) {
+        return new Response(JSON.stringify({ error: "Too many requests" }), {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)),
+            "X-RateLimit-Limit": String(limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(reset),
+          },
+        });
+      }
+      void remaining; // consumed above; suppress unused-var lint
+    }
+
     let memories: import("@/types/emma").MemoryEntry[] = [];
     if (userId) {
       try {
