@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const customData = event.meta?.custom_data;
   const userId = customData?.user_id;
   const attrs = event.data?.attributes;
-  const variantId = String(attrs?.variant_id || attrs?.first_subscription_item?.variant_id || "");
+  const variantId = String(attrs?.variant_id || "");
 
   if (!userId) {
     console.warn("[Lemon Webhook] No user_id in custom_data");
@@ -181,6 +181,41 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      // ── Payment Recovered ──────────────────────────────────────────────
+      case "subscription_payment_recovered": {
+        const plan = getPlanByLemonVariant(variantId);
+        if (plan) {
+          const { data: membership } = await supabase
+            .from("client_members")
+            .select("client_id")
+            .eq("user_id", userId)
+            .single();
+
+          if (membership) {
+            await supabase
+              .from("clients")
+              .update({
+                plan_id: plan.id,
+                token_budget_monthly: plan.tokenBudgetMonthly,
+                token_budget_daily: plan.tokenBudgetDaily,
+                message_limit_daily: plan.messageLimitDaily,
+                tools_enabled: plan.toolsEnabled,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", membership.client_id);
+
+            audit({
+              userId,
+              action: "write",
+              resource: "billing",
+              reason: `subscription_payment_recovered: plan restored (variant ${variantId})`,
+              ip: getClientIp(req),
+            }).catch(() => {});
+          }
+        }
+        break;
+      }
+
       default:
         // Check for extra pack one-time purchase
         if (eventName === "order_created") {
@@ -193,12 +228,30 @@ export async function POST(req: NextRequest) {
             orderVariantId === extraPackVariantId &&
             userId
           ) {
+            const purchaseRef = String(event.data?.id || "");
+            if (!purchaseRef) break;
+
+            // Idempotency: skip if this order was already processed
+            const { data: existing } = await supabase
+              .from("extra_packs")
+              .select("id")
+              .eq("purchase_ref", purchaseRef)
+              .maybeSingle();
+
+            if (existing) {
+              console.warn(
+                "[Lemon Webhook] order_created duplicate — already processed",
+                purchaseRef
+              );
+              break;
+            }
+
             await supabase.from("extra_packs").insert({
               user_id: userId,
               tokens_granted: 500_000,
               tokens_remaining: 500_000,
               valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-              purchase_ref: String(event.data?.id || ""),
+              purchase_ref: purchaseRef,
             });
 
             audit({
