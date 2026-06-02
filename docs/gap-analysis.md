@@ -404,17 +404,14 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 
 ### 9. WhatsApp Inbound Reply Loop (`whatsapp-inbound-loop-research.md`)
 
-**Status:** ⚠️ PARTIAL (~20%) — ingest webhook exists, reply loop not automated  
+**Status:** ✅ Complete  
 **Impact:** Low-Medium
 
-**What remains:**
-
-- ❌ Inbound webhook triggers agent loop (webhook at `/api/emma/ingest/whatsapp` exists but is passive)
-- ❌ Conversation state tracking (link WhatsApp thread to Emma user/conversation)
-- ❌ Automatic reply generation and delivery
-- ❌ Multi-turn conversation threading in WhatsApp
-
-**Recommendation:** Phase 2 enhancement.
+- Inbound webhook stores message with `direction='inbound'` + `window_expires_at` (24h window tracking)
+- `after()` fires reply loop post-200: loads last 15 messages for `from_number` as context, calls LLM via `UTILITY_MODELS`, sends reply via `WhatsAppAdapter.sendText()`, stores outbound row with `direction='outbound'`
+- Multi-turn threading via `ingested_whatsapp` history (inbound + outbound rows ordered by `received_at`)
+- New schema columns: `direction TEXT DEFAULT 'inbound'`, `outbound_wamid TEXT`, `window_expires_at TIMESTAMPTZ`
+- Always returns 200 to Meta regardless of reply outcome — prevents webhook retry storms
 
 ---
 
@@ -464,7 +461,7 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                                 |
 | **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                             |
 | **Push notifications**     | ❌ 0%       | Low         | 2–3d   | Phase 3+ (requires PWA)                           |
-| **WhatsApp reply loop**    | ⚠️ 20%      | Low         | 2–3d   | Phase 2 enhancement                               |
+| **WhatsApp reply loop**    | ✅ Complete | —           | —      | Shipped                                           |
 | **Realtime subscriptions** | ❌ 0%       | Low         | 2–3d   | Phase 3+                                          |
 | **Background workers**     | ❌ 0%       | Low         | 3–5d   | Defer until ~200 users                            |
 | **Security audit agent**   | ❌ 0%       | Low         | 3–5d   | Defer                                             |
