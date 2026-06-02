@@ -42,8 +42,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
 
     const state = crypto.randomBytes(32).toString("hex");
 
+    // PKCE: code_verifier (32 random bytes, base64url) + S256 challenge
+    const codeVerifier = crypto.randomBytes(32).toString("base64url");
+    const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+
     await supabase.from("oauth_states").insert({
       state,
+      code_verifier: codeVerifier,
       client_id: membership.client_id,
       user_id: user.id,
       service,
@@ -71,6 +76,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       oauthUrl.searchParams.set("access_type", "offline");
       oauthUrl.searchParams.set("prompt", "consent");
       oauthUrl.searchParams.set("state", state);
+      oauthUrl.searchParams.set("code_challenge", codeChallenge);
+      oauthUrl.searchParams.set("code_challenge_method", "S256");
       return NextResponse.redirect(oauthUrl.toString());
     }
 
@@ -89,6 +96,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       oauthUrl.searchParams.set("response_type", "code");
       oauthUrl.searchParams.set("owner", "user");
       oauthUrl.searchParams.set("state", state);
+      oauthUrl.searchParams.set("code_challenge", codeChallenge);
+      oauthUrl.searchParams.set("code_challenge_method", "S256");
       return NextResponse.redirect(oauthUrl.toString());
     }
 
@@ -106,6 +115,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
       oauthUrl.searchParams.set("scope", "channels:read,chat:write,files:write");
       oauthUrl.searchParams.set("redirect_uri", redirectUri);
       oauthUrl.searchParams.set("state", state);
+      oauthUrl.searchParams.set("code_challenge", codeChallenge);
+      oauthUrl.searchParams.set("code_challenge_method", "S256");
       return NextResponse.redirect(oauthUrl.toString());
     }
 

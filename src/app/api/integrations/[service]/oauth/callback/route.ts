@@ -27,10 +27,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
   }
 
   try {
-    // Look up and validate state (single-use, TTL)
+    // Look up and validate state (single-use, TTL); fetch code_verifier for PKCE
     const { data: oauthState } = await supabase
       .from("oauth_states")
-      .select("client_id, user_id, service")
+      .select("client_id, user_id, service, code_verifier")
       .eq("state", state)
       .gt("expires_at", new Date().toISOString())
       .single();
@@ -63,6 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
           client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
           redirect_uri: redirectUri,
           grant_type: "authorization_code",
+          ...(oauthState.code_verifier ? { code_verifier: oauthState.code_verifier } : {}),
         }),
       });
       if (!tokenRes.ok) {
@@ -99,7 +100,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
           "Content-Type": "application/json",
           "Notion-Version": "2022-06-28",
         },
-        body: JSON.stringify({ grant_type: "authorization_code", code, redirect_uri: redirectUri }),
+        body: JSON.stringify({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+          ...(oauthState.code_verifier ? { code_verifier: oauthState.code_verifier } : {}),
+        }),
       });
       if (!tokenRes.ok) {
         console.error(`[OAuth] Notion token exchange failed:`, await tokenRes.text());
@@ -123,7 +129,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
           Authorization: `Basic ${basicAuth}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ code, redirect_uri: redirectUri }),
+        body: new URLSearchParams({
+          code,
+          redirect_uri: redirectUri,
+          ...(oauthState.code_verifier ? { code_verifier: oauthState.code_verifier } : {}),
+        }),
       });
       if (!tokenRes.ok) {
         console.error(`[OAuth] Slack token exchange failed:`, await tokenRes.text());
