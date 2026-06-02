@@ -23,6 +23,63 @@ function isUuid(id: string): boolean {
   return UUID_RE.test(id);
 }
 
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "my",
+  "your",
+  "our",
+  "their",
+  "his",
+  "her",
+  "its",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "i",
+  "me",
+  "we",
+  "you",
+  "he",
+  "she",
+  "it",
+  "they",
+  "to",
+  "of",
+  "in",
+  "for",
+  "on",
+  "with",
+  "at",
+  "by",
+  "from",
+]);
+
+// Normalize a memory key: lowercase, strip stop words, snake_case, max 60 chars
+function normalizeKey(raw: string): string {
+  const words = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !STOP_WORDS.has(w));
+  const normalized = words
+    .join("_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+  return (
+    normalized ||
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "_")
+      .slice(0, 60)
+  );
+}
+
 // â”€â”€â”€ Read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getMemoriesForUser(
@@ -37,6 +94,7 @@ export async function getMemoriesForUser(
     .from("memories")
     .select("*")
     .eq("user_id", userId)
+    .eq("status", "active")
     .order("created_at", { ascending: false });
 
   if (category) {
@@ -61,22 +119,54 @@ export async function addMemoryForUser(
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const id = entry.id || `mem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const normalizedKey = normalizeKey(entry.key);
+  const newId = entry.id || `mem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const encryptedValue = encrypt(entry.value);
+
+  // Check for an existing active memory with the same key
+  const { data: existing } = await supabase
+    .from("memories")
+    .select("id, value")
+    .eq("user_id", userId)
+    .eq("category", entry.category)
+    .eq("key", normalizedKey)
+    .eq("status", "active")
+    .single();
+
+  if (existing) {
+    const currentDecrypted = decrypt(existing.value as string);
+    if (currentDecrypted === entry.value) {
+      // Value unchanged — update confidence if provided, return existing
+      await supabase
+        .from("memories")
+        .update({ confidence: entry.confidence ?? 0.8, updated_at: new Date().toISOString() })
+        .eq("id", existing.id);
+      const { data: updated } = await supabase
+        .from("memories")
+        .select("*")
+        .eq("id", existing.id)
+        .single();
+      return updated ? rowToMemoryEntry(updated) : null;
+    }
+    // Value changed — soft-delete the old entry before inserting the new one
+    await supabase
+      .from("memories")
+      .update({ status: "superseded", superseded_by: newId, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+  }
 
   const { data, error } = await supabase
     .from("memories")
-    .upsert(
-      {
-        id,
-        user_id: userId,
-        category: entry.category,
-        key: entry.key,
-        value: encrypt(entry.value),
-        confidence: entry.confidence ?? 0.8,
-        source: entry.source || "extracted",
-      },
-      { onConflict: "user_id,category,key" }
-    )
+    .insert({
+      id: newId,
+      user_id: userId,
+      category: entry.category,
+      key: normalizedKey,
+      value: encryptedValue,
+      confidence: entry.confidence ?? 0.8,
+      source: entry.source || "extracted",
+      status: "active",
+    })
     .select()
     .single();
 
@@ -90,8 +180,8 @@ export async function addMemoryForUser(
       userId,
       action: "write",
       resource: "memory",
-      resourceId: id,
-      reason: `Store ${entry.category}:${entry.key}`,
+      resourceId: newId,
+      reason: `Store ${entry.category}:${normalizedKey}`,
     }).catch(() => {});
   }
 
