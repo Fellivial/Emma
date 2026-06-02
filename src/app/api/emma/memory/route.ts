@@ -70,7 +70,15 @@ export async function POST(req: NextRequest) {
                 properties: {
                   category: {
                     type: "string",
-                    enum: ["preference", "routine", "personal", "episodic", "environment"],
+                    enum: [
+                      "preference",
+                      "habit",
+                      "personal",
+                      "goal",
+                      "relationship",
+                      "context",
+                      "constraint",
+                    ],
                   },
                   key: { type: "string" },
                   value: { type: "string" },

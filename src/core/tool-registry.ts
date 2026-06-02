@@ -307,7 +307,15 @@ registerTool({
         anyOf: [
           {
             type: "string",
-            enum: ["preference", "routine", "personal", "episodic", "environment"],
+            enum: [
+              "preference",
+              "habit",
+              "personal",
+              "goal",
+              "relationship",
+              "context",
+              "constraint",
+            ],
           },
           { type: "null" },
         ],

@@ -176,7 +176,14 @@ export interface MemoryEntry {
   userId?: string;
 }
 
-export type MemoryCategory = "preference" | "routine" | "personal" | "episodic" | "environment";
+export type MemoryCategory =
+  | "preference"
+  | "habit"
+  | "personal"
+  | "goal"
+  | "relationship"
+  | "context"
+  | "constraint";
 
 export interface MemoryStore {
   entries: MemoryEntry[];
