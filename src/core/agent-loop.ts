@@ -19,6 +19,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
+import { decrypt } from "@/core/security/encryption";
+import { listMcpTools, callMcpTool } from "@/core/integrations/mcp-client";
 import {
   startChain,
   addStep,
@@ -182,6 +184,49 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     }
   }
 
+  // Discover tools from connected MCP servers
+  type McpEntry = {
+    url: string;
+    originalName: string;
+    authToken?: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+  const mcpToolMap = new Map<string, McpEntry>();
+  if (task.clientId && supabase) {
+    const { data: mcpServers } = await supabase
+      .from("client_integrations")
+      .select("service, mcp_url, access_token")
+      .eq("client_id", task.clientId)
+      .eq("status", "connected")
+      .like("service", "mcp_%");
+    if (mcpServers) {
+      await Promise.all(
+        (mcpServers as Array<{ service: string; mcp_url?: string; access_token?: string }>).map(
+          async (server) => {
+            if (!server.mcp_url) return;
+            try {
+              const authToken = server.access_token ? decrypt(server.access_token) : undefined;
+              const serverTools = await listMcpTools(server.mcp_url, authToken);
+              for (const t of serverTools) {
+                const key = `mcp__${server.service}__${t.name}`;
+                mcpToolMap.set(key, {
+                  url: server.mcp_url,
+                  originalName: t.name,
+                  authToken,
+                  description: t.description,
+                  parameters: t.parameters,
+                });
+              }
+            } catch (err) {
+              console.warn(`[Agent] MCP server "${server.service}" unreachable:`, err);
+            }
+          }
+        )
+      );
+    }
+  }
+
   // Resolve the client's autonomy tier so moderate-tool gating works correctly.
   // Default to 3 (execute) so behavior is unchanged when no client config is found.
   let autonomyTier: AutonomyTier = 3;
@@ -190,7 +235,17 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     autonomyTier = clientCfg.autonomyTier ?? 3;
   }
 
-  const tools = getToolsForClaude(connectedIntegrations);
+  const tools = [
+    ...getToolsForClaude(connectedIntegrations),
+    ...[...mcpToolMap.entries()].map(([key, meta]) => ({
+      type: "function" as const,
+      function: {
+        name: key,
+        description: meta.description,
+        parameters: meta.parameters,
+      },
+    })),
+  ];
   let provChain: ProvenanceChain = startChain(task.id, task.goal);
   const steps: AgentStepResult[] = [];
   let totalTokens = 0;
@@ -325,6 +380,54 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               tokenCost: inputTokens + outputTokens,
               durationMs: Date.now() - stepStart,
             });
+            continue;
+          }
+
+          // Dispatch MCP tools: call the remote server directly
+          if (toolName.startsWith("mcp__")) {
+            const mcpEntry = mcpToolMap.get(toolName);
+            if (!mcpEntry) {
+              messages.push({
+                role: "tool",
+                tool_call_id: toolId,
+                content: `Error: MCP tool "${toolName}" not found in registry`,
+              });
+              steps.push({
+                step,
+                toolName,
+                input: toolInput,
+                output: `MCP tool "${toolName}" not found`,
+                riskLevel: "safe",
+                status: "failed",
+                tokenCost: inputTokens + outputTokens,
+                durationMs: Date.now() - stepStart,
+              });
+              continue;
+            }
+            let mcpOut = "";
+            try {
+              mcpOut = await callMcpTool(
+                mcpEntry.url,
+                mcpEntry.originalName,
+                toolInput,
+                mcpEntry.authToken
+              );
+            } catch (err) {
+              mcpOut = `MCP error: ${String(err)}`;
+            }
+            messages.push({ role: "tool", tool_call_id: toolId, content: mcpOut });
+            steps.push({
+              step,
+              toolName,
+              input: toolInput,
+              output: mcpOut,
+              riskLevel: "safe",
+              status: mcpOut.startsWith("MCP error:") ? "failed" : "completed",
+              tokenCost: inputTokens + outputTokens,
+              durationMs: Date.now() - stepStart,
+            });
+            ctx = updateContext(ctx, step, toolName, mcpOut);
+            persistContext(ctx);
             continue;
           }
 
