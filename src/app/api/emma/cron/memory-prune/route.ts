@@ -14,15 +14,12 @@ function getSupabase() {
  * Cron: Memory Staleness Pruning — hard-delete stale memories daily.
  * Schedule: daily at 04:00 UTC (vercel.json)
  *
- * Uses service role key to bypass RLS on the memories table.
- * Uses COALESCE(last_accessed, created_at) so un-accessed memories are
- * treated as last accessed at creation time and don't escape pruning.
- *
- * Rules:
- *   1. category = 'context' AND COALESCE(last_accessed, created_at) < now() - 30 days → delete
- *   2. confidence < 0.5 AND COALESCE(last_accessed, created_at) < now() - 90 days → delete
- *   3. confidence < 0.7 AND COALESCE(last_accessed, created_at) < now() - 180 days → delete
+ * Rules (active memories only — superseded rows handled separately):
+ *   1. category = 'context' AND last_accessed < now() - 30 days → delete
+ *   2. confidence < 0.5 AND last_accessed < now() - 90 days → delete
+ *   3. confidence < 0.7 AND last_accessed < now() - 180 days → delete
  *   4. category = 'constraint' → never delete
+ *   5. status = 'superseded' AND updated_at < now() - 90 days → delete (tombstone cleanup)
  */
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -50,10 +47,11 @@ export async function GET(req: NextRequest) {
     const cutoff180 = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString();
 
     // Rule 1: context memories not accessed (or created) in 30+ days
-    // COALESCE: treat NULL last_accessed as created_at for comparison
+    // Rule 1: active context memories not accessed in 30+ days
     const { count: c1, error: e1 } = await supabase
       .from("memories")
       .delete({ count: "exact" })
+      .eq("status", "active")
       .eq("category", "context")
       .or(`last_accessed.lt.${cutoff30},and(last_accessed.is.null,created_at.lt.${cutoff30})`);
 
@@ -64,10 +62,11 @@ export async function GET(req: NextRequest) {
     const pruned1 = c1 ?? 0;
     console.log(`[memory-prune] Rule 1 (context/30d): deleted ${pruned1}`);
 
-    // Rule 2: confidence < 0.5, not accessed in 90+ days, skip constraints
+    // Rule 2: active, confidence < 0.5, not accessed in 90+ days, skip constraints
     const { count: c2, error: e2 } = await supabase
       .from("memories")
       .delete({ count: "exact" })
+      .eq("status", "active")
       .neq("category", "constraint")
       .lt("confidence", 0.5)
       .or(`last_accessed.lt.${cutoff90},and(last_accessed.is.null,created_at.lt.${cutoff90})`);
@@ -79,10 +78,11 @@ export async function GET(req: NextRequest) {
     const pruned2 = c2 ?? 0;
     console.log(`[memory-prune] Rule 2 (confidence<0.5/90d): deleted ${pruned2}`);
 
-    // Rule 3: confidence < 0.7, not accessed in 180+ days, skip constraints
+    // Rule 3: active, confidence < 0.7, not accessed in 180+ days, skip constraints
     const { count: c3, error: e3 } = await supabase
       .from("memories")
       .delete({ count: "exact" })
+      .eq("status", "active")
       .neq("category", "constraint")
       .lt("confidence", 0.7)
       .or(`last_accessed.lt.${cutoff180},and(last_accessed.is.null,created_at.lt.${cutoff180})`);
@@ -94,7 +94,21 @@ export async function GET(req: NextRequest) {
     const pruned3 = c3 ?? 0;
     console.log(`[memory-prune] Rule 3 (confidence<0.7/180d): deleted ${pruned3}`);
 
-    const total = pruned1 + pruned2 + pruned3;
+    // Rule 5: hard-delete superseded tombstones older than 90 days
+    const { count: c5, error: e5 } = await supabase
+      .from("memories")
+      .delete({ count: "exact" })
+      .eq("status", "superseded")
+      .lt("updated_at", cutoff90);
+
+    if (e5) {
+      console.error("[memory-prune] Rule 5 error:", e5);
+      return NextResponse.json({ error: e5.message }, { status: 500 });
+    }
+    const pruned5 = c5 ?? 0;
+    console.log(`[memory-prune] Rule 5 (superseded/90d): deleted ${pruned5}`);
+
+    const total = pruned1 + pruned2 + pruned3 + pruned5;
     console.log(`[memory-prune] Total pruned: ${total}`);
 
     return NextResponse.json({
@@ -102,6 +116,7 @@ export async function GET(req: NextRequest) {
         context: pruned1,
         lowConfidence90: pruned2,
         lowConfidence180: pruned3,
+        superseded: pruned5,
       },
       total,
     });

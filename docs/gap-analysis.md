@@ -49,22 +49,14 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 **Research required:** 7-category taxonomy, extraction prompt with few-shot examples, confidence thresholding, staleness pruning.
 
-**Implemented:** ⚠️ PARTIAL (~75%)
+**Implemented:** ✅ Complete
 
-- **Commit:** `9c6d22e` — "feat: research-backed memory extraction prompt, 7-category taxonomy"
-- **Commit:** `55778ba` — "fix: update memories CHECK constraint to 7-category taxonomy, fix prompt alignment"
-- 7-category taxonomy deployed (preference, habit, personal, goal, relationship, context, constraint)
-- Confidence filtering at 0.55 threshold (raised from 0.5 per research recommendation)
-- 4 few-shot examples in prompt (including borderline case to teach threshold calibration)
-- Explicit skip rules (transient states, questions, filler, one-time context, assistant statements)
-- Staleness pruning cron at `src/app/api/emma/cron/memory-prune/route.ts`, scheduled daily at 04:00 UTC
-
-**Gaps:**
-
-- ❌ Key normalization before upsert (lemmatize, strip stop words)
-- ❌ Soft delete / superseded tracking (temporal contradiction handling)
-- ❌ Semantic deduplication (embedding-based for near-duplicates)
-- ❌ Retrieval switchover to semantic search for >100 memories
+- 7-category taxonomy, 0.55 confidence threshold, 4 few-shot examples, explicit skip rules, staleness pruning cron
+- **Key normalization** in `addMemoryForUser`: lowercase → strip stop words → snake_case → 60-char limit; eliminates "prefers_tea" vs "prefer_tea" duplicates without embedding cost
+- **Soft delete / superseded tracking**: `memories.status TEXT DEFAULT 'active'` + `memories.superseded_by TEXT`; on value conflict, old row is marked `status='superseded'` before new row is inserted; partial unique index `WHERE status='active'` enforces uniqueness
+- `getMemoriesForUser` filters `status='active'` only — superseded rows never reach the system prompt
+- Memory-prune cron updated: all 3 active-memory rules now filter `status='active'`; new rule 5 hard-deletes 90-day-old superseded tombstones
+- Semantic dedup + retrieval switchover deferred (lower priority per research — key normalization solves most duplicates algorithmically)
 
 ---
 
@@ -452,36 +444,36 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 
 ## SUMMARY TABLE
 
-| Area                       | Status      | Priority    | Effort | Recommendation                                    |
-| -------------------------- | ----------- | ----------- | ------ | ------------------------------------------------- |
-| OAuth refresh              | ✅ Complete | —           | —      | Shipped                                           |
-| Rate limiting              | ✅ Complete | —           | —      | Shipped                                           |
-| Memory extraction          | ⚠️ 75%      | Medium      | 2–3d   | Key normalization (1d), soft-delete tracking (2d) |
-| Email deliverability       | ✅ Complete | —           | —      | Shipped                                           |
-| LemonSqueezy billing       | ⚠️ 90%      | Medium      | 1–2d   | Add subscription metadata storage                 |
-| Agent tools                | ✅ Complete | —           | —      | Shipped                                           |
-| Security audit             | ✅ Complete | —           | —      | Shipped                                           |
-| OpenRouter fallback        | ✅ Complete | —           | —      | Shipped                                           |
-| TTS/Live2D                 | ✅ Complete | —           | —      | Shipped                                           |
-| STT fixes                  | ✅ Complete | —           | —      | Shipped                                           |
-| Live2D idle                | ✅ Complete | —           | —      | Shipped                                           |
-| ElevenLabs BYOK            | ⚠️ 90%      | Low         | 1d     | Concurrency headers (optional)                    |
-| Vision                     | ✅ Complete | —           | —      | Shipped                                           |
-| Cron hardening             | ✅ Complete | —           | —      | Shipped                                           |
-| GDPR                       | ✅ Complete | —           | —      | Shipped                                           |
-| Supabase RLS               | ✅ Complete | —           | —      | Shipped                                           |
-| **PKCE on OAuth**          | ✅ Complete | —           | —      | Shipped                                           |
-| **Autonomous systems**     | ❌ 0%       | Medium      | 5–7d   | Phase 1: surface patterns + quiet hours           |
-| **Custom persona**         | ❌ 0%       | Medium      | 2–3w   | Phase 2: structured fields first                  |
-| **Conversation history**   | ⚠️ 10%      | Medium      | 3–5d   | Phase 2: migration + summarization                |
-| **MCP/Connectors**         | ⚠️ 15%      | Medium-High | 2–3w   | PKCE done; Phase 2: MCP client (2w)               |
-| **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                                 |
-| **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                             |
-| **Push notifications**     | ❌ 0%       | Low         | 2–3d   | Phase 3+ (requires PWA)                           |
-| **WhatsApp reply loop**    | ⚠️ 20%      | Low         | 2–3d   | Phase 2 enhancement                               |
-| **Realtime subscriptions** | ❌ 0%       | Low         | 2–3d   | Phase 3+                                          |
-| **Background workers**     | ❌ 0%       | Low         | 3–5d   | Defer until ~200 users                            |
-| **Security audit agent**   | ❌ 0%       | Low         | 3–5d   | Defer                                             |
+| Area                       | Status      | Priority    | Effort | Recommendation                          |
+| -------------------------- | ----------- | ----------- | ------ | --------------------------------------- |
+| OAuth refresh              | ✅ Complete | —           | —      | Shipped                                 |
+| Rate limiting              | ✅ Complete | —           | —      | Shipped                                 |
+| Memory extraction          | ✅ Complete | —           | —      | Shipped                                 |
+| Email deliverability       | ✅ Complete | —           | —      | Shipped                                 |
+| LemonSqueezy billing       | ⚠️ 90%      | Medium      | 1–2d   | Add subscription metadata storage       |
+| Agent tools                | ✅ Complete | —           | —      | Shipped                                 |
+| Security audit             | ✅ Complete | —           | —      | Shipped                                 |
+| OpenRouter fallback        | ✅ Complete | —           | —      | Shipped                                 |
+| TTS/Live2D                 | ✅ Complete | —           | —      | Shipped                                 |
+| STT fixes                  | ✅ Complete | —           | —      | Shipped                                 |
+| Live2D idle                | ✅ Complete | —           | —      | Shipped                                 |
+| ElevenLabs BYOK            | ⚠️ 90%      | Low         | 1d     | Concurrency headers (optional)          |
+| Vision                     | ✅ Complete | —           | —      | Shipped                                 |
+| Cron hardening             | ✅ Complete | —           | —      | Shipped                                 |
+| GDPR                       | ✅ Complete | —           | —      | Shipped                                 |
+| Supabase RLS               | ✅ Complete | —           | —      | Shipped                                 |
+| **PKCE on OAuth**          | ✅ Complete | —           | —      | Shipped                                 |
+| **Autonomous systems**     | ❌ 0%       | Medium      | 5–7d   | Phase 1: surface patterns + quiet hours |
+| **Custom persona**         | ❌ 0%       | Medium      | 2–3w   | Phase 2: structured fields first        |
+| **Conversation history**   | ⚠️ 10%      | Medium      | 3–5d   | Phase 2: migration + summarization      |
+| **MCP/Connectors**         | ⚠️ 15%      | Medium-High | 2–3w   | PKCE done; Phase 2: MCP client (2w)     |
+| **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                       |
+| **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                   |
+| **Push notifications**     | ❌ 0%       | Low         | 2–3d   | Phase 3+ (requires PWA)                 |
+| **WhatsApp reply loop**    | ⚠️ 20%      | Low         | 2–3d   | Phase 2 enhancement                     |
+| **Realtime subscriptions** | ❌ 0%       | Low         | 2–3d   | Phase 3+                                |
+| **Background workers**     | ❌ 0%       | Low         | 3–5d   | Defer until ~200 users                  |
+| **Security audit agent**   | ❌ 0%       | Low         | 3–5d   | Defer                                   |
 
 ---
 
