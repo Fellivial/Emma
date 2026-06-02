@@ -48,10 +48,17 @@ export async function POST(req: NextRequest) {
       const body = await validationRes.text().catch(() => "");
       console.error("[elevenlabs] key rejected by ElevenLabs (401):", body);
       let parsed: { detail?: { status?: string } } = {};
-      try { parsed = JSON.parse(body); } catch { /* non-JSON body */ }
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        /* non-JSON body */
+      }
       if (parsed?.detail?.status === "missing_permissions") {
         return NextResponse.json(
-          { error: "API key is missing required permissions — create a new key with full access at elevenlabs.io/app/settings/api-keys" },
+          {
+            error:
+              "API key is missing required permissions — create a key with Text to Speech, Voices, and User scopes enabled at elevenlabs.io/app/settings/api-keys",
+          },
           { status: 400 }
         );
       }
@@ -64,6 +71,20 @@ export async function POST(req: NextRequest) {
       const errBody = await validationRes.text().catch(() => "");
       console.error(`[elevenlabs] ElevenLabs /voices returned ${validationRes.status}:`, errBody);
       return NextResponse.json({ error: "Could not verify key — try again" }, { status: 400 });
+    }
+
+    // Best-effort: fetch subscription quota for usage bar visibility.
+    // Requires "User" scope; silently skipped if unavailable.
+    const subscriptionMeta: Record<string, unknown> = {};
+    const subRes = await fetch(`${ELEVENLABS_API}/user/subscription`, {
+      headers: { "xi-api-key": trimmedKey },
+    }).catch(() => null);
+    if (subRes?.ok) {
+      const sub = await subRes.json().catch(() => ({}));
+      subscriptionMeta.tier = sub.tier ?? null;
+      subscriptionMeta.characterCount = sub.character_count ?? null;
+      subscriptionMeta.characterLimit = sub.character_limit ?? null;
+      subscriptionMeta.resetUnix = sub.next_character_count_reset_unix ?? null;
     }
 
     const accountName = "ElevenLabs Account";
@@ -110,6 +131,7 @@ export async function POST(req: NextRequest) {
         metadata: {
           voiceId: voiceId || null,
           voiceName: verifiedVoiceName || (voiceId ? null : "Rachel (default)"),
+          ...subscriptionMeta,
         },
         updated_at: new Date().toISOString(),
       },
@@ -204,7 +226,11 @@ export async function PATCH(req: NextRequest) {
     const voiceInfo = await voiceRes.json();
     const verifiedVoiceName: string = voiceInfo.name || voiceId;
 
-    const updatedMetadata = { ...(integration.metadata || {}), voiceId, voiceName: verifiedVoiceName };
+    const updatedMetadata = {
+      ...(integration.metadata || {}),
+      voiceId,
+      voiceName: verifiedVoiceName,
+    };
 
     await supabase
       .from("client_integrations")
