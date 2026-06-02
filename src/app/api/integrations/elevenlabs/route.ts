@@ -48,10 +48,17 @@ export async function POST(req: NextRequest) {
       const body = await validationRes.text().catch(() => "");
       console.error("[elevenlabs] key rejected by ElevenLabs (401):", body);
       let parsed: { detail?: { status?: string } } = {};
-      try { parsed = JSON.parse(body); } catch { /* non-JSON body */ }
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        /* non-JSON body */
+      }
       if (parsed?.detail?.status === "missing_permissions") {
         return NextResponse.json(
-          { error: "API key is missing required permissions — create a new key with full access at elevenlabs.io/app/settings/api-keys" },
+          {
+            error:
+              "API key is missing required permissions — create a new key with full access at elevenlabs.io/app/settings/api-keys",
+          },
           { status: 400 }
         );
       }
@@ -67,6 +74,60 @@ export async function POST(req: NextRequest) {
     }
 
     const accountName = "ElevenLabs Account";
+
+    // ── Fetch subscription quota ─────────────────────────────────────────
+    let subscriptionTier = "free";
+    let characterCount = 0;
+    let characterLimit = 10000;
+    let nextResetUnix: number | null = null;
+
+    try {
+      const subRes = await fetch(`${ELEVENLABS_API}/user/subscription`, {
+        headers: { "xi-api-key": trimmedKey },
+      });
+      if (subRes.ok) {
+        const sub = await subRes.json();
+        subscriptionTier = sub.tier ?? "free";
+        characterCount = sub.character_count ?? 0;
+        characterLimit = sub.character_limit ?? 10000;
+        nextResetUnix = sub.next_character_count_reset_unix ?? null;
+      }
+    } catch {
+      /* non-blocking */
+    }
+
+    // ── Fetch model info ─────────────────────────────────────────────────
+    let ttsModel = "eleven_turbo_v2_5";
+    let charLimitPerRequest = 1000;
+
+    try {
+      const modelsRes = await fetch(`${ELEVENLABS_API}/models`, {
+        headers: { "xi-api-key": trimmedKey },
+      });
+      if (modelsRes.ok) {
+        const models = await modelsRes.json();
+        // Pick eleven_turbo_v2_5 if available, else first TTS-capable model
+        const ttsModels = (
+          models as Array<{
+            model_id: string;
+            can_do_text_to_speech: boolean;
+            max_characters_request_free_user: number;
+            max_characters_request_subscribed_user: number;
+          }>
+        ).filter((m) => m.can_do_text_to_speech);
+
+        const preferred = ttsModels.find((m) => m.model_id === "eleven_turbo_v2_5") ?? ttsModels[0];
+        if (preferred) {
+          ttsModel = preferred.model_id;
+          const isSubscribed = subscriptionTier !== "free";
+          charLimitPerRequest = isSubscribed
+            ? preferred.max_characters_request_subscribed_user || 5000
+            : preferred.max_characters_request_free_user || 1000;
+        }
+      }
+    } catch {
+      /* non-blocking */
+    }
 
     // Verify voice ID if provided
     let verifiedVoiceName: string | null = null;
@@ -110,6 +171,15 @@ export async function POST(req: NextRequest) {
         metadata: {
           voiceId: voiceId || null,
           voiceName: verifiedVoiceName || (voiceId ? null : "Rachel (default)"),
+          // Subscription quota
+          tier: subscriptionTier,
+          characterCount,
+          characterLimit,
+          nextResetUnix,
+          // TTS model
+          ttsModel,
+          charLimitPerRequest,
+          quotaUpdatedAt: Date.now(),
         },
         updated_at: new Date().toISOString(),
       },
@@ -204,7 +274,11 @@ export async function PATCH(req: NextRequest) {
     const voiceInfo = await voiceRes.json();
     const verifiedVoiceName: string = voiceInfo.name || voiceId;
 
-    const updatedMetadata = { ...(integration.metadata || {}), voiceId, voiceName: verifiedVoiceName };
+    const updatedMetadata = {
+      ...(integration.metadata || {}),
+      voiceId,
+      voiceName: verifiedVoiceName,
+    };
 
     await supabase
       .from("client_integrations")

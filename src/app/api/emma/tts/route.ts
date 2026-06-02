@@ -27,6 +27,8 @@ const EXPRESSION_VOICE_SETTINGS: Record<
 interface TtsCacheEntry {
   apiKey: string;
   voiceId: string | null;
+  ttsModel: string;
+  charLimitPerRequest: number;
   clientId: string;
   ts: number;
 }
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
 
     let apiKey: string | null = null;
     let storedVoiceId: string | null = null;
+    let storedTtsModel = "eleven_turbo_v2_5";
+    let storedCharLimit = 1000;
     let resolvedClientId: string | null = null;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,6 +66,8 @@ export async function POST(req: NextRequest) {
     if (cached && Date.now() - cached.ts < TTS_CACHE_TTL) {
       apiKey = cached.apiKey;
       storedVoiceId = cached.voiceId;
+      storedTtsModel = cached.ttsModel;
+      storedCharLimit = cached.charLimitPerRequest;
       resolvedClientId = cached.clientId;
     } else if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey);
@@ -88,9 +94,13 @@ export async function POST(req: NextRequest) {
           if (decrypted && !decrypted.startsWith("[")) {
             apiKey = decrypted;
             storedVoiceId = (data?.metadata?.voiceId as string | null) || null;
+            storedTtsModel = (data?.metadata?.ttsModel as string | null) || "eleven_turbo_v2_5";
+            storedCharLimit = (data?.metadata?.charLimitPerRequest as number | null) || 1000;
             ttsCache.set(sessionUser.id, {
               apiKey: decrypted,
               voiceId: storedVoiceId,
+              ttsModel: storedTtsModel,
+              charLimitPerRequest: storedCharLimit,
               clientId: resolvedClientId!,
               ts: Date.now(),
             });
@@ -120,8 +130,8 @@ export async function POST(req: NextRequest) {
         "xi-api-key": apiKey,
       },
       body: JSON.stringify({
-        text: text.slice(0, 1000),
-        model_id: "eleven_turbo_v2_5",
+        text: text.slice(0, storedCharLimit),
+        model_id: storedTtsModel,
         voice_settings: { ...voiceSettings, use_speaker_boost: true },
       }),
     });

@@ -12,6 +12,7 @@ interface IntegrationStatus {
   lastError: string | null;
   voiceId?: string | null;
   voiceName?: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface VoiceOption {
@@ -715,6 +716,44 @@ function ElevenLabsConnect({
               </button>
             </div>
           </div>
+          {status.metadata &&
+            (() => {
+              const meta = status.metadata as {
+                characterCount?: number;
+                characterLimit?: number;
+                nextResetUnix?: number;
+                tier?: string;
+              };
+              if (!meta.characterLimit) return null;
+              const pct = Math.min(
+                100,
+                Math.round(((meta.characterCount ?? 0) / meta.characterLimit) * 100)
+              );
+              const resets = meta.nextResetUnix
+                ? new Date(meta.nextResetUnix * 1000).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null;
+              return (
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[10px] text-emma-200/40">
+                    <span>
+                      {(meta.characterCount ?? 0).toLocaleString()} /{" "}
+                      {meta.characterLimit.toLocaleString()} chars
+                    </span>
+                    {resets && <span>resets {resets}</span>}
+                    {meta.tier && <span className="capitalize">{meta.tier} plan</span>}
+                  </div>
+                  <div className="h-1 bg-emma-950 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${pct >= 80 ? "bg-amber-400" : "bg-emma-400"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           {showVoiceSelector && (
             <div className="mt-3 pt-3 border-t border-surface-border">
               <VoiceSelector

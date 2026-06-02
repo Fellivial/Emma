@@ -59,10 +59,16 @@ export async function GET() {
           lastUsedAt: row.last_used_at,
           lastError: row.last_error,
         };
-        // ElevenLabs: include voice info
+        // ElevenLabs: include voice info + quota metadata
         if (row.service === "elevenlabs") {
           entry.voiceId = row.metadata?.voiceId || null;
           entry.voiceName = row.metadata?.voiceName || "Rachel (default)";
+          entry.metadata = {
+            characterCount: row.metadata?.characterCount ?? null,
+            characterLimit: row.metadata?.characterLimit ?? null,
+            nextResetUnix: row.metadata?.nextResetUnix ?? null,
+            tier: row.metadata?.tier ?? null,
+          };
         }
         integrations[row.service] = entry;
       }
