@@ -458,8 +458,8 @@ export function useVoice(): UseVoiceReturn {
   // ── Full speak (ElevenLabs → fallback) ─────────────────────────────────────
 
   const speakElevenLabs = useCallback(
-    async (text: string, clientId?: string): Promise<boolean> => {
-      const blob = await fetchAudioBlob(text, clientId);
+    async (text: string, clientId?: string, expression?: string): Promise<boolean> => {
+      const blob = await fetchAudioBlob(text, clientId, expression);
       if (!blob) return false;
       return new Promise((resolve) => {
         const url = URL.createObjectURL(blob);
@@ -488,7 +488,7 @@ export function useVoice(): UseVoiceReturn {
   const speak = useCallback(
     (text: string, _clientId?: string, emotion?: string) => {
       // Always try ElevenLabs first — server returns 204 if no key configured
-      speakElevenLabs(text).then((ok) => {
+      speakElevenLabs(text, undefined, emotion).then((ok) => {
         if (!ok) speakFallback(text, emotion);
       });
     },

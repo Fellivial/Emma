@@ -720,7 +720,7 @@ export default function EmmaPage() {
       avatar.setExpression(expression);
       avatar.startTalking(text);
 
-      if (ttsEnabled) voice.speak(text);
+      if (ttsEnabled) voice.speak(text, undefined, expression);
 
       timeline.log({
         type: "system_event",
