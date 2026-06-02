@@ -111,8 +111,8 @@ export async function POST(req: NextRequest) {
     const userId = sessionUserId ?? activeUser?.id;
 
     // ── Rate limit by userId (sliding window, fail-open) ────────────────────
-    if (userId) {
-      const { success, limit, remaining, reset } = await brainRatelimit.limit(userId);
+    if (userId && brainRatelimit) {
+      const { success, limit, reset } = await brainRatelimit.limit(userId);
       if (!success) {
         return new Response(JSON.stringify({ error: "Too many requests" }), {
           status: 429,
@@ -121,11 +121,10 @@ export async function POST(req: NextRequest) {
             "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)),
             "X-RateLimit-Limit": String(limit),
             "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(reset),
+            "X-RateLimit-Reset": String(Math.ceil(reset / 1000)),
           },
         });
       }
-      void remaining; // consumed above; suppress unused-var lint
     }
 
     let memories: import("@/types/emma").MemoryEntry[] = [];

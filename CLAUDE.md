@@ -101,6 +101,8 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail + Google Calendar OAuth                                                                                                                 |
 | `EMMA_ADMIN_EMAILS`                         | Comma-separated emails allowed into `/admin` and bypassed past the waitlist gate                                                              |
 | `CRON_SECRET`                               | Authenticates Vercel cron calls to `/api/emma/cron/*` routes                                                                                  |
+| `UPSTASH_REDIS_REST_URL`                    | Upstash Redis REST endpoint for distributed rate limiting (from Upstash console → database → REST API)                                        |
+| `UPSTASH_REDIS_REST_TOKEN`                  | Upstash Redis REST token (same location as URL)                                                                                               |
 | `LEMONSQUEEZY_API_KEY`                      | Billing — checkout + subscription management                                                                                                  |
 | `LEMONSQUEEZY_STORE_ID`                     | Billing — checkout session creation                                                                                                           |
 | `LEMONSQUEEZY_WEBHOOK_SECRET`               | Billing — webhook signature verification                                                                                                      |
