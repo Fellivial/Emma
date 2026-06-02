@@ -23,6 +23,9 @@ interface InputBarProps {
   onTypingStop?: () => void;
   visionActive?: boolean;
   onVisionToggle?: () => void;
+  transcript?: string;
+  voiceError?: string | null;
+  onVoiceErrorClear?: () => void;
 }
 
 export function InputBar({
@@ -38,6 +41,9 @@ export function InputBar({
   onTypingStop,
   visionActive,
   onVisionToggle,
+  transcript,
+  voiceError,
+  onVoiceErrorClear,
 }: InputBarProps) {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
@@ -54,6 +60,21 @@ export function InputBar({
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
     }
   }, [input]);
+
+  // Merge voice transcript into the textarea when it changes
+  useEffect(() => {
+    if (transcript) {
+      setInput(transcript);
+      textareaRef.current?.focus();
+    }
+  }, [transcript]);
+
+  // Auto-clear voice error after 8s so the hint doesn't persist indefinitely
+  useEffect(() => {
+    if (!voiceError || !onVoiceErrorClear) return;
+    const id = setTimeout(onVoiceErrorClear, 8000);
+    return () => clearTimeout(id);
+  }, [voiceError, onVoiceErrorClear]);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -165,6 +186,19 @@ export function InputBar({
             style={{ minHeight: "1.5rem" }}
           />
         </div>
+
+        {/* Voice error hint */}
+        {voiceError && (
+          <p className="px-4 pb-1 text-xs text-red-400/70">
+            {voiceError === "not-allowed"
+              ? "Microphone access was denied — check browser permissions"
+              : voiceError === "no-speech"
+                ? "No speech detected — try speaking after clicking the mic"
+                : voiceError === "service-not-allowed"
+                  ? "Speech recognition is not available in this browser"
+                  : "Microphone error — check your audio device"}
+          </p>
+        )}
 
         {/* Action bar */}
         <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">

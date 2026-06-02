@@ -1,23 +1,40 @@
 /**
  * Notion Adapter — Bearer token auth, pages API v1.
  * Token stored encrypted in access_token field.
+ *
+ * All API calls are wrapped with callWithTokenRefresh so a 401 triggers
+ * one automatic refresh attempt. Notion rotates its refresh_token on every
+ * use — the refresh module writes both tokens atomically.
  */
 
 import {
   type IntegrationAdapter,
   type IntegrationService,
   type AdapterResult,
-  getIntegrationTokens,
   markIntegrationUsed,
   markIntegrationError,
 } from "./adapter";
+import { callWithTokenRefresh, IntegrationExpiredError } from "@/lib/oauth-refresh";
 
 export class NotionAdapter implements IntegrationAdapter {
   service: IntegrationService = "notion";
 
   async validate(clientId: string): Promise<boolean> {
     try {
-      await getIntegrationTokens(clientId, "notion");
+      // Attempt a lightweight search to confirm the token is still valid.
+      // callWithTokenRefresh will throw IntegrationExpiredError if no token
+      // exists or if refresh fails.
+      await callWithTokenRefresh(clientId, "notion", (token) =>
+        fetch("https://api.notion.com/v1/search", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+          },
+          body: JSON.stringify({ query: "", page_size: 1 }),
+        })
+      );
       return true;
     } catch {
       return false;
@@ -36,8 +53,6 @@ export class NotionAdapter implements IntegrationAdapter {
     };
 
     try {
-      const { accessToken } = await getIntegrationTokens(clientId, "notion");
-
       const body: Record<string, unknown> = {
         parent: { page_id: parent_page_id },
         properties: {
@@ -55,15 +70,17 @@ export class NotionAdapter implements IntegrationAdapter {
         ];
       }
 
-      const res = await fetch("https://api.notion.com/v1/pages", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Notion-Version": "2022-06-28",
-        },
-        body: JSON.stringify(body),
-      });
+      const res = await callWithTokenRefresh(clientId, "notion", (token) =>
+        fetch("https://api.notion.com/v1/pages", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+          },
+          body: JSON.stringify(body),
+        })
+      );
 
       if (!res.ok) {
         const errText = await res.text();
@@ -79,6 +96,9 @@ export class NotionAdapter implements IntegrationAdapter {
         data: { pageId: data.id, url: data.url },
       };
     } catch (err) {
+      if (err instanceof IntegrationExpiredError) {
+        return { success: false, output: `Notion requires re-authorization` };
+      }
       await markIntegrationError(clientId, "notion", err as Error);
       return { success: false, output: `Notion failed: ${(err as Error).message}` };
     }
@@ -88,21 +108,21 @@ export class NotionAdapter implements IntegrationAdapter {
     const { query, page_size = 10 } = params as { query: string; page_size?: number };
 
     try {
-      const { accessToken } = await getIntegrationTokens(clientId, "notion");
-
-      const res = await fetch("https://api.notion.com/v1/search", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Notion-Version": "2022-06-28",
-        },
-        body: JSON.stringify({
-          query,
-          filter: { value: "page", property: "object" },
-          page_size,
-        }),
-      });
+      const res = await callWithTokenRefresh(clientId, "notion", (token) =>
+        fetch("https://api.notion.com/v1/search", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+          },
+          body: JSON.stringify({
+            query,
+            filter: { value: "page", property: "object" },
+            page_size,
+          }),
+        })
+      );
 
       if (!res.ok) {
         const errText = await res.text();
@@ -142,6 +162,9 @@ export class NotionAdapter implements IntegrationAdapter {
         data: { count: pages.length, pages: pages.map((p) => ({ id: p.id, url: p.url })) },
       };
     } catch (err) {
+      if (err instanceof IntegrationExpiredError) {
+        return { success: false, output: `Notion requires re-authorization` };
+      }
       await markIntegrationError(clientId, "notion", err as Error);
       return { success: false, output: `Notion search failed: ${(err as Error).message}` };
     }
@@ -159,54 +182,69 @@ export class NotionAdapter implements IntegrationAdapter {
     }
 
     try {
-      const { accessToken } = await getIntegrationTokens(clientId, "notion");
-      const headers = {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-      };
+      // Wrap the entire update (both PATCH calls) in a single refresh scope.
+      // If the first call triggers a token refresh, the second call uses the
+      // already-refreshed token that was stored atomically.
+      await callWithTokenRefresh(clientId, "notion", async (token) => {
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28",
+        };
 
-      if (title) {
-        const patchRes = await fetch(`https://api.notion.com/v1/pages/${page_id}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            properties: { title: { title: [{ text: { content: title } }] } },
-          }),
-        });
+        if (title) {
+          const patchRes = await fetch(`https://api.notion.com/v1/pages/${page_id}`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              properties: { title: { title: [{ text: { content: title } }] } },
+            }),
+          });
 
-        if (!patchRes.ok) {
-          const errText = await patchRes.text();
-          await markIntegrationError(clientId, "notion", new Error(errText));
-          return { success: false, output: `Notion API error: ${patchRes.status}` };
+          if (!patchRes.ok) {
+            const errText = await patchRes.text();
+            if (patchRes.status !== 401) {
+              await markIntegrationError(clientId, "notion", new Error(errText));
+            }
+            throw Object.assign(new Error(`Notion API error: ${patchRes.status}`), {
+              status: patchRes.status,
+            });
+          }
         }
-      }
 
-      if (content) {
-        const blockRes = await fetch(`https://api.notion.com/v1/blocks/${page_id}/children`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            children: [
-              {
-                object: "block",
-                type: "paragraph",
-                paragraph: { rich_text: [{ type: "text", text: { content } }] },
-              },
-            ],
-          }),
-        });
+        if (content) {
+          const blockRes = await fetch(`https://api.notion.com/v1/blocks/${page_id}/children`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              children: [
+                {
+                  object: "block",
+                  type: "paragraph",
+                  paragraph: { rich_text: [{ type: "text", text: { content } }] },
+                },
+              ],
+            }),
+          });
 
-        if (!blockRes.ok) {
-          const errText = await blockRes.text();
-          await markIntegrationError(clientId, "notion", new Error(errText));
-          return { success: false, output: `Notion block error: ${blockRes.status}` };
+          if (!blockRes.ok) {
+            const errText = await blockRes.text();
+            if (blockRes.status !== 401) {
+              await markIntegrationError(clientId, "notion", new Error(errText));
+            }
+            throw Object.assign(new Error(`Notion block error: ${blockRes.status}`), {
+              status: blockRes.status,
+            });
+          }
         }
-      }
+      });
 
       await markIntegrationUsed(clientId, "notion");
       return { success: true, output: `Page ${page_id} updated` };
     } catch (err) {
+      if (err instanceof IntegrationExpiredError) {
+        return { success: false, output: `Notion requires re-authorization` };
+      }
       await markIntegrationError(clientId, "notion", err as Error);
       return { success: false, output: `Notion update failed: ${(err as Error).message}` };
     }

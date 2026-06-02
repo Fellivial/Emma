@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { MODEL_BRAIN } from "@/core/models";
+import { BRAIN_MODELS } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
@@ -18,6 +18,7 @@ import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { brainRatelimit } from "@/lib/ratelimit";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -108,6 +109,24 @@ export async function POST(req: NextRequest) {
 
     // Use session-verified ID for data operations; fall back to body for dev mode
     const userId = sessionUserId ?? activeUser?.id;
+
+    // ── Rate limit by userId (sliding window, fail-open) ────────────────────
+    if (userId && brainRatelimit) {
+      const { success, limit, reset } = await brainRatelimit.limit(userId);
+      if (!success) {
+        return new Response(JSON.stringify({ error: "Too many requests" }), {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)),
+            "X-RateLimit-Limit": String(limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(Math.ceil(reset / 1000)),
+          },
+        });
+      }
+    }
+
     let memories: import("@/types/emma").MemoryEntry[] = [];
     if (userId) {
       try {
@@ -287,7 +306,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: openRouterHeaders(),
         body: JSON.stringify({
-          model: MODEL_BRAIN,
+          models: BRAIN_MODELS,
           max_tokens: detectMaxTokens(messages, hasDocuments),
           stream: true,
           messages: [{ role: "system", content: systemPromptText }, ...apiMessages],

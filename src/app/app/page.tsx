@@ -517,7 +517,9 @@ export default function EmmaPage() {
             onDone: async (event: StreamDoneEvent) => {
               // Kick off TTS immediately — runs in parallel with all state updates below
               const audioBlobPromise =
-                ttsEnabled && event.text ? voice.fetchAudioBlob(event.text) : Promise.resolve(null);
+                ttsEnabled && event.text
+                  ? voice.fetchAudioBlob(event.text, undefined, event.expression ?? undefined)
+                  : Promise.resolve(null);
 
               // Finalize message with parsed data
               setMessages((prev) =>
@@ -597,27 +599,30 @@ export default function EmmaPage() {
 
               // Commands parsed but no longer dispatched to physical devices
 
-              // Avatar expression
-              if (event.expression) {
-                avatar.setExpression(event.expression);
-              }
-
               // TTS + lip sync — audioBlob was already in-flight from top of onDone
+              // Expression is fired inside onAudioStart so it syncs with actual playback,
+              // not with response parse (~800ms–2s before audio begins).
               if (ttsEnabled && event.text) {
                 const audioBlob = await audioBlobPromise;
                 if (audioBlob) {
-                  avatar.startTalkingWithAudio(audioBlob);
+                  avatar.startTalkingWithAudio(audioBlob, () => {
+                    if (event.expression) avatar.setExpression(event.expression);
+                  });
                 } else {
                   // WebSpeech: drive avatar from actual utterance start/end events
                   // so mouth only moves when speech is actually playing.
                   voice.speakFallback(
                     event.text,
                     event.expression ?? undefined,
-                    () => avatar.startTalkingContinuous(),
+                    () =>
+                      avatar.startTalkingContinuous(() => {
+                        if (event.expression) avatar.setExpression(event.expression);
+                      }),
                     () => avatar.stopTalking()
                   );
                 }
               } else if (event.text) {
+                if (event.expression) avatar.setExpression(event.expression);
                 avatar.startTalking(event.text);
               }
 
@@ -667,10 +672,24 @@ export default function EmmaPage() {
     ]
   );
 
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+
   const handleVoice = useCallback(async () => {
+    if (voice.listening) {
+      voice.stopListening();
+      return;
+    }
     const transcript = await voice.listen();
-    if (transcript) sendMessage(transcript);
-  }, [voice, sendMessage]);
+    if (transcript) setVoiceTranscript(transcript);
+  }, [voice]);
+
+  const handleSend = useCallback(
+    (text: string) => {
+      setVoiceTranscript("");
+      sendMessage(text);
+    },
+    [sendMessage]
+  );
 
   // ── User switch logging ────────────────────────────────────────────────────
   const prevUserId = useRef(multiUser.activeUser.id);
@@ -704,7 +723,7 @@ export default function EmmaPage() {
       avatar.setExpression(expression);
       avatar.startTalking(text);
 
-      if (ttsEnabled) voice.speak(text);
+      if (ttsEnabled) voice.speak(text, undefined, expression);
 
       timeline.log({
         type: "system_event",
@@ -819,7 +838,7 @@ export default function EmmaPage() {
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
           <InputBar
-            onSend={sendMessage}
+            onSend={handleSend}
             onVoice={handleVoice}
             voiceSupported={voice.supported}
             listening={voice.listening}
@@ -831,6 +850,9 @@ export default function EmmaPage() {
             onTypingStop={handleTypingStop}
             visionActive={vision.active}
             onVisionToggle={handleVisionToggle}
+            transcript={voiceTranscript}
+            voiceError={voice.error}
+            onVoiceErrorClear={voice.clearError}
           />
         </div>
       </div>
@@ -905,7 +927,7 @@ export default function EmmaPage() {
               messages={messages}
               loading={loading}
               historyLoading={historyReady === null}
-              onSend={sendMessage}
+              onSend={handleSend}
               onVoice={handleVoice}
               voiceSupported={voice.supported}
               listening={voice.listening}
@@ -922,6 +944,9 @@ export default function EmmaPage() {
               onCancelApproval={handleCancelApproval}
               visionActive={vision.active}
               onVisionToggle={handleVisionToggle}
+              transcript={voiceTranscript}
+              voiceError={voice.error}
+              onVoiceErrorClear={voice.clearError}
             />
           </div>
 

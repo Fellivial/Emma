@@ -18,6 +18,22 @@ export const MODEL_VISION = "google/gemma-4-31b-it:free";
 // DEV: free tier (same as brain — gpt-oss-20b doesn't support tool_calls). LAUNCH: google/gemini-2.5-flash
 export const MODEL_UTILITY = "openai/gpt-oss-120b:free";
 
+// Fallback arrays for OpenRouter — tried in order, first available wins.
+// OpenRouter accepts "models" (array) as an alternative to "model" (string).
+export const BRAIN_MODELS = [
+  MODEL_BRAIN,
+  "meta-llama/llama-3.3-70b-instruct:free", // free fallback
+];
+
+export const VISION_MODELS = [
+  MODEL_VISION, // primary only — vision requires image_url support
+];
+
+export const UTILITY_MODELS = [
+  MODEL_UTILITY,
+  "meta-llama/llama-3.3-70b-instruct:free", // free fallback
+];
+
 // Convenience map for logging
 export const MODEL_MAP = {
   brain: MODEL_BRAIN,

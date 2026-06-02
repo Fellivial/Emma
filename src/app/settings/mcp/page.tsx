@@ -44,7 +44,7 @@ export default function McpPage() {
     const { data: client } = await supabase
       .from("clients")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("owner_id", user.id)
       .maybeSingle();
 
     if (!client) {
@@ -309,17 +309,13 @@ export default function McpPage() {
           <div className="flex items-start gap-3">
             <span className="text-base mt-0.5">🔒</span>
             <div>
-              <p className="text-xs font-medium text-emma-200/60 mb-1">
-                Private network server?
-              </p>
+              <p className="text-xs font-medium text-emma-200/60 mb-1">Private network server?</p>
               <p className="text-[11px] text-emma-200/35 leading-relaxed">
                 If your MCP server runs behind a firewall, use{" "}
                 <strong className="text-emma-200/50">MCP Tunnels</strong> — a Cloudflare-backed
                 outbound-only connector that exposes your server without opening inbound ports.
                 Deploy the tunnel inside your network, then paste the routed URL here (e.g.{" "}
-                <span className="font-mono text-emma-300/50">
-                  https://service.your-domain/mcp
-                </span>
+                <span className="font-mono text-emma-300/50">https://service.your-domain/mcp</span>
                 ).
               </p>
               <a

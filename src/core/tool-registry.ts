@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 function getSupabaseAdmin() {
@@ -153,7 +153,7 @@ registerTool({
       method: "POST",
       headers: openRouterHeaders(),
       body: JSON.stringify({
-        model: MODEL_UTILITY,
+        models: UTILITY_MODELS,
         max_tokens: 512,
         messages: [
           {
@@ -307,7 +307,15 @@ registerTool({
         anyOf: [
           {
             type: "string",
-            enum: ["preference", "routine", "personal", "episodic", "environment"],
+            enum: [
+              "preference",
+              "habit",
+              "personal",
+              "goal",
+              "relationship",
+              "context",
+              "constraint",
+            ],
           },
           { type: "null" },
         ],
@@ -1795,9 +1803,10 @@ registerTool({
                   text,
                   model_id: "eleven_turbo_v2_5",
                   voice_settings: {
-                    stability: 1.0,
-                    similarity_boost: 0.5,
-                    style: 0.75,
+                    stability: 0.55,
+                    similarity_boost: 0.75,
+                    style: 0.0,
+                    speed: 1.0,
                     use_speaker_boost: true,
                   },
                 }),

@@ -1,4 +1,4 @@
-import { MODEL_UTILITY } from "@/core/models";
+import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { MemoryApiRequest, MemoryApiResponse, MemoryEntry } from "@/types/emma";
 import {
@@ -70,7 +70,15 @@ export async function POST(req: NextRequest) {
                 properties: {
                   category: {
                     type: "string",
-                    enum: ["preference", "routine", "personal", "episodic", "environment"],
+                    enum: [
+                      "preference",
+                      "habit",
+                      "personal",
+                      "goal",
+                      "relationship",
+                      "context",
+                      "constraint",
+                    ],
                   },
                   key: { type: "string" },
                   value: { type: "string" },
@@ -89,13 +97,13 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: openRouterHeaders(),
           body: JSON.stringify({
-            model: MODEL_UTILITY,
+            models: UTILITY_MODELS,
             max_tokens: 512,
             messages: [
               { role: "system", content: MEMORY_EXTRACTION_PROMPT },
               {
                 role: "user",
-                content: `Extract memories from this conversation:\n\n${body.conversationText}`,
+                content: body.conversationText,
               },
             ],
             response_format: {
