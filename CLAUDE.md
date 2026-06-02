@@ -89,6 +89,7 @@ Two personas in `src/core/personas.ts`: `mommy` (default — playful, warm, teas
 | Variable                                    | Purpose                                                                                                                                       |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `OPENROUTER_API_KEY`                        | Required — all LLM calls (brain, vision, memory, emotion)                                                                                     |
+| `TAVILY_API_KEY`                            | Tavily web search API key for the `web_search` agent tool (api.tavily.com → Dashboard)                                                        |
 | `NEXT_PUBLIC_SUPABASE_URL`                  | Required for auth/DB (skip for local dev)                                                                                                     |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | Required for client-side auth                                                                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY`                 | Required for server-side DB operations                                                                                                        |

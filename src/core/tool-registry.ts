@@ -1853,6 +1853,118 @@ registerTool({
   },
 });
 
+// Tool: web_search — Search the web via Tavily (safe)
+registerTool({
+  name: "web_search",
+  description:
+    "Search the web for current information. Returns titles, URLs, and content snippets from the top results.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "The search query" },
+      max_results: {
+        anyOf: [{ type: "number" }, { type: "null" }],
+        description: "Max results to return (null for default 5)",
+      },
+    },
+    required: ["query", "max_results"],
+    additionalProperties: false,
+  },
+  riskLevel: "safe",
+  handler: async (input) => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      return { success: false, output: "Web search is not configured (TAVILY_API_KEY missing)" };
+    }
+
+    const query = input.query as string;
+    const maxResults = (input.max_results as number | null) ?? 5;
+
+    try {
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey, query, max_results: maxResults }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        return { success: false, output: `Tavily error ${res.status}: ${errText.slice(0, 200)}` };
+      }
+
+      const data = (await res.json()) as {
+        results: Array<{ url: string; title: string; content: string; score: number }>;
+      };
+
+      if (!data.results?.length) {
+        return { success: true, output: `No results found for "${query}".` };
+      }
+
+      const formatted = data.results
+        .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.content.slice(0, 300)}`)
+        .join("\n\n");
+
+      return {
+        success: true,
+        output: `Search results for "${query}":\n\n${formatted}`,
+        data: { query, resultCount: data.results.length },
+      };
+    } catch (err) {
+      return { success: false, output: `Search failed: ${String(err)}` };
+    }
+  },
+});
+
+// Tool: web_fetch — Fetch a web page via Jina Reader (safe)
+registerTool({
+  name: "web_fetch",
+  description:
+    "Fetch the content of a specific web page and return it as clean text. Use when you have a URL you need to read.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      url: { type: "string", description: "The HTTPS URL to fetch" },
+    },
+    required: ["url"],
+    additionalProperties: false,
+  },
+  riskLevel: "safe",
+  handler: async (input) => {
+    const url = input.url as string;
+
+    // SSRF guard — reuse the existing isSafeUrl helper already in this file
+    if (!url || !isSafeUrl(url)) {
+      return {
+        success: false,
+        output: "URL not allowed (must be https:// and not an internal address)",
+      };
+    }
+
+    try {
+      const jinaUrl = `https://r.jina.ai/${url}`;
+      const res = await fetch(jinaUrl, {
+        headers: { Accept: "text/plain" },
+      });
+
+      if (!res.ok) {
+        return { success: false, output: `Fetch error ${res.status} for ${url}` };
+      }
+
+      const text = await res.text();
+      const trimmed = text.slice(0, 8000); // cap at 8k — agent-loop applies MAX_TOOL_OUTPUT anyway but be explicit
+      return {
+        success: true,
+        output:
+          trimmed +
+          (text.length > 8000 ? `\n\n[truncated — full page is ${text.length} chars]` : ""),
+        data: { url, truncated: text.length > 8000 },
+      };
+    } catch (err) {
+      return { success: false, output: `Fetch failed: ${String(err)}` };
+    }
+  },
+});
+
 // Tool: complete_task — Signal that the task is finished (safe)
 registerTool({
   name: "complete_task",
