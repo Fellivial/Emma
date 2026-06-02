@@ -23,8 +23,8 @@ const IDLE_SIGH_TIMEOUT = 60_000;
 const NEUTRAL_DELAY = 3000;
 
 // Idle variant intervals (ms)
-const BLINK_MIN = 2000;
-const BLINK_MAX = 6000;
+const IDLE_FIRST_DELAY_MIN = 2000;
+const IDLE_FIRST_DELAY_MAX = 6000;
 const MICRO_MOVE_MIN = 5000;
 const MICRO_MOVE_MAX = 12000;
 
@@ -116,7 +116,8 @@ export function useAvatar(): UseAvatarReturn {
     // Skip micro-behaviors when a NORMAL or FORCE motion is playing (e.g. talking).
     // pixi-live2d-display MotionPriority: NONE=0, IDLE=1, NORMAL=2, FORCE=3
     const mm = model?.internalModel?.motionManager;
-    const isMotionPlaying = mm?.state?.currentPriority > 1;
+    const currentPriority = mm?.state?.currentPriority ?? 0;
+    const isMotionPlaying = currentPriority > 1;
     if (isMotionPlaying) {
       const nextDelay = MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN);
       // eslint-disable-next-line react-hooks/immutability
@@ -146,6 +147,9 @@ export function useAvatar(): UseAvatarReturn {
         addParam("ParamAngleX", dx, 0.3);
         addParam("ParamAngleY", dy, 0.3);
         setTimeout(() => {
+          const mm = model?.internalModel?.motionManager;
+          const currentPriority = mm?.state?.currentPriority ?? 0;
+          if (currentPriority > 1) return; // don't fight a NORMAL/FORCE motion
           setParam("ParamAngleX", 0);
           setParam("ParamAngleY", 0);
         }, 1200);
@@ -157,6 +161,9 @@ export function useAvatar(): UseAvatarReturn {
         addParam("ParamEyeBallX", dir, 0.7);
         addParam("ParamAngleX", dir * 5, 0.5);
         setTimeout(() => {
+          const mm = model?.internalModel?.motionManager;
+          const currentPriority = mm?.state?.currentPriority ?? 0;
+          if (currentPriority > 1) return; // don't fight a NORMAL/FORCE motion
           setParam("ParamEyeBallX", 0);
           setParam("ParamAngleX", 0);
         }, 2000);
@@ -166,7 +173,12 @@ export function useAvatar(): UseAvatarReturn {
       case "weight_shift": {
         const bodyX = (Math.random() - 0.5) * 6;
         addParam("ParamBodyAngleX", bodyX, 0.4);
-        setTimeout(() => setParam("ParamBodyAngleX", 0), 1500);
+        setTimeout(() => {
+          const mm = model?.internalModel?.motionManager;
+          const currentPriority = mm?.state?.currentPriority ?? 0;
+          if (currentPriority > 1) return; // don't fight a NORMAL/FORCE motion
+          setParam("ParamBodyAngleX", 0);
+        }, 1500);
         break;
       }
 
@@ -175,6 +187,9 @@ export function useAvatar(): UseAvatarReturn {
         addParam("ParamMouthOpenY", 0.15, 0.6);
         addParam("ParamBodyAngleZ", -2, 0.4);
         setTimeout(() => {
+          const mm = model?.internalModel?.motionManager;
+          const currentPriority = mm?.state?.currentPriority ?? 0;
+          if (currentPriority > 1) return; // don't fight a NORMAL/FORCE motion — critical for mouth
           setParam("ParamMouthOpenY", 0);
           setParam("ParamBodyAngleZ", 0);
         }, 1500);
@@ -217,6 +232,9 @@ export function useAvatar(): UseAvatarReturn {
             core.setParameterValueById("ParamBodyAngleZ", -2);
           } catch {}
           setTimeout(() => {
+            const mm = model?.internalModel?.motionManager;
+            const currentPriority = mm?.state?.currentPriority ?? 0;
+            if (currentPriority > 1) return; // don't fight a NORMAL/FORCE motion — critical for mouth
             try {
               core.setParameterValueById("ParamMouthOpenY", 0);
               core.setParameterValueById("ParamBodyAngleZ", 0);
@@ -362,7 +380,8 @@ export function useAvatar(): UseAvatarReturn {
         // Start idle behaviors
         // Note: CubismEyeBlink and CubismBreath already run every frame via pixi-live2d-display.
         // We only start the micro-behavior loop here; breathing/blinking are handled natively.
-        const firstIdleDelay = BLINK_MIN + Math.random() * (BLINK_MAX - BLINK_MIN);
+        const firstIdleDelay =
+          IDLE_FIRST_DELAY_MIN + Math.random() * (IDLE_FIRST_DELAY_MAX - IDLE_FIRST_DELAY_MIN);
         idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), firstIdleDelay);
 
         setState((s) => ({ ...s, loaded: true }));
