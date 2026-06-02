@@ -20,14 +20,15 @@ function getSupabase() {
  *
  * Deletion order matters (foreign key constraints):
  *   1. messages (references conversations)
- *   2. conversations
- *   3. memories
- *   4. usage
- *   5. action_log (by user_id text match)
- *   6. approvals (via client)
- *   7. client_members
- *   8. profiles
- *   9. Supabase auth user (optional — they may want to keep the account)
+ *   2. chat_messages (active flat message store)
+ *   3. conversations
+ *   4. memories
+ *   5. usage
+ *   6. action_log (by user_id text match)
+ *   7. approvals (via client)
+ *   8. client_members
+ *   9. profiles
+ *   10. Supabase auth user (optional — they may want to keep the account)
  *
  * The audit log entry for the deletion itself is kept (legal requirement).
  */
@@ -125,35 +126,46 @@ export async function POST(req: NextRequest) {
         .eq("user_id", user.id);
       deletionLog.push(`messages: ${msgCount || 0}`);
 
-      // 2. Conversations
+      // 2. Chat messages
+      try {
+        const { count: chatMsgCount } = await supabase
+          .from("chat_messages")
+          .delete({ count: "exact" })
+          .eq("user_id", user.id);
+        deletionLog.push(`chat_messages: ${chatMsgCount || 0}`);
+      } catch {
+        deletionLog.push("chat_messages: skipped");
+      }
+
+      // 4. Conversations
       const { count: convCount } = await supabase
         .from("conversations")
         .delete({ count: "exact" })
         .eq("user_id", user.id);
       deletionLog.push(`conversations: ${convCount || 0}`);
 
-      // 3. Memories
+      // 5. Memories
       const { count: memCount } = await supabase
         .from("memories")
         .delete({ count: "exact" })
         .eq("user_id", user.id);
       deletionLog.push(`memories: ${memCount || 0}`);
 
-      // 4. Usage
+      // 6. Usage
       const { count: usageCount } = await supabase
         .from("usage")
         .delete({ count: "exact" })
         .eq("user_id", user.id);
       deletionLog.push(`usage: ${usageCount || 0}`);
 
-      // 5. Client memberships (removes from any client)
+      // 7. Client memberships (removes from any client)
       const { count: memberCount } = await supabase
         .from("client_members")
         .delete({ count: "exact" })
         .eq("user_id", user.id);
       deletionLog.push(`client_memberships: ${memberCount || 0}`);
 
-      // 6. Audit log (keep only the deletion entry itself, written above)
+      // 8. Audit log (keep only the deletion entry itself, written above)
       try {
         const deletionAuditThreshold = new Date(Date.now() - 5000).toISOString();
         await supabase
@@ -166,7 +178,7 @@ export async function POST(req: NextRequest) {
         deletionLog.push("audit_log: skipped");
       }
 
-      // 7. Tasks
+      // 9. Tasks
       try {
         await supabase.from("tasks").delete().eq("user_id", user.id);
         deletionLog.push("tasks: cleared");
@@ -174,7 +186,7 @@ export async function POST(req: NextRequest) {
         deletionLog.push("tasks: skipped");
       }
 
-      // 8. Profile
+      // 10. Profile
       const { error: profileErr } = await supabase.from("profiles").delete().eq("id", user.id);
       deletionLog.push(profileErr ? "profile: failed" : "profile: deleted");
 
