@@ -507,16 +507,16 @@ export function useAvatar(): UseAvatarReturn {
           sum += dataArray[i];
         }
         const avg = sum / speechBins / 255; // 0-1
-        // Quintic easing for more natural jaw movement
-        const eased = Math.min(1, Math.pow(Math.min(1, avg * 3), 5));
-        // Lerp: 70% old value, 30% new — smooths sudden amplitude spikes
-        prevMouth = prevMouth * 0.7 + eased * 0.3;
+        // Cubic easing for visible jaw movement at typical ElevenLabs amplitudes
+        const eased = Math.min(1, Math.pow(Math.min(1, avg * 3), 3));
+        // Lerp: 40% old value, 60% new — more responsive than quintic
+        prevMouth = prevMouth * 0.4 + eased * 0.6;
 
         if (modelRef.current) {
           const core = modelRef.current?.internalModel?.coreModel;
           if (core) {
             try {
-              core.addParameterValueById("ParamMouthOpenY", prevMouth, 0.8);
+              core.setParameterValueById("ParamMouthOpenY", prevMouth);
             } catch {}
           }
         }
@@ -548,11 +548,13 @@ export function useAvatar(): UseAvatarReturn {
       };
 
       audio.onerror = () => {
+        onAudioStart?.(); // fire expression even on audio error
         URL.revokeObjectURL(url);
         setState((s) => ({ ...s, talking: false }));
       };
 
       audio.play().catch(() => {
+        onAudioStart?.(); // fire expression even if audio is blocked by autoplay policy
         URL.revokeObjectURL(url);
         setState((s) => ({ ...s, talking: false }));
       });
@@ -566,14 +568,15 @@ export function useAvatar(): UseAvatarReturn {
     (onAudioStart?: () => void) => {
       resetIdleTimer();
       setState((s) => ({ ...s, talking: true }));
-      // Web Speech starts playing immediately — fire callback right away
-      onAudioStart?.();
 
       if (modelRef.current) {
         try {
           modelRef.current.motion("Talk", 0, 2);
         } catch {}
       }
+
+      // Fire after motion() so Talk motion doesn't stomp the expression set by the callback
+      onAudioStart?.();
 
       const animate = () => {
         if (modelRef.current) {

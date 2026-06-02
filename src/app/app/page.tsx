@@ -622,6 +622,7 @@ export default function EmmaPage() {
                   );
                 }
               } else if (event.text) {
+                if (event.expression) avatar.setExpression(event.expression);
                 avatar.startTalking(event.text);
               }
 
