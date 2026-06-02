@@ -133,7 +133,7 @@ export default function OnboardingPage() {
         const { data: clientRow } = await supabase
           .from("clients")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("owner_id", user.id)
           .maybeSingle();
 
         if (clientRow) {

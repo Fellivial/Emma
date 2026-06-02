@@ -550,6 +550,9 @@ alter table public.agent_task_summaries enable row level security;
 alter table public.pattern_detections enable row level security;
 alter table public.provenance_chains enable row level security;
 alter table public.global_config enable row level security;
+alter table public.waitlist enable row level security;
+alter table public.waitlist_v2 enable row level security;
+alter table public.rate_limit_counters enable row level security;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -663,6 +666,20 @@ create policy "Deny all direct access to global_config"
   for all
   using (false);
 
+-- Waitlist: anon insert only — no reads (privacy)
+drop policy if exists "Anon can join waitlist" on public.waitlist;
+create policy "Anon can join waitlist" on public.waitlist
+  for insert with check (true);
+
+drop policy if exists "Anon can join waitlist_v2" on public.waitlist_v2;
+create policy "Anon can join waitlist_v2" on public.waitlist_v2
+  for insert with check (true);
+
+-- Rate limit counters: service_role only (deny all direct access)
+drop policy if exists "Deny direct access to rate_limit_counters" on public.rate_limit_counters;
+create policy "Deny direct access to rate_limit_counters"
+  on public.rate_limit_counters for all using (false);
+
 -- Storage: task-documents
 -- Users can only read files in their own folder ({user_id}/...).
 -- Server-side writes use the service role (bypasses RLS) — no insert policy needed.
@@ -674,6 +691,40 @@ create policy "Users read own documents"
     bucket_id = 'task-documents'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- GRANTS (required for Data API access on projects created after 2026-05-30)
+-- Without these, PostgREST returns "permission denied for table" on new projects.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- anon: only tables reachable without authentication (waitlist signup)
+grant select, insert on public.waitlist to anon;
+grant select, insert on public.waitlist_v2 to anon;
+
+-- authenticated: all tables a signed-in user accesses via the browser client
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.memories to authenticated;
+grant select, insert, update, delete on public.conversations to authenticated;
+grant select, insert, update, delete on public.messages to authenticated;
+grant select on public.usage to authenticated;
+grant select on public.usage_windows to authenticated;
+grant select on public.extra_packs to authenticated;
+grant select on public.tasks to authenticated;
+grant select on public.clients to authenticated;
+grant select on public.client_members to authenticated;
+grant select, insert, update, delete on public.client_integrations to authenticated;
+grant select on public.provenance_chains to authenticated;
+
+-- service_role: full access to all tables (server-side API routes)
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
+-- Ensure future tables created by the postgres role get service_role grants automatically
+alter default privileges for role postgres in schema public
+  grant select, insert, update, delete on tables to service_role;
+alter default privileges for role postgres in schema public
+  grant usage, select on sequences to service_role;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
