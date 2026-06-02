@@ -36,8 +36,8 @@ Confidence scale:
   0.85–1.0  Direct, explicit statement ("I love jazz")
   0.65–0.75 Clearly implied but not stated outright
   0.45–0.60 Reasonable inference from context
-  0.20–0.49 Weak inference or speculation — usually not worth storing
-  < 0.50    Do not extract
+  0.20–0.44 Weak inference or speculation — do not extract
+  < 0.55    Do not extract
 
 Do NOT extract:
   - Transient states: "I'm tired," "I'm hungry right now," "I'm in a rush"
@@ -54,11 +54,12 @@ Extract:
   { "category": "habit", "key": "morning_routine", "value": "gym before work", "confidence": 0.85 }
 
 User: "Do you know any good Italian restaurants?"
-Extract: []
+Extract: []  ← question about Emma, not a fact about the user
 
-User: "I've been working remotely for two years now and I actually love it."
+User: "I have a presentation tomorrow, I'm really stressed."
 Extract:
-  { "category": "context", "key": "work_arrangement", "value": "remote worker, prefers remote work", "confidence": 0.9 }
+  { "category": "context", "key": "presentation_stress", "value": "stressed about upcoming presentation", "confidence": 0.5 }
+  ← borderline: one-time context at confidence 0.5, below the 0.55 threshold — Emma skips this
 
 User: "I'm vegetarian and my partner Alex is vegan."
 Extract:
@@ -67,7 +68,7 @@ Extract:
   { "category": "relationship", "key": "partner_diet", "value": "Alex is vegan", "confidence": 0.9 }
 
 User: "ok thanks!"
-Extract: []
+Extract: []  ← filler
 </examples>
 
 Now extract from the following conversation turn. Return only the JSON array.`;

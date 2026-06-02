@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         }
 
         const toStore = parsed
-          .filter((p) => p.confidence >= 0.5)
+          .filter((p) => p.confidence >= 0.55)
           .map((p) => ({
             category: p.category as MemoryEntry["category"],
             key: p.key,
