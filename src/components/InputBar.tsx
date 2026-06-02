@@ -25,6 +25,7 @@ interface InputBarProps {
   onVisionToggle?: () => void;
   transcript?: string;
   voiceError?: string | null;
+  onVoiceErrorClear?: () => void;
 }
 
 export function InputBar({
@@ -42,6 +43,7 @@ export function InputBar({
   onVisionToggle,
   transcript,
   voiceError,
+  onVoiceErrorClear,
 }: InputBarProps) {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
@@ -66,6 +68,13 @@ export function InputBar({
       textareaRef.current?.focus();
     }
   }, [transcript]);
+
+  // Auto-clear voice error after 8s so the hint doesn't persist indefinitely
+  useEffect(() => {
+    if (!voiceError || !onVoiceErrorClear) return;
+    const id = setTimeout(onVoiceErrorClear, 8000);
+    return () => clearTimeout(id);
+  }, [voiceError, onVoiceErrorClear]);
 
   const handleSend = () => {
     const trimmed = input.trim();

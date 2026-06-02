@@ -29,6 +29,7 @@ interface UseVoiceReturn {
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
   setCurrentEmotion: (emotion: string) => void;
+  clearError: () => void;
 }
 
 /**
@@ -184,6 +185,8 @@ export function useVoice(): UseVoiceReturn {
   const speaking = mode === "speaking";
 
   useEffect(() => {
+    const isFirefox = /firefox/i.test(navigator.userAgent);
+    if (isFirefox) return;
     const w =
       typeof window !== "undefined"
         ? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition })
@@ -246,6 +249,7 @@ export function useVoice(): UseVoiceReturn {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
         // Only reset to idle if we haven't transitioned to thinking
         setMode((prev) => (prev === "listening" ? "idle" : prev));
+        resolve(null);
       };
 
       setMode("listening");
@@ -495,6 +499,10 @@ export function useVoice(): UseVoiceReturn {
     currentEmotionRef.current = emotion;
   }, []);
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -544,5 +552,6 @@ export function useVoice(): UseVoiceReturn {
     stopSpeaking,
     setMode,
     setCurrentEmotion,
+    clearError,
   };
 }

@@ -847,6 +847,7 @@ export default function EmmaPage() {
             onVisionToggle={handleVisionToggle}
             transcript={voiceTranscript}
             voiceError={voice.error}
+            onVoiceErrorClear={voice.clearError}
           />
         </div>
       </div>
@@ -940,6 +941,7 @@ export default function EmmaPage() {
               onVisionToggle={handleVisionToggle}
               transcript={voiceTranscript}
               voiceError={voice.error}
+              onVoiceErrorClear={voice.clearError}
             />
           </div>
 

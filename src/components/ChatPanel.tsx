@@ -45,6 +45,7 @@ interface ChatPanelProps {
   agentPlan?: AgentTask[];
   transcript?: string;
   voiceError?: string | null;
+  onVoiceErrorClear?: () => void;
 }
 
 export function ChatPanel({
@@ -71,6 +72,7 @@ export function ChatPanel({
   agentPlan,
   transcript,
   voiceError,
+  onVoiceErrorClear,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -263,6 +265,7 @@ export function ChatPanel({
         onVisionToggle={onVisionToggle}
         transcript={transcript}
         voiceError={voiceError}
+        onVoiceErrorClear={onVoiceErrorClear}
       />
     </div>
   );
