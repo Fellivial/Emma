@@ -18,12 +18,13 @@ function getSupabase() {
  * Verifies HMAC signature, then processes subscription lifecycle events.
  *
  * Events handled:
- *   subscription_created  → Activate plan for user
- *   subscription_updated  → Update plan tier (upgrade/downgrade)
- *   subscription_cancelled → Downgrade to free tier
+ *   subscription_created  → Activate plan for user + store billing metadata
+ *   subscription_updated  → Update plan tier + refresh metadata
+ *   subscription_cancelled → Awaits subscription_expired for downgrade
  *   subscription_expired   → Downgrade to free tier
- *   subscription_payment_failed → Grace period (reduce limits)
- *   subscription_resumed   → Re-activate plan
+ *   subscription_payment_failed → Grace period (reduce daily limit)
+ *   subscription_payment_recovered → Restore full plan limits
+ *   subscription_resumed   → Re-activate plan + refresh metadata
  */
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
@@ -74,7 +75,20 @@ export async function POST(req: NextRequest) {
   const customData = event.meta?.custom_data;
   const userId = customData?.user_id;
   const attrs = event.data?.attributes;
-  const variantId = String(attrs?.variant_id || attrs?.first_subscription_item?.variant_id || "");
+  const variantId = String(attrs?.variant_id || "");
+
+  // Extract subscription billing metadata for display in billing UI
+  const lemonMeta = attrs
+    ? {
+        lemonSqueezyId: String(event.data?.id || ""),
+        orderId: attrs.order_id ?? null,
+        renewsAt: attrs.renews_at ?? null,
+        endsAt: attrs.ends_at ?? null,
+        cardBrand: attrs.card_brand ?? null,
+        cardLastFour: attrs.card_last_four ?? null,
+        status: attrs.status ?? null,
+      }
+    : null;
 
   if (!userId) {
     console.warn("[Lemon Webhook] No user_id in custom_data");
@@ -108,6 +122,7 @@ export async function POST(req: NextRequest) {
                 token_budget_daily: plan.tokenBudgetDaily,
                 message_limit_daily: plan.messageLimitDaily,
                 tools_enabled: plan.toolsEnabled,
+                ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
                 updated_at: new Date().toISOString(),
               })
               .eq("id", membership.client_id);
@@ -169,7 +184,7 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (membership) {
-          // Grace period: reduce to free daily limit
+          // Grace period: reduce to free daily limit until payment recovers
           await supabase
             .from("clients")
             .update({
@@ -177,6 +192,41 @@ export async function POST(req: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq("id", membership.client_id);
+        }
+        break;
+      }
+
+      // ── Payment Recovered ───────────────────────────────────────────────
+      // Reverses the grace-period limit reduction from subscription_payment_failed.
+      case "subscription_payment_recovered": {
+        const plan = getPlanByLemonVariant(variantId);
+        const { data: membership } = await supabase
+          .from("client_members")
+          .select("client_id")
+          .eq("user_id", userId)
+          .single();
+
+        if (membership && plan) {
+          await supabase
+            .from("clients")
+            .update({
+              plan_id: plan.id,
+              token_budget_monthly: plan.tokenBudgetMonthly,
+              token_budget_daily: plan.tokenBudgetDaily,
+              message_limit_daily: plan.messageLimitDaily,
+              tools_enabled: plan.toolsEnabled,
+              ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", membership.client_id);
+
+          audit({
+            userId,
+            action: "write",
+            resource: "billing",
+            reason: "subscription_payment_recovered: plan limits restored",
+            ip: getClientIp(req),
+          }).catch(() => {});
         }
         break;
       }

@@ -85,17 +85,14 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 **Research required:** `payment_recovered` handler, `variantId` fix, extra-pack idempotency, subscription metadata storage.
 
-**Implemented:** ⚠️ PARTIAL (~90%)
+**Implemented:** ✅ Complete
 
 - **Commit:** `e491e4c` — "fix: P15 lemon webhook — payment_recovered handler, variantId fix, extra-pack idempotency"
-- `subscription_payment_recovered` event handler added
-- `variantId` extraction corrected
+- `subscription_payment_recovered` handler restores full plan limits (reverses `payment_failed` grace-period reduction)
+- `variantId` simplified to `String(attrs?.variant_id || "")` — the `first_subscription_item.variant_id` path was not a real field
 - Extra-pack one-time purchase idempotency enforced
-
-**Gaps:**
-
-- ❌ Subscription metadata storage (lemonSqueezyId, orderId, endsAt, renewsAt, cardBrand)
-- ❌ `subscription_payment_failed` restoration logic (if access was reduced, payment recovery should restore it)
+- `clients.lemon_meta JSONB` column stores `{lemonSqueezyId, orderId, renewsAt, endsAt, cardBrand, cardLastFour, status}` on all active subscription events
+- Schema migration: `ALTER TABLE clients ADD COLUMN IF NOT EXISTS lemon_meta jsonb`
 
 ---
 
@@ -189,23 +186,12 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 **Research required:** `/v1/user/subscription` endpoint for quota, usage bar display, tier detection, concurrency awareness.
 
-**Implemented:** ⚠️ PARTIAL (~90%)
+**Implemented:** ✅ Complete
 
 - **Commit:** `372ea25` — "feat: P14 ElevenLabs quota visibility bar + dynamic model/char-limit"
-- Quota visibility bar implemented
-- Dynamic model selection based on key capabilities
-- Character limit adjustment per model
-- `/v1/user/subscription` fetched on connect — stores `tier`, `characterCount`, `characterLimit`, `resetUnix` in metadata
-- `GET /api/integrations/elevenlabs/usage` endpoint returns live quota data
-- Usage bar in Settings connected state: chars used/limit, % fill, reset countdown, tier label; amber ≥80%, red ≥95%
-- `has_open_invoices` and non-active subscription warnings surfaced in UI
-- `missing_permissions` error now lists required scopes (Text to Speech, Voices, User)
-- Key-input hint updated with required scope names
-
-**Gaps:**
-
-- ❌ Concurrency awareness via response headers (`current-concurrent-requests` / `maximum-concurrent-requests`)
-- ❌ WebSocket streaming for low-tier keys (more concurrency-efficient than HTTP)
+- Quota visibility bar, dynamic model/char-limit, `/v1/user/subscription` on connect, live usage endpoint
+- Concurrency awareness: TTS route reads `current-concurrent-requests` / `maximum-concurrent-requests` response headers; warns at ≥80% usage; forwards as `x-el-concurrent`/`x-el-concurrent-max` response headers
+- WebSocket streaming deferred as a future optimization — HTTP is correct for current single-user-at-a-time TTS calls
 
 ---
 
@@ -458,14 +444,14 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | Rate limiting              | ✅ Complete | —           | —      | Shipped                                           |
 | Memory extraction          | ⚠️ 75%      | Medium      | 2–3d   | Key normalization (1d), soft-delete tracking (2d) |
 | Email deliverability       | ✅ Complete | —           | —      | Shipped                                           |
-| LemonSqueezy billing       | ⚠️ 90%      | Medium      | 1–2d   | Add subscription metadata storage                 |
+| LemonSqueezy billing       | ✅ Complete | —           | —      | Shipped                                           |
 | Agent tools                | ✅ Complete | —           | —      | Shipped                                           |
 | Security audit             | ✅ Complete | —           | —      | Shipped                                           |
 | OpenRouter fallback        | ✅ Complete | —           | —      | Shipped                                           |
 | TTS/Live2D                 | ✅ Complete | —           | —      | Shipped                                           |
 | STT fixes                  | ✅ Complete | —           | —      | Shipped                                           |
 | Live2D idle                | ✅ Complete | —           | —      | Shipped                                           |
-| ElevenLabs BYOK            | ⚠️ 90%      | Low         | 1d     | Concurrency headers (optional)                    |
+| ElevenLabs BYOK            | ✅ Complete | —           | —      | Shipped                                           |
 | Vision                     | ✅ Complete | —           | —      | Shipped                                           |
 | Cron hardening             | ✅ Complete | —           | —      | Shipped                                           |
 | GDPR                       | ✅ Complete | —           | —      | Shipped                                           |
