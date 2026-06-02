@@ -14,6 +14,16 @@ interface IntegrationStatus {
   voiceName?: string;
 }
 
+interface ELQuota {
+  tier: string;
+  characterCount: number;
+  characterLimit: number;
+  resetUnix: number | null;
+  canExtend: boolean;
+  hasOpenInvoices: boolean;
+  subscriptionStatus: string;
+}
+
 interface VoiceOption {
   voiceId: string;
   name: string;
@@ -585,6 +595,7 @@ function ElevenLabsConnect({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
+  const [quota, setQuota] = useState<ELQuota | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -594,6 +605,18 @@ function ElevenLabsConnect({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.status]);
+
+  useEffect(() => {
+    if (step !== "connected") return;
+    fetch("/api/integrations/elevenlabs/usage")
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = await r.json();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setQuota(d as ELQuota);
+      })
+      .catch(() => {});
+  }, [step]);
 
   const handleConnectKey = async () => {
     if (!apiKey.trim()) return;
@@ -653,7 +676,8 @@ function ElevenLabsConnect({
           </div>
           {error && <p className="text-[11px] text-red-300/60 mt-2">{error}</p>}
           <p className="text-[10px] text-emma-200/20 mt-2">
-            Get your key at{" "}
+            Create a key with{" "}
+            <span className="text-emma-200/35">Text to Speech, Voices, and User</span> scopes at{" "}
             <a
               href="https://elevenlabs.io/app/settings/api-keys"
               target="_blank"
@@ -715,6 +739,7 @@ function ElevenLabsConnect({
               </button>
             </div>
           </div>
+          {quota && <QuotaBar quota={quota} />}
           {showVoiceSelector && (
             <div className="mt-3 pt-3 border-t border-surface-border">
               <VoiceSelector
@@ -733,6 +758,60 @@ function ElevenLabsConnect({
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ElevenLabs Quota Bar ────────────────────────────────────────────────────
+
+function QuotaBar({ quota }: { quota: ELQuota }) {
+  const pct =
+    quota.characterLimit > 0
+      ? Math.min(100, (quota.characterCount / quota.characterLimit) * 100)
+      : 0;
+  const barColor = pct >= 95 ? "bg-red-400/70" : pct >= 80 ? "bg-amber-400/60" : "bg-emma-300/50";
+  const textColor =
+    pct >= 95 ? "text-red-300/60" : pct >= 80 ? "text-amber-300/60" : "text-emma-200/30";
+  const tierLabel =
+    quota.tier && quota.tier !== "unknown"
+      ? quota.tier.charAt(0).toUpperCase() + quota.tier.slice(1) + " plan"
+      : null;
+  const resetText = quota.resetUnix ? `resets ${fmtReset(quota.resetUnix)}` : null;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-surface-border">
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-[10px] ${textColor}`}>
+          {fmtChars(quota.characterCount)} / {fmtChars(quota.characterLimit)} chars
+          {resetText && ` · ${resetText}`}
+          {tierLabel && ` · ${tierLabel}`}
+        </span>
+        <span className={`text-[10px] ${textColor}`}>{Math.round(pct)}%</span>
+      </div>
+      <div className="h-1 rounded-full bg-emma-200/8 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {quota.hasOpenInvoices && (
+        <p className="text-[10px] text-amber-300/60 mt-1.5">
+          Billing issue — fix at{" "}
+          <a
+            href="https://elevenlabs.io/app/billing"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-amber-300"
+          >
+            elevenlabs.io/app/billing
+          </a>
+        </p>
+      )}
+      {quota.subscriptionStatus !== "active" && quota.subscriptionStatus !== "unknown" && (
+        <p className="text-[10px] text-amber-300/60 mt-1.5">
+          Subscription {quota.subscriptionStatus} — check your ElevenLabs account
+        </p>
       )}
     </div>
   );
@@ -964,4 +1043,17 @@ function fmtTime(iso: string): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return d.toLocaleDateString();
+}
+
+function fmtChars(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function fmtReset(unix: number): string {
+  const days = Math.ceil((unix * 1000 - Date.now()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
 }

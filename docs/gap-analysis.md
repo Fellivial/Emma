@@ -189,16 +189,21 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 **Research required:** `/v1/user/subscription` endpoint for quota, usage bar display, tier detection, concurrency awareness.
 
-**Implemented:** ⚠️ PARTIAL (~70%)
+**Implemented:** ⚠️ PARTIAL (~90%)
 
 - **Commit:** `372ea25` — "feat: P14 ElevenLabs quota visibility bar + dynamic model/char-limit"
 - Quota visibility bar implemented
 - Dynamic model selection based on key capabilities
 - Character limit adjustment per model
+- `/v1/user/subscription` fetched on connect — stores `tier`, `characterCount`, `characterLimit`, `resetUnix` in metadata
+- `GET /api/integrations/elevenlabs/usage` endpoint returns live quota data
+- Usage bar in Settings connected state: chars used/limit, % fill, reset countdown, tier label; amber ≥80%, red ≥95%
+- `has_open_invoices` and non-active subscription warnings surfaced in UI
+- `missing_permissions` error now lists required scopes (Text to Speech, Voices, User)
+- Key-input hint updated with required scope names
 
 **Gaps:**
 
-- ❌ `/v1/user/subscription` integration (tier, reset date, overage info) — research identifies as "the biggest missing piece"
 - ❌ Concurrency awareness via response headers (`current-concurrent-requests` / `maximum-concurrent-requests`)
 - ❌ WebSocket streaming for low-tier keys (more concurrency-efficient than HTTP)
 
@@ -460,7 +465,7 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | TTS/Live2D                 | ✅ Complete | —           | —      | Shipped                                           |
 | STT fixes                  | ✅ Complete | —           | —      | Shipped                                           |
 | Live2D idle                | ✅ Complete | —           | —      | Shipped                                           |
-| ElevenLabs BYOK            | ⚠️ 70%      | Medium      | 1–2d   | Add `/v1/user/subscription` integration           |
+| ElevenLabs BYOK            | ⚠️ 90%      | Low         | 1d     | Concurrency headers (optional)                    |
 | Vision                     | ✅ Complete | —           | —      | Shipped                                           |
 | Cron hardening             | ✅ Complete | —           | —      | Shipped                                           |
 | GDPR                       | ✅ Complete | —           | —      | Shipped                                           |
@@ -488,8 +493,11 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
    - Confidence threshold raised 0.5 → 0.55 (prompt + filter)
    - Staleness pruning cron registered in `vercel.json` (daily 04:00 UTC)
 
-2. **ElevenLabs `/v1/user/subscription` integration** — 1–2 days, direct BYOK UX improvement
-   - Show tier, character count/limit, reset date, overage warnings in Settings
+2. ✅ **ElevenLabs `/v1/user/subscription` integration** — **DONE**
+   - Live usage bar: chars used/limit, % fill (amber ≥80%, red ≥95%), reset countdown, tier label
+   - Subscription metadata stored on connect; `/api/integrations/elevenlabs/usage` endpoint
+   - Billing issue + inactive subscription warnings surfaced
+   - `missing_permissions` error and key-input hint now list required scopes
 
 3. **PKCE on OAuth flow** — 1 day, closes "single biggest security gap" per research
    - Enables future MCP connector work
