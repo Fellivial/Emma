@@ -35,6 +35,7 @@ import {
   buildTierNotification,
   shouldAutoExecute,
   buildSystemNotification,
+  buildPatternNotification,
 } from "@/core/autonomy-engine";
 import { uid } from "@/lib/utils";
 import { streamEmmaResponse, type StreamDoneEvent } from "@/lib/stream-client";
@@ -202,6 +203,15 @@ export default function EmmaPage() {
       .catch(() => {
         setHistoryReady([]);
       });
+    // Surface top pattern suggestion (quiet-hours + daily-cap enforced server-side)
+    fetch("/api/emma/patterns")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { pattern?: { id: string; suggestion: string } | null } | null) => {
+        if (d?.pattern) {
+          notifications.push(buildPatternNotification(d.pattern.id, d.pattern.suggestion));
+        }
+      })
+      .catch(() => {});
     timeline.log({
       type: "system_event",
       source: "system",
