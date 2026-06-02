@@ -53,13 +53,32 @@ export interface ToolResult {
 
 /**
  * Returns true only for public HTTPS URLs.
- * Blocks loopback, link-local, private ranges, and non-HTTPS protocols.
+ * Blocks loopback, link-local, all RFC-1918 private ranges (including 172.16-31),
+ * and IPv6 ULA/link-local addresses.
  */
 function isSafeUrl(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url);
-    const blocked = ["localhost", "127.", "169.254.", "10.", "192.168.", "0.", "::1", "[::"];
-    return protocol === "https:" && !blocked.some((b) => hostname.startsWith(b));
+    if (protocol !== "https:") return false;
+    // 172.16.0.0/12 — must check numerically (172.16–172.31)
+    if (hostname.startsWith("172.")) {
+      const second = parseInt(hostname.split(".")[1] ?? "0", 10);
+      if (second >= 16 && second <= 31) return false;
+    }
+    const blocked = [
+      "localhost",
+      "127.",
+      "169.254.",
+      "10.",
+      "192.168.",
+      "0.",
+      "::1",
+      "[::",
+      "[fc",
+      "[fd",
+      "[fe8",
+    ];
+    return !blocked.some((b) => hostname.startsWith(b));
   } catch {
     return false;
   }
@@ -1505,19 +1524,11 @@ registerTool({
 
     if (input.image_url) {
       const rawUrl = input.image_url as string;
-      if (!rawUrl.startsWith("https://")) {
-        return { success: false, output: "image_url must use HTTPS." };
-      }
-      let hostname: string;
-      try {
-        hostname = new URL(rawUrl).hostname;
-      } catch {
-        return { success: false, output: "Invalid image URL." };
-      }
-      const privateRange =
-        /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|0\.0\.0\.0|::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|::ffff:)/i;
-      if (privateRange.test(hostname)) {
-        return { success: false, output: "image_url must point to a public host." };
+      if (!rawUrl || !isSafeUrl(rawUrl)) {
+        return {
+          success: false,
+          output: "Image URL not allowed (must be https:// and not an internal address)",
+        };
       }
       try {
         const res = await fetch(rawUrl);

@@ -89,6 +89,9 @@ const EXTERNAL_READ_TOOLS = new Set([
   "calendar_get_today",
   "gmail_list_messages",
   "gmail_read_message",
+  "read_ingested_document",
+  "read_recent_emails",
+  "read_whatsapp_messages",
 ]);
 
 /** Maximum characters of tool output fed into the LLM message history. */
@@ -393,7 +396,12 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 step_number: step,
                 action: toolName,
                 input: toolInput,
-                status: autonomyTier <= 2 ? "skipped_low_autonomy" : "moderate_executed",
+                status:
+                  autonomyTier === 1
+                    ? "skipped_low_autonomy"
+                    : autonomyTier === 2
+                      ? "awaiting_approval"
+                      : "moderate_executed",
                 risk_level: "moderate",
                 reason:
                   autonomyTier === 1
@@ -445,6 +453,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 durationMs: Date.now() - stepStart,
               };
               steps.push(stepResult);
+              await logAction(supabase, task.id, stepResult);
               if (supabase) {
                 await supabase
                   .from("tasks")
@@ -587,9 +596,16 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           // Detect output_var convention: tool may return { outputVar, output }
           const outputVar = toolResult.outputVar;
 
-          // Update intra-task scratchpad — sanitise external content before storing in outputVars
+          // Update intra-task scratchpad — sanitise external content before storing in outputVars.
+          // On high threat, store a sentinel instead of the content so injection text never
+          // enters outputVars (sanitiseInput().clean does NOT strip injection patterns).
           const sanitiser = EXTERNAL_READ_TOOLS.has(toolName)
-            ? (v: string) => sanitiseInput(v.slice(0, 1000)).clean
+            ? (v: string) => {
+                const scan = sanitiseInput(v.slice(0, 1000));
+                return scan.threat === "high"
+                  ? "[EXTERNAL CONTENT REDACTED — HIGH THREAT]"
+                  : scan.clean;
+              }
             : undefined;
           ctx = updateContext(ctx, step, toolName, toolResult.output, outputVar, sanitiser);
           persistContext(ctx);
