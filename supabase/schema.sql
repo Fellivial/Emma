@@ -416,12 +416,15 @@ create table if not exists public.client_integrations (
 create table if not exists public.oauth_states (
   id uuid default gen_random_uuid() primary key,
   state text unique not null,
+  code_verifier text,
   client_id uuid references public.clients on delete cascade not null,
   user_id uuid references auth.users not null,
   service text not null,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '10 minutes')
 );
+-- PKCE migration: add code_verifier for existing databases
+alter table public.oauth_states add column if not exists code_verifier text;
 
 
 -- ─── 20. Usage Metering ─────────────────────────────────────────────────────

@@ -365,14 +365,14 @@ Current flat `chat_messages` prevents per-session history, conversation switchin
 
 ### 6. Connector Integration / MCP (`connector-integration-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED  
+**Status:** ⚠️ PARTIAL (~15%)  
 **Impact:** Medium-High
 
 Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would unlock 800–10,000+ integrations with zero per-service code.
 
 **What remains:**
 
-- ❌ PKCE on OAuth start/callback (research identifies as "single biggest security gap")
+- ✅ PKCE on OAuth start/callback — `code_verifier` stored in `oauth_states`, `code_challenge` (S256) sent in all three provider auth URLs, `code_verifier` sent in all three token exchanges; `oauth_states.code_verifier` column added to schema
 - ❌ MCP client support in agent-loop (via Vercel AI SDK + `@ai-sdk/mcp`)
 - ❌ Tool allowlist/denylist via `needsApproval` gates
 - ❌ Connection-expiry health checks + proactive re-auth suggestions
@@ -470,11 +470,11 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 | Cron hardening             | ✅ Complete | —           | —      | Shipped                                           |
 | GDPR                       | ✅ Complete | —           | —      | Shipped                                           |
 | Supabase RLS               | ✅ Complete | —           | —      | Shipped                                           |
-| **PKCE on OAuth**          | ❌ 0%       | **High**    | **1d** | **Quick win — closes biggest security gap**       |
+| **PKCE on OAuth**          | ✅ Complete | —           | —      | Shipped                                           |
 | **Autonomous systems**     | ❌ 0%       | Medium      | 5–7d   | Phase 1: surface patterns + quiet hours           |
 | **Custom persona**         | ❌ 0%       | Medium      | 2–3w   | Phase 2: structured fields first                  |
 | **Conversation history**   | ⚠️ 10%      | Medium      | 3–5d   | Phase 2: migration + summarization                |
-| **MCP/Connectors**         | ❌ 0%       | Medium-High | 2–3w   | Phase 1: PKCE (1w), Phase 2: MCP client (2w)      |
+| **MCP/Connectors**         | ⚠️ 15%      | Medium-High | 2–3w   | PKCE done; Phase 2: MCP client (2w)               |
 | **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                                 |
 | **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                             |
 | **Push notifications**     | ❌ 0%       | Low         | 2–3d   | Phase 3+ (requires PWA)                           |
@@ -499,8 +499,10 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
    - Billing issue + inactive subscription warnings surfaced
    - `missing_permissions` error and key-input hint now list required scopes
 
-3. **PKCE on OAuth flow** — 1 day, closes "single biggest security gap" per research
-   - Enables future MCP connector work
+3. ✅ **PKCE on OAuth flow** — **DONE**
+   - `code_verifier` (S256) generated in `start`, stored in `oauth_states`, sent in all three token exchanges
+   - `oauth_states.code_verifier TEXT` column added to `schema.sql` (with idempotent `ALTER TABLE`)
+   - Unlocks MCP connector Phase 2
 
 ---
 
