@@ -343,22 +343,25 @@ Current flat `chat_messages` prevents per-session history, conversation switchin
 
 ### 6. Connector Integration / MCP (`connector-integration-research.md`)
 
-**Status:** ⚠️ PARTIAL (~15%)  
+**Status:** ✅ Complete (Phase 1 + Phase 2 core)  
 **Impact:** Medium-High
 
-Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would unlock 800–10,000+ integrations with zero per-service code.
+Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the agent loop.
 
-**What remains:**
+**Implemented:**
 
 - ✅ PKCE on OAuth start/callback — `code_verifier` stored in `oauth_states`, `code_challenge` (S256) sent in all three provider auth URLs, `code_verifier` sent in all three token exchanges; `oauth_states.code_verifier` column added to schema
-- ❌ MCP client support in agent-loop (via Vercel AI SDK + `@ai-sdk/mcp`)
+- ✅ MCP client support in agent-loop — `src/core/integrations/mcp-client.ts` implements JSON-RPC 2.0 over HTTP (`listMcpTools`, `callMcpTool`); `runAgentLoop` queries `client_integrations` for `mcp_%` services, discovers tools at task start, extends the tools array, and dispatches `mcp__<service>__<tool>` calls to the remote server
+- ✅ `mcp_url` + encrypted `access_token` stored in `client_integrations`; token decrypted at dispatch time
+
+**Deferred (Phase 3):**
+
 - ❌ Tool allowlist/denylist via `needsApproval` gates
 - ❌ Connection-expiry health checks + proactive re-auth suggestions
 - ❌ Nango platform integration (as universal connector alternative)
-- ❌ Scope expansion for proactive features (read scopes for Gmail, Calendar, Slack)
 - ❌ OAuth scope re-consent flow
 
-**Recommendation:** Phase 1 (~1 week): add PKCE. Phase 2 (~2–3 weeks): MCP client. Phase 3: Nango platform.
+**Recommendation:** Phase 3: Nango platform for zero-code connector management.
 
 ---
 
@@ -427,37 +430,36 @@ Emma currently connects to 6 services via hand-rolled OAuth. MCP connector would
 
 ## SUMMARY TABLE
 
-| Area                       | Status      | Priority    | Effort | Recommendation                                    |
-| -------------------------- | ----------- | ----------- | ------ | ------------------------------------------------- |
-| OAuth refresh              | ✅ Complete | —           | —      | Shipped                                           |
-| Rate limiting              | ✅ Complete | —           | —      | Shipped                                           |
-| Memory extraction          | ✅ Complete | Medium      | 2–3d   | Key normalization (1d), soft-delete tracking (2d) |
-| Email deliverability       | ✅ Complete | —           | —      | Shipped                                           |
-| LemonSqueezy billing       | ✅ Complete | —           | —      | Shipped                                           |
-| Agent tools                | ✅ Complete | —           | —      | Shipped                                           |
-| Security audit             | ✅ Complete | —           | —      | Shipped                                           |
-| OpenRouter fallback        | ✅ Complete | —           | —      | Shipped                                           |
-| TTS/Live2D                 | ✅ Complete | —           | —      | Shipped                                           |
-| STT fixes                  | ✅ Complete | —           | —      | Shipped                                           |
-| Live2D idle                | ✅ Complete | —           | —      | Shipped                                           |
-| ElevenLabs BYOK            | ✅ Complete | —           | —      | Shipped                                           |
-| Vision                     | ✅ Complete | —           | —      | Shipped                                           |
-| Cron hardening             | ✅ Complete | —           | —      | Shipped                                           |
-| GDPR                       | ✅ Complete | —           | —      | Shipped                                           |
-| Supabase RLS               | ✅ Complete | —           | —      | Shipped                                           |
-| **PKCE on OAuth**          | ✅ Complete | —           | —      | Shipped                                           |
-| **Autonomous systems**     | ❌ 0%       | Medium      | 5–7d   | Phase 1: surface patterns + quiet hours           |
-| **Custom persona**         | ❌ 0%       | Medium      | 2–3w   | Phase 2: structured fields first                  |
-| **Conversation history**   | ⚠️ 10%      | Medium      | 3–5d   | Phase 2: migration + summarization                |
-| **MCP/Connectors**         | ⚠️ 15%      | Medium-High | 2–3w   | PKCE done; Phase 2: MCP client (2w)               |
-| **Document ingestion**     | ❌ 0%       | Medium      | 3–4w   | Phase 2–3 feature                                 |
-| **STT fallback**           | ❌ 0%       | Low         | 2–3d   | Defer                                             |
-| **Push notifications**     | ❌ 0%       | Low         | 2–3d   | Phase 3+ (requires PWA)                           |
-| **WhatsApp reply loop**    | ✅ Complete | —           | —      | Shipped                                           |
-| **Realtime subscriptions** | ❌ 0%       | Low         | 2–3d   | Phase 3+                                          |
-| **Background workers**     | ❌ 0%       | Low         | 3–5d   | Defer until ~200 users                            |
-| **Security audit agent**   | ❌ 0%       | Low         | 3–5d   | Defer                                             |
-
+| Area                       | Status      | Priority | Effort | Recommendation                                    |
+| -------------------------- | ----------- | -------- | ------ | ------------------------------------------------- |
+| OAuth refresh              | ✅ Complete | —        | —      | Shipped                                           |
+| Rate limiting              | ✅ Complete | —        | —      | Shipped                                           |
+| Memory extraction          | ✅ Complete | Medium   | 2–3d   | Key normalization (1d), soft-delete tracking (2d) |
+| Email deliverability       | ✅ Complete | —        | —      | Shipped                                           |
+| LemonSqueezy billing       | ✅ Complete | —        | —      | Shipped                                           |
+| Agent tools                | ✅ Complete | —        | —      | Shipped                                           |
+| Security audit             | ✅ Complete | —        | —      | Shipped                                           |
+| OpenRouter fallback        | ✅ Complete | —        | —      | Shipped                                           |
+| TTS/Live2D                 | ✅ Complete | —        | —      | Shipped                                           |
+| STT fixes                  | ✅ Complete | —        | —      | Shipped                                           |
+| Live2D idle                | ✅ Complete | —        | —      | Shipped                                           |
+| ElevenLabs BYOK            | ✅ Complete | —        | —      | Shipped                                           |
+| Vision                     | ✅ Complete | —        | —      | Shipped                                           |
+| Cron hardening             | ✅ Complete | —        | —      | Shipped                                           |
+| GDPR                       | ✅ Complete | —        | —      | Shipped                                           |
+| Supabase RLS               | ✅ Complete | —        | —      | Shipped                                           |
+| **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                           |
+| **Autonomous systems**     | ❌ 0%       | Medium   | 5–7d   | Phase 1: surface patterns + quiet hours           |
+| **Custom persona**         | ❌ 0%       | Medium   | 2–3w   | Phase 2: structured fields first                  |
+| **Conversation history**   | ✅ Complete | —        | —      | Shipped                                           |
+| **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                           |
+| **Document ingestion**     | ❌ 0%       | Medium   | 3–4w   | Phase 2–3 feature                                 |
+| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                             |
+| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                           |
+| **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                           |
+| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                          |
+| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                            |
+| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                             |
 
 ---
 
