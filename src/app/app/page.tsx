@@ -667,10 +667,24 @@ export default function EmmaPage() {
     ]
   );
 
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+
   const handleVoice = useCallback(async () => {
+    if (voice.listening) {
+      voice.stopListening();
+      return;
+    }
     const transcript = await voice.listen();
-    if (transcript) sendMessage(transcript);
-  }, [voice, sendMessage]);
+    if (transcript) setVoiceTranscript(transcript);
+  }, [voice]);
+
+  const handleSend = useCallback(
+    (text: string) => {
+      setVoiceTranscript("");
+      sendMessage(text);
+    },
+    [sendMessage]
+  );
 
   // ── User switch logging ────────────────────────────────────────────────────
   const prevUserId = useRef(multiUser.activeUser.id);
@@ -819,7 +833,7 @@ export default function EmmaPage() {
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
           <InputBar
-            onSend={sendMessage}
+            onSend={handleSend}
             onVoice={handleVoice}
             voiceSupported={voice.supported}
             listening={voice.listening}
@@ -831,6 +845,8 @@ export default function EmmaPage() {
             onTypingStop={handleTypingStop}
             visionActive={vision.active}
             onVisionToggle={handleVisionToggle}
+            transcript={voiceTranscript}
+            voiceError={voice.error}
           />
         </div>
       </div>
@@ -905,7 +921,7 @@ export default function EmmaPage() {
               messages={messages}
               loading={loading}
               historyLoading={historyReady === null}
-              onSend={sendMessage}
+              onSend={handleSend}
               onVoice={handleVoice}
               voiceSupported={voice.supported}
               listening={voice.listening}
@@ -922,6 +938,8 @@ export default function EmmaPage() {
               onCancelApproval={handleCancelApproval}
               visionActive={vision.active}
               onVisionToggle={handleVisionToggle}
+              transcript={voiceTranscript}
+              voiceError={voice.error}
             />
           </div>
 

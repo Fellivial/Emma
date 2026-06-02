@@ -43,6 +43,8 @@ interface ChatPanelProps {
   visionActive?: boolean;
   onVisionToggle?: () => void;
   agentPlan?: AgentTask[];
+  transcript?: string;
+  voiceError?: string | null;
 }
 
 export function ChatPanel({
@@ -67,6 +69,8 @@ export function ChatPanel({
   visionActive,
   onVisionToggle,
   agentPlan,
+  transcript,
+  voiceError,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -124,10 +128,12 @@ export function ChatPanel({
             </div>
           </div>
         )}
-        {loading && (!agentPlan || agentPlan.length === 0) && (() => {
-          const last = messages[messages.length - 1];
-          return !last || last.role === "user" || !last.display;
-        })() && <TypingIndicator />}
+        {loading &&
+          (!agentPlan || agentPlan.length === 0) &&
+          (() => {
+            const last = messages[messages.length - 1];
+            return !last || last.role === "user" || !last.display;
+          })() && <TypingIndicator />}
 
         {/* Usage warning — amber left-border annotation below last bubble */}
         {usageWarning && !usageBlocked && (
@@ -255,6 +261,8 @@ export function ChatPanel({
         onTypingStop={onTypingStop}
         visionActive={visionActive}
         onVisionToggle={onVisionToggle}
+        transcript={transcript}
+        voiceError={voiceError}
       />
     </div>
   );

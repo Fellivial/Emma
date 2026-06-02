@@ -8,15 +8,24 @@ export type VoiceMode = "idle" | "listening" | "thinking" | "speaking";
 
 const SILENCE_TIMEOUT = 5000; // 5s of silence → auto-stop recording
 
+export type VoiceError = "not-allowed" | "no-speech" | "hardware" | "service-not-allowed" | null;
+
 interface UseVoiceReturn {
   mode: VoiceMode;
   listening: boolean;
   speaking: boolean;
   supported: boolean;
+  error: VoiceError;
   listen: () => Promise<string | null>;
+  stopListening: () => void;
   speak: (text: string, clientId?: string, emotion?: string) => void;
   fetchAudioBlob: (text: string, clientId?: string) => Promise<Blob | null>;
-  speakFallback: (text: string, emotion?: string, onTalkStart?: () => void, onTalkEnd?: () => void) => void;
+  speakFallback: (
+    text: string,
+    emotion?: string,
+    onTalkStart?: () => void,
+    onTalkEnd?: () => void
+  ) => void;
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
   setCurrentEmotion: (emotion: string) => void;
@@ -42,21 +51,21 @@ interface UseVoiceReturn {
 // Per-chunk teasing variation is handled in getChunkConfig, not here.
 const VOICE_PARAMS: Record<string, { rate: number; pitch: number; volume: number }> = {
   // Emma's core tones
-  neutral:    { rate: 0.95, pitch: 0.97, volume: 0.9  },
-  warm:       { rate: 0.91, pitch: 0.95, volume: 0.85 },
-  smirk:      { rate: 0.97, pitch: 0.99, volume: 0.95 },
-  flirty:     { rate: 0.92, pitch: 0.98, volume: 0.85 },
-  amused:     { rate: 0.96, pitch: 0.99, volume: 0.9  },
-  concerned:  { rate: 0.9,  pitch: 0.95, volume: 0.8  },
-  sad:        { rate: 0.88, pitch: 0.93, volume: 0.75 },
-  skeptical:  { rate: 0.95, pitch: 0.96, volume: 0.9  },
-  listening:  { rate: 0.92, pitch: 0.96, volume: 0.8  },
-  idle_bored: { rate: 0.97, pitch: 0.98, volume: 0.9  },
+  neutral: { rate: 0.95, pitch: 0.97, volume: 0.9 },
+  warm: { rate: 0.91, pitch: 0.95, volume: 0.85 },
+  smirk: { rate: 0.97, pitch: 0.99, volume: 0.95 },
+  flirty: { rate: 0.92, pitch: 0.98, volume: 0.85 },
+  amused: { rate: 0.96, pitch: 0.99, volume: 0.9 },
+  concerned: { rate: 0.9, pitch: 0.95, volume: 0.8 },
+  sad: { rate: 0.88, pitch: 0.93, volume: 0.75 },
+  skeptical: { rate: 0.95, pitch: 0.96, volume: 0.9 },
+  listening: { rate: 0.92, pitch: 0.96, volume: 0.8 },
+  idle_bored: { rate: 0.97, pitch: 0.98, volume: 0.9 },
 
   // Mapped emotions from detection pipeline
-  happy:   { rate: 0.96, pitch: 0.99, volume: 0.9  },
-  caring:  { rate: 0.91, pitch: 0.95, volume: 0.85 },
-  focused: { rate: 0.95, pitch: 0.96, volume: 0.9  },
+  happy: { rate: 0.96, pitch: 0.99, volume: 0.9 },
+  caring: { rate: 0.91, pitch: 0.95, volume: 0.85 },
+  focused: { rate: 0.95, pitch: 0.96, volume: 0.9 },
   excited: { rate: 0.99, pitch: 1.02, volume: 0.95 },
 };
 
@@ -110,40 +119,40 @@ function getChunkConfig(chunk: string, base: VoiceParams): VoiceParams & { gapMs
 
   if (isFiller(t)) {
     return {
-      rate:   Math.max(0.82, base.rate  * 0.9),
-      pitch:  base.pitch * 0.97,
+      rate: Math.max(0.82, base.rate * 0.9),
+      pitch: base.pitch * 0.97,
       volume: base.volume * 0.8,
-      gapMs:  150, // long breath — she's savoring the moment
+      gapMs: 150, // long breath — she's savoring the moment
     };
   }
 
   // Short teasing question — playful upward lilt, capped so it doesn't go bright
   if (t.endsWith("?") && t.length < 55) {
     return {
-      rate:   Math.min(1.03, base.rate  * 1.04),
-      pitch:  Math.min(1.02, base.pitch * 1.04),
+      rate: Math.min(1.03, base.rate * 1.04),
+      pitch: Math.min(1.02, base.pitch * 1.04),
       volume: base.volume,
-      gapMs:  55,
+      gapMs: 55,
     };
   }
 
   // Endearment term — softer landing, slight slow-down
   if (/\b(baby|sweetheart)\b/i.test(t)) {
     return {
-      rate:   base.rate  * 0.96,
-      pitch:  base.pitch,
+      rate: base.rate * 0.96,
+      pitch: base.pitch,
       volume: base.volume * 0.9,
-      gapMs:  100,
+      gapMs: 100,
     };
   }
 
   // Short punchy statement (< 40 chars) — teasing energy without question
   if (t.length < 40) {
     return {
-      rate:   Math.min(1.02, base.rate * 1.01),
-      pitch:  base.pitch,
+      rate: Math.min(1.02, base.rate * 1.01),
+      pitch: base.pitch,
       volume: base.volume,
-      gapMs:  65,
+      gapMs: 65,
     };
   }
 
@@ -153,9 +162,14 @@ function getChunkConfig(chunk: string, base: VoiceParams): VoiceParams & { gapMs
 export function useVoice(): UseVoiceReturn {
   const [mode, setMode] = useState<VoiceMode>("idle");
   const [supported, setSupported] = useState(false);
+  const [error, setError] = useState<VoiceError>(null);
   useEffect(() => {
     const w = window as Window & { webkitSpeechRecognition?: unknown };
-    setSupported(!!(window.SpeechRecognition || w.webkitSpeechRecognition));
+    const hasSR = !!(window.SpeechRecognition || w.webkitSpeechRecognition);
+    // Firefox exposes SpeechRecognition in types but disables it by default;
+    // treat it as unsupported so the mic button is hidden rather than silently broken.
+    const isFirefox = /firefox/i.test(navigator.userAgent);
+    setSupported(hasSR && !isFirefox);
   }, []);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -194,6 +208,9 @@ export function useVoice(): UseVoiceReturn {
         return;
       }
 
+      // Clear error from any previous attempt
+      setError(null);
+
       // Clear any previous silence timer
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -209,12 +226,17 @@ export function useVoice(): UseVoiceReturn {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
         setMode("idle");
 
-        // Check for specific error types
         const errEvent = e as unknown as { error: string };
         if (errEvent.error === "not-allowed") {
-          console.warn("[EMMA Voice] Microphone permission denied");
+          setError("not-allowed");
         } else if (errEvent.error === "no-speech") {
-          console.warn("[EMMA Voice] No speech detected (silence timeout)");
+          setError("no-speech");
+        } else if (errEvent.error === "service-not-allowed") {
+          // Firefox: recognition API present but disabled — hide the mic button
+          setError("service-not-allowed");
+          setSupported(false);
+        } else {
+          setError("hardware");
         }
 
         resolve(null);
@@ -308,21 +330,19 @@ export function useVoice(): UseVoiceReturn {
     // Aria second as a warm fallback. Both are Windows 11 Azure Neural (Online|Natural).
     // Michelle Online Natural is also available in Chrome on Windows — warmer register.
     const candidates = [
-      "Microsoft Jenny",           // Windows 11 Neural — casual, warm, assistant-optimized
-      "Microsoft Aria",            // Windows 11 Neural — versatile, empathetic fallback
-      "Microsoft Michelle",        // Windows 11 Neural — warm register, third option
-      "Karen",                     // macOS — warm, Australian
-      "Moira",                     // macOS — intimate, Irish
-      "Samantha",                  // macOS — clean American
-      "Google UK English Female",  // Chrome/Android
-      "Microsoft Zira",            // Windows legacy — last resort
+      "Microsoft Jenny", // Windows 11 Neural — casual, warm, assistant-optimized
+      "Microsoft Aria", // Windows 11 Neural — versatile, empathetic fallback
+      "Microsoft Michelle", // Windows 11 Neural — warm register, third option
+      "Karen", // macOS — warm, Australian
+      "Moira", // macOS — intimate, Irish
+      "Samantha", // macOS — clean American
+      "Google UK English Female", // Chrome/Android
+      "Microsoft Zira", // Windows legacy — last resort
     ];
 
     for (const name of candidates) {
       // Prefer the Neural/Online/Natural variant of a given voice name
-      const neural = voices.find(
-        (v) => v.name.startsWith(name) && /Online|Natural/i.test(v.name)
-      );
+      const neural = voices.find((v) => v.name.startsWith(name) && /Online|Natural/i.test(v.name));
       if (neural) return neural;
       const any = voices.find((v) => v.name.startsWith(name));
       if (any) return any;
@@ -369,7 +389,10 @@ export function useVoice(): UseVoiceReturn {
 
         if (isFiller(t)) {
           // Never merge a filler sound into an adjacent sentence
-          if (current) { chunks.push(current); current = ""; }
+          if (current) {
+            chunks.push(current);
+            current = "";
+          }
           chunks.push(t);
         } else if (!current) {
           current = t;
@@ -392,13 +415,16 @@ export function useVoice(): UseVoiceReturn {
           return;
         }
         const chunk = chunks[idx++];
-        if (!chunk) { speakNext(); return; }
+        if (!chunk) {
+          speakNext();
+          return;
+        }
 
         const cfg = getChunkConfig(chunk, base);
 
         const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.rate   = cfg.rate;
-        utterance.pitch  = cfg.pitch;
+        utterance.rate = cfg.rate;
+        utterance.pitch = cfg.pitch;
         utterance.volume = cfg.volume;
         if (voice) utterance.voice = voice;
 
@@ -469,6 +495,17 @@ export function useVoice(): UseVoiceReturn {
     currentEmotionRef.current = emotion;
   }, []);
 
+  const stopListening = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    try {
+      recognitionRef.current?.abort();
+    } catch {}
+    setMode("idle");
+  }, []);
+
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -498,7 +535,9 @@ export function useVoice(): UseVoiceReturn {
     listening,
     speaking,
     supported,
+    error,
     listen,
+    stopListening,
     speak,
     fetchAudioBlob,
     speakFallback,
