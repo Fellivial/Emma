@@ -699,8 +699,8 @@ create policy "Users read own documents"
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- anon: only tables reachable without authentication (waitlist signup)
-grant select, insert on public.waitlist to anon;
-grant select, insert on public.waitlist_v2 to anon;
+grant insert on public.waitlist to anon;
+grant insert on public.waitlist_v2 to anon;
 
 -- authenticated: all tables a signed-in user accesses via the browser client
 grant select, insert, update, delete on public.profiles to authenticated;
@@ -711,7 +711,7 @@ grant select on public.usage to authenticated;
 grant select on public.usage_windows to authenticated;
 grant select on public.extra_packs to authenticated;
 grant select on public.tasks to authenticated;
-grant select on public.clients to authenticated;
+grant select, insert, update on public.clients to authenticated;
 grant select on public.client_members to authenticated;
 grant select, insert, update, delete on public.client_integrations to authenticated;
 grant select on public.provenance_chains to authenticated;
