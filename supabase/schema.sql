@@ -64,6 +64,8 @@ alter table public.clients add column if not exists vertical_id text default nul
 alter table public.clients add column if not exists autonomy_tier integer not null default 2;
 alter table public.clients add column if not exists proactive_vision boolean not null default false;
 alter table public.clients add column if not exists custom_routines jsonb default '[]'::jsonb;
+-- LemonSqueezy subscription metadata (lemonSqueezyId, orderId, renewsAt, endsAt, cardBrand, cardLastFour)
+alter table public.clients add column if not exists lemon_meta jsonb default null;
 
 create table if not exists public.client_members (
   client_id uuid references public.clients on delete cascade,

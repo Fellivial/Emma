@@ -149,15 +149,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `ElevenLabs API ${res.status}` }, { status: 502 });
     }
 
+    // Read concurrency headers for throttle awareness (ElevenLabs BYOK plan limits)
+    const currentConcurrent = res.headers.get("current-concurrent-requests");
+    const maxConcurrent = res.headers.get("maximum-concurrent-requests");
+    if (currentConcurrent && maxConcurrent) {
+      const cur = Number(currentConcurrent);
+      const max = Number(maxConcurrent);
+      if (!isNaN(cur) && !isNaN(max) && max > 0 && cur / max >= 0.8) {
+        console.warn(
+          `[EMMA TTS] ElevenLabs concurrency at ${cur}/${max} — approaching limit for user ${sessionUser.id}`
+        );
+      }
+    }
+
     const audioBuffer = await res.arrayBuffer();
 
-    return new NextResponse(audioBuffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Length": audioBuffer.byteLength.toString(),
-      },
-    });
+    const responseHeaders: Record<string, string> = {
+      "Content-Type": "audio/mpeg",
+      "Content-Length": audioBuffer.byteLength.toString(),
+    };
+    if (currentConcurrent) responseHeaders["x-el-concurrent"] = currentConcurrent;
+    if (maxConcurrent) responseHeaders["x-el-concurrent-max"] = maxConcurrent;
+
+    return new NextResponse(audioBuffer, { status: 200, headers: responseHeaders });
   } catch (err) {
     console.error("[EMMA TTS] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
