@@ -1,7 +1,10 @@
 import * as crypto from "crypto";
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { WhatsAppAdapter } from "@/core/integrations/whatsapp";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { UTILITY_MODELS } from "@/core/models";
+import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
 
 const adapter = new WhatsAppAdapter();
 
@@ -60,23 +63,121 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (message) {
+    if (message && message.text) {
+      const receivedAt = message.timestamp;
+      const windowExpiresAt = new Date(
+        new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
+      ).toISOString();
+
       if (supabase) {
         await supabase.from("ingested_whatsapp").upsert(
           {
             from_number: message.from,
             message_id: message.messageId,
             body: message.text,
-            received_at: message.timestamp,
+            received_at: receivedAt,
+            direction: "inbound",
+            window_expires_at: windowExpiresAt,
             ...(clientId ? { client_id: clientId } : {}),
           },
           { onConflict: "message_id" }
         );
+
+        // Fire reply loop after returning 200 — Meta expects fast acknowledgement
+        after(async () => {
+          try {
+            await replyToWhatsApp(message.from, message.text, clientId, supabase, windowExpiresAt);
+          } catch (err) {
+            console.error("[WhatsApp reply] Unhandled error:", err);
+          }
+        });
       }
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch {
     return NextResponse.json({ success: true }, { status: 200 });
+  }
+}
+
+const WA_SYSTEM_PROMPT =
+  "You are Emma, a concise AI assistant replying via WhatsApp. " +
+  "Keep responses brief (1-3 short paragraphs). Plain text only — no markdown headers or bold.";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function replyToWhatsApp(
+  fromNumber: string,
+  inboundText: string,
+  clientId: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  windowExpiresAt: string
+): Promise<void> {
+  // Load last 15 messages for this number (oldest first after reverse)
+  const { data: history } = await supabase
+    .from("ingested_whatsapp")
+    .select("direction, body, received_at")
+    .eq("from_number", fromNumber)
+    .order("received_at", { ascending: false })
+    .limit(15);
+
+  const messages: Array<{ role: string; content: string }> = (
+    (history as Array<{ direction: string; body: string }>) || []
+  )
+    .reverse()
+    .map((row) => ({
+      role: row.direction === "outbound" ? "assistant" : "user",
+      content: row.body || "",
+    }))
+    .filter((m) => m.content);
+
+  // Guarantee the current inbound is the last user turn
+  if (!messages.length || messages[messages.length - 1].content !== inboundText) {
+    messages.push({ role: "user", content: inboundText });
+  }
+
+  let replyText = "";
+  try {
+    const llmRes = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: openRouterHeaders(),
+      body: JSON.stringify({
+        models: UTILITY_MODELS,
+        max_tokens: 400,
+        messages: [{ role: "system", content: WA_SYSTEM_PROMPT }, ...messages],
+      }),
+    });
+    if (llmRes.ok) {
+      replyText = extractText(await llmRes.json()).trim();
+    } else {
+      console.error("[WhatsApp reply] LLM error:", llmRes.status);
+    }
+  } catch (err) {
+    console.error("[WhatsApp reply] LLM fetch error:", err);
+  }
+
+  if (!replyText) return;
+
+  const sendResult = await adapter.sendText(fromNumber, replyText);
+  if (!sendResult.success) {
+    console.error("[WhatsApp reply] Send failed:", sendResult.output);
+    return;
+  }
+
+  const outboundWamid = (sendResult.data as { messageId?: string })?.messageId ?? null;
+  if (outboundWamid) {
+    await supabase.from("ingested_whatsapp").upsert(
+      {
+        from_number: fromNumber,
+        message_id: outboundWamid,
+        body: replyText,
+        received_at: new Date().toISOString(),
+        direction: "outbound",
+        outbound_wamid: outboundWamid,
+        window_expires_at: windowExpiresAt,
+        ...(clientId ? { client_id: clientId } : {}),
+      },
+      { onConflict: "message_id" }
+    );
   }
 }
