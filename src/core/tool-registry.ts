@@ -1878,6 +1878,9 @@ registerTool({
     }
 
     const query = input.query as string;
+    if (!query.trim()) {
+      return { success: false, output: "Query must not be empty." };
+    }
     const maxResults = (input.max_results as number | null) ?? 5;
 
     try {
@@ -1942,9 +1945,13 @@ registerTool({
 
     try {
       const jinaUrl = `https://r.jina.ai/${url}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15_000);
       const res = await fetch(jinaUrl, {
         headers: { Accept: "text/plain" },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         return { success: false, output: `Fetch error ${res.status} for ${url}` };
