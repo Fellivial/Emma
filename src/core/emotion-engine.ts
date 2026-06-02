@@ -13,14 +13,90 @@ interface UseEmotionReturn {
   history: EmotionState[];
 }
 
+// ─── MediaPipe FaceLandmarker singleton ──────────────────────────────────────
+// Module-level singleton — loaded once, reused across calls
+let _faceLandmarker: import("@mediapipe/tasks-vision").FaceLandmarker | null = null;
+let _faceLandmarkerLoading: Promise<
+  import("@mediapipe/tasks-vision").FaceLandmarker | null
+> | null = null;
+
+async function getFaceLandmarker() {
+  if (_faceLandmarker) return _faceLandmarker;
+  if (_faceLandmarkerLoading) return _faceLandmarkerLoading;
+
+  _faceLandmarkerLoading = (async () => {
+    try {
+      const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      );
+      _faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "GPU",
+        },
+        outputFaceBlendshapes: true,
+        runningMode: "IMAGE",
+        numFaces: 1,
+      });
+      return _faceLandmarker;
+    } catch {
+      return null;
+    }
+  })();
+
+  return _faceLandmarkerLoading;
+}
+
+type BlendshapeScore = { categoryName: string; score: number };
+
+function blendshapesToEmotion(scores: BlendshapeScore[]): EmotionLabel {
+  const g = (name: string) => scores.find((s) => s.categoryName === name)?.score ?? 0;
+  const avg = (...names: string[]) => names.reduce((sum, n) => sum + g(n), 0) / names.length;
+
+  const smile = avg("mouthSmileLeft", "mouthSmileRight");
+  const frown = avg("mouthFrownLeft", "mouthFrownRight");
+  const browDn = avg("browDownLeft", "browDownRight");
+  const browUp = g("browInnerUp");
+  const eyeWide = avg("eyeWideLeft", "eyeWideRight");
+  const eyeBlink = avg("eyeBlinkLeft", "eyeBlinkRight");
+
+  if (smile > 0.4 && browDn < 0.2) return "happy";
+  if (browDn > 0.4 && frown > 0.3) return "angry";
+  if (frown > 0.3 && browUp > 0.3) return "sad";
+  if (eyeWide > 0.5 && browUp > 0.5) return "anxious";
+  if (eyeBlink > 0.7) return "tired";
+  if (g("jawOpen") > 0.3 && eyeWide > 0.3) return "excited";
+  if (browDn > 0.3 && smile < 0.2) return "frustrated";
+  return "neutral";
+}
+
+// Maps emotion label to valence/arousal for fusion with voice and text signals
+function emotionLabelToVA(label: EmotionLabel): { valence: number; arousal: number } {
+  const map: Record<EmotionLabel, { valence: number; arousal: number }> = {
+    happy: { valence: 0.8, arousal: 0.5 },
+    excited: { valence: 0.9, arousal: 0.9 },
+    calm: { valence: 0.3, arousal: 0.1 },
+    neutral: { valence: 0.0, arousal: 0.2 },
+    sad: { valence: -0.7, arousal: 0.2 },
+    angry: { valence: -0.6, arousal: 0.9 },
+    frustrated: { valence: -0.5, arousal: 0.6 },
+    anxious: { valence: -0.4, arousal: 0.7 },
+    stressed: { valence: -0.5, arousal: 0.7 },
+    tired: { valence: -0.2, arousal: 0.1 },
+  };
+  return map[label] ?? { valence: 0, arousal: 0.2 };
+}
+
 /**
  * Emotion detection engine.
  *
  * Voice: Analyzes audio features (energy, pitch variance, speaking rate)
  *        to estimate arousal/valence → maps to emotion labels.
  *
- * Vision: Sends webcam frame to /api/emma/emotion with Claude Vision
- *         for facial expression analysis.
+ * Vision: MediaPipe FaceLandmarker (browser-side WASM, ~50ms, zero API cost).
+ *         Detects face blendshapes → maps to EmotionLabel → valence/arousal.
  *
  * Text: Simple keyword/pattern-based sentiment from user messages.
  *
@@ -68,30 +144,42 @@ export function useEmotion(): UseEmotionReturn {
     return state;
   }, []);
 
-  // ── Vision Expression (Claude Vision) ──────────────────────────────────────
+  // ── Vision Expression (MediaPipe FaceLandmarker, browser-side WASM ~50ms) ──
 
   const analyzeFromVision = useCallback(
     async (frameBase64: string): Promise<EmotionState | null> => {
       setAnalyzing(true);
       try {
-        const res = await fetch("/api/emma/emotion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ frame: frameBase64, source: "vision" }),
+        const landmarker = await getFaceLandmarker();
+        if (!landmarker) return null;
+
+        // Convert base64 JPEG to HTMLImageElement for detection
+        const img = new Image();
+        img.src = `data:image/jpeg;base64,${frameBase64}`;
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("Image load failed"));
         });
 
-        const data = await res.json();
-        if (data.emotion) {
-          const state: EmotionState = {
-            ...data.emotion,
-            source: "vision",
-            timestamp: Date.now(),
-          };
-          visionRef.current = state;
-          pushHistory(state);
-          return state;
-        }
-        return null;
+        const result = landmarker.detect(img);
+        if (!result.faceBlendshapes?.length) return null;
+
+        const scores = result.faceBlendshapes[0].categories;
+        const label = blendshapesToEmotion(scores);
+        const { valence, arousal } = emotionLabelToVA(label);
+
+        const state: EmotionState = {
+          primary: label,
+          confidence: 0.85,
+          valence,
+          arousal,
+          source: "vision",
+          timestamp: Date.now(),
+        };
+
+        visionRef.current = state;
+        pushHistory(state);
+        return state;
       } catch {
         return null;
       } finally {

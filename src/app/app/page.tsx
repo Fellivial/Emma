@@ -423,10 +423,12 @@ export default function EmmaPage() {
 
       let visionContext: string | undefined;
       if (vision.active && vision.lastAnalysis) {
-        visionContext = vision.lastAnalysis.description;
-        if (vision.lastAnalysis.objects.length > 0) {
-          visionContext += ` Objects: ${vision.lastAnalysis.objects.join(", ")}.`;
-        }
+        const a = vision.lastAnalysis;
+        visionContext = a.description;
+        if (a.objects.length > 0) visionContext += ` Objects: ${a.objects.join(", ")}.`;
+        if (a.anomalies.length > 0) visionContext += `\nIssues visible: ${a.anomalies.join(", ")}.`;
+        if (a.activities.length > 0)
+          visionContext += `\nUser activity: ${a.activities.join(", ")}.`;
       }
 
       const userMsg: ChatMessageType = {
