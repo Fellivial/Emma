@@ -25,21 +25,12 @@ const NEUTRAL_DELAY = 3000;
 // Idle variant intervals (ms)
 const BLINK_MIN = 2000;
 const BLINK_MAX = 6000;
-const BREATH_CYCLE = 4000;
 const MICRO_MOVE_MIN = 5000;
 const MICRO_MOVE_MAX = 12000;
 
 // ─── Idle Behavior Definitions ───────────────────────────────────────────────
 
-type IdleBehavior =
-  | "blink"
-  | "slow_blink"
-  | "double_blink"
-  | "breath_deep"
-  | "head_micro"
-  | "look_away"
-  | "weight_shift"
-  | "sigh";
+type IdleBehavior = "head_micro" | "look_away" | "weight_shift" | "sigh";
 
 interface IdleVariant {
   type: IdleBehavior;
@@ -48,10 +39,6 @@ interface IdleVariant {
 }
 
 const IDLE_VARIANTS: IdleVariant[] = [
-  { type: "blink", weight: 30, duration: 200 },
-  { type: "slow_blink", weight: 10, duration: 600 },
-  { type: "double_blink", weight: 8, duration: 400 },
-  { type: "breath_deep", weight: 15, duration: 2000 },
   { type: "head_micro", weight: 15, duration: 1500 },
   { type: "look_away", weight: 10, duration: 2500 },
   { type: "weight_shift", weight: 8, duration: 2000 },
@@ -116,7 +103,6 @@ export function useAvatar(): UseAvatarReturn {
   const neutralTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
   const idleBehaviorRef = useRef<NodeJS.Timeout | null>(null);
-  const breathFrameRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   // ── Idle Behavior Loop ─────────────────────────────────────────────────────
@@ -124,11 +110,29 @@ export function useAvatar(): UseAvatarReturn {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runIdleBehavior = useCallback((model: any) => {
     if (!model) return;
-
-    const variant = pickIdleVariant();
     const core = model?.internalModel?.coreModel;
     if (!core) return;
 
+    // Skip micro-behaviors when a NORMAL or FORCE motion is playing (e.g. talking).
+    // pixi-live2d-display MotionPriority: NONE=0, IDLE=1, NORMAL=2, FORCE=3
+    const mm = model?.internalModel?.motionManager;
+    const isMotionPlaying = mm?.state?.currentPriority > 1;
+    if (isMotionPlaying) {
+      const nextDelay = MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN);
+      // eslint-disable-next-line react-hooks/immutability
+      idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), nextDelay);
+      return;
+    }
+
+    const variant = pickIdleVariant();
+
+    // addParam: additive write — layers ON TOP of motion/breath without fighting them
+    const addParam = (id: string, value: number, weight = 1.0) => {
+      try {
+        core.addParameterValueById(id, value, weight);
+      } catch {}
+    };
+    // setParam: absolute write — used only for reset (snap back to 0)
     const setParam = (id: string, value: number) => {
       try {
         core.setParameterValueById(id, value);
@@ -136,110 +140,52 @@ export function useAvatar(): UseAvatarReturn {
     };
 
     switch (variant.type) {
-      case "blink":
-        setParam("ParamEyeLOpen", 0);
-        setParam("ParamEyeROpen", 0);
-        setTimeout(() => {
-          setParam("ParamEyeLOpen", 1);
-          setParam("ParamEyeROpen", 1);
-        }, 150);
-        break;
-
-      case "slow_blink":
-        setParam("ParamEyeLOpen", 0.2);
-        setParam("ParamEyeROpen", 0.2);
-        setTimeout(() => {
-          setParam("ParamEyeLOpen", 1);
-          setParam("ParamEyeROpen", 1);
-        }, 500);
-        break;
-
-      case "double_blink":
-        setParam("ParamEyeLOpen", 0);
-        setParam("ParamEyeROpen", 0);
-        setTimeout(() => {
-          setParam("ParamEyeLOpen", 1);
-          setParam("ParamEyeROpen", 1);
-          setTimeout(() => {
-            setParam("ParamEyeLOpen", 0);
-            setParam("ParamEyeROpen", 0);
-            setTimeout(() => {
-              setParam("ParamEyeLOpen", 1);
-              setParam("ParamEyeROpen", 1);
-            }, 120);
-          }, 150);
-        }, 120);
-        break;
-
-      case "breath_deep":
-        // Handled by continuous breathing loop
-        setParam("ParamBreath", 1);
-        setTimeout(() => setParam("ParamBreath", 0), 1500);
-        break;
-
-      case "head_micro":
+      case "head_micro": {
         const dx = (Math.random() - 0.5) * 6;
         const dy = (Math.random() - 0.5) * 4;
-        setParam("ParamAngleX", dx);
-        setParam("ParamAngleY", dy);
+        addParam("ParamAngleX", dx, 0.3);
+        addParam("ParamAngleY", dy, 0.3);
         setTimeout(() => {
           setParam("ParamAngleX", 0);
           setParam("ParamAngleY", 0);
         }, 1200);
         break;
+      }
 
-      case "look_away":
+      case "look_away": {
         const dir = Math.random() > 0.5 ? 0.6 : -0.6;
-        setParam("ParamEyeBallX", dir);
-        setParam("ParamAngleX", dir * 5);
+        addParam("ParamEyeBallX", dir, 0.7);
+        addParam("ParamAngleX", dir * 5, 0.5);
         setTimeout(() => {
           setParam("ParamEyeBallX", 0);
           setParam("ParamAngleX", 0);
         }, 2000);
         break;
+      }
 
-      case "weight_shift":
+      case "weight_shift": {
         const bodyX = (Math.random() - 0.5) * 6;
-        setParam("ParamBodyAngleX", bodyX);
+        addParam("ParamBodyAngleX", bodyX, 0.4);
         setTimeout(() => setParam("ParamBodyAngleX", 0), 1500);
         break;
+      }
 
-      case "sigh":
+      case "sigh": {
         // Deep exhale — mouth slightly open, body drops
-        setParam("ParamMouthOpenY", 0.15);
-        setParam("ParamBodyAngleZ", -2);
+        addParam("ParamMouthOpenY", 0.15, 0.6);
+        addParam("ParamBodyAngleZ", -2, 0.4);
         setTimeout(() => {
           setParam("ParamMouthOpenY", 0);
           setParam("ParamBodyAngleZ", 0);
         }, 1500);
         break;
+      }
     }
 
     // Schedule next idle behavior
     const nextDelay = MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN);
     // eslint-disable-next-line react-hooks/immutability
     idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), nextDelay);
-  }, []);
-
-  // ── Continuous Breathing ───────────────────────────────────────────────────
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const startBreathing = useCallback((model: any) => {
-    if (!model) return;
-    const core = model?.internalModel?.coreModel;
-    if (!core) return;
-
-    const startTime = Date.now();
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const phase = ((elapsed % BREATH_CYCLE) / BREATH_CYCLE) * Math.PI * 2;
-      const breath = (Math.sin(phase) + 1) * 0.5; // 0 to 1
-      try {
-        core.setParameterValueById("ParamBreath", breath * 0.6);
-      } catch {}
-      breathFrameRef.current = requestAnimationFrame(animate);
-    };
-    animate();
   }, []);
 
   // ── Idle Timer Reset ───────────────────────────────────────────────────────
@@ -414,7 +360,8 @@ export function useAvatar(): UseAvatarReturn {
         hitListenerRef.current = onPointerDown;
 
         // Start idle behaviors
-        startBreathing(model);
+        // Note: CubismEyeBlink and CubismBreath already run every frame via pixi-live2d-display.
+        // We only start the micro-behavior loop here; breathing/blinking are handled natively.
         const firstIdleDelay = BLINK_MIN + Math.random() * (BLINK_MAX - BLINK_MIN);
         idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), firstIdleDelay);
 
@@ -431,7 +378,7 @@ export function useAvatar(): UseAvatarReturn {
       console.error("[EMMA Avatar] Init failed:", err);
       return false;
     }
-  }, [resetIdleTimer, runIdleBehavior, startBreathing]);
+  }, [resetIdleTimer, runIdleBehavior]);
 
   // ── Set Expression ─────────────────────────────────────────────────────────
 
@@ -678,7 +625,6 @@ export function useAvatar(): UseAvatarReturn {
 
   const destroy = useCallback(() => {
     if (lipSyncFrameRef.current) cancelAnimationFrame(lipSyncFrameRef.current);
-    if (breathFrameRef.current) cancelAnimationFrame(breathFrameRef.current);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (sighTimerRef.current) clearTimeout(sighTimerRef.current);
     if (neutralTimerRef.current) clearTimeout(neutralTimerRef.current);
