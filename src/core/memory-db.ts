@@ -342,7 +342,10 @@ export async function getLatestConversationSummary(userId: string): Promise<{
   };
 }
 
-export async function updateConversationSummary(conversationId: string, summary: string): Promise<void> {
+export async function updateConversationSummary(
+  conversationId: string,
+  summary: string
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
   await supabase
@@ -351,7 +354,10 @@ export async function updateConversationSummary(conversationId: string, summary:
     .eq("id", conversationId);
 }
 
-export async function updateConversationTitle(conversationId: string, title: string): Promise<void> {
+export async function updateConversationTitle(
+  conversationId: string,
+  title: string
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
   await supabase
