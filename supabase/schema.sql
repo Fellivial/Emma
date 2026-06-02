@@ -86,11 +86,18 @@ create table if not exists public.memories (
   value text not null,
   confidence real not null default 0.8,
   source text not null default 'extracted' check (source in ('extracted', 'explicit', 'observed')),
+  status text not null default 'active' check (status in ('active', 'superseded')),
+  superseded_by text references public.memories(id),
   last_accessed timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id, category, key)
 );
+-- Soft-delete migration: add status + superseded_by, replace unique with partial index
+alter table public.memories add column if not exists status text not null default 'active' check (status in ('active', 'superseded'));
+alter table public.memories add column if not exists superseded_by text references public.memories(id);
+alter table public.memories drop constraint if exists memories_user_id_category_key_key;
+create unique index if not exists memories_active_uq on public.memories (user_id, category, key) where status = 'active';
 
 
 -- ─── 4. Conversations + Messages ────────────────────────────────────────────
