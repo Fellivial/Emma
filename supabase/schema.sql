@@ -895,3 +895,11 @@ insert into public.global_config (key, value) values
   ('max_active_users', '10'),
   ('waitlist_enabled', 'true')
 on conflict (key) do nothing;
+
+
+-- ─── WhatsApp reply loop (migration) ────────────────────────────────────────
+-- ingested_whatsapp lives in migrations/20250509000004_input_layer.sql.
+-- These ALTER TABLE statements add the columns needed for the bidirectional loop.
+alter table ingested_whatsapp add column if not exists direction text not null default 'inbound' check (direction in ('inbound', 'outbound'));
+alter table ingested_whatsapp add column if not exists outbound_wamid text;
+alter table ingested_whatsapp add column if not exists window_expires_at timestamptz;
