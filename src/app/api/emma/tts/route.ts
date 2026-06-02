@@ -6,6 +6,22 @@ import { getUser } from "@/lib/supabase/server";
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
+const EXPRESSION_VOICE_SETTINGS: Record<
+  string,
+  { stability: number; similarity_boost: number; style: number; speed: number }
+> = {
+  neutral: { stability: 0.55, similarity_boost: 0.75, style: 0.0, speed: 1.0 },
+  warm: { stability: 0.4, similarity_boost: 0.75, style: 0.2, speed: 0.9 },
+  flirty: { stability: 0.2, similarity_boost: 0.75, style: 0.5, speed: 0.82 },
+  amused: { stability: 0.25, similarity_boost: 0.75, style: 0.3, speed: 0.95 },
+  smirk: { stability: 0.25, similarity_boost: 0.75, style: 0.3, speed: 0.95 },
+  concerned: { stability: 0.45, similarity_boost: 0.75, style: 0.1, speed: 0.88 },
+  sad: { stability: 0.3, similarity_boost: 0.75, style: 0.1, speed: 0.8 },
+  skeptical: { stability: 0.5, similarity_boost: 0.75, style: 0.1, speed: 1.0 },
+  listening: { stability: 0.55, similarity_boost: 0.75, style: 0.0, speed: 0.92 },
+  idle_bored: { stability: 0.3, similarity_boost: 0.75, style: 0.0, speed: 0.78 },
+};
+
 // Short-lived cache so repeated TTS calls don't re-query Supabase on every message.
 interface TtsCacheEntry {
   apiKey: string;
@@ -23,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { text, voiceId } = await req.json();
+    const { text, voiceId, expression } = await req.json();
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -92,6 +108,8 @@ export async function POST(req: NextRequest) {
     // ── Call ElevenLabs ─────────────────────────────────────────────────
     // Priority: request voiceId → stored voice_id → Rachel default
     const voice = voiceId || storedVoiceId || DEFAULT_VOICE_ID;
+    const voiceSettings =
+      EXPRESSION_VOICE_SETTINGS[expression ?? "neutral"] ?? EXPRESSION_VOICE_SETTINGS.neutral;
 
     const res = await fetch(`${ELEVENLABS_API}/text-to-speech/${voice}`, {
       method: "POST",
@@ -102,12 +120,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         text: text.slice(0, 1000),
         model_id: "eleven_turbo_v2_5",
-        voice_settings: {
-          stability: 1.0, // sp100 — very consistent
-          similarity_boost: 0.5, // s50
-          style: 0.75, // sb75 — strong expression
-          use_speaker_boost: true, // b
-        },
+        voice_settings: voiceSettings,
       }),
     });
 

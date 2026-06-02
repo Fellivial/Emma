@@ -19,7 +19,7 @@ interface UseVoiceReturn {
   listen: () => Promise<string | null>;
   stopListening: () => void;
   speak: (text: string, clientId?: string, emotion?: string) => void;
-  fetchAudioBlob: (text: string, clientId?: string) => Promise<Blob | null>;
+  fetchAudioBlob: (text: string, clientId?: string, expression?: string) => Promise<Blob | null>;
   speakFallback: (
     text: string,
     emotion?: string,
@@ -276,13 +276,13 @@ export function useVoice(): UseVoiceReturn {
   // ── Fetch ElevenLabs audio blob (for avatar lip sync) ──────────────────────
 
   const fetchAudioBlob = useCallback(
-    async (text: string, clientId?: string): Promise<Blob | null> => {
+    async (text: string, clientId?: string, expression?: string): Promise<Blob | null> => {
       if (elevenLabsUnavailableRef.current) return null;
       try {
         const res = await fetch("/api/emma/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, clientId }),
+          body: JSON.stringify({ text, clientId, expression }),
         });
         if (res.status === 204 || res.status === 501) {
           elevenLabsUnavailableRef.current = true;

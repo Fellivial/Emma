@@ -517,7 +517,9 @@ export default function EmmaPage() {
             onDone: async (event: StreamDoneEvent) => {
               // Kick off TTS immediately — runs in parallel with all state updates below
               const audioBlobPromise =
-                ttsEnabled && event.text ? voice.fetchAudioBlob(event.text) : Promise.resolve(null);
+                ttsEnabled && event.text
+                  ? voice.fetchAudioBlob(event.text, undefined, event.expression ?? undefined)
+                  : Promise.resolve(null);
 
               // Finalize message with parsed data
               setMessages((prev) =>
