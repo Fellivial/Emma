@@ -49,6 +49,22 @@ export interface ToolResult {
   outputVar?: string;
 }
 
+// ─── SSRF Guard ──────────────────────────────────────────────────────────────
+
+/**
+ * Returns true only for public HTTPS URLs.
+ * Blocks loopback, link-local, private ranges, and non-HTTPS protocols.
+ */
+function isSafeUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    const blocked = ["localhost", "127.", "169.254.", "10.", "192.168.", "0.", "::1", "[::"];
+    return protocol === "https:" && !blocked.some((b) => hostname.startsWith(b));
+  } catch {
+    return false;
+  }
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 const registry = new Map<string, ToolDefinition>();
@@ -115,7 +131,7 @@ export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
       type: "function" as const,
       function: {
         name: t.name,
-        description: `${t.description} [Risk: ${t.riskLevel}]`,
+        description: t.description,
         parameters: t.inputSchema,
       },
     }));
@@ -1079,21 +1095,11 @@ registerTool({
   riskLevel: "dangerous",
   handler: async (input) => {
     const rawUrl = input.url as string;
-    if (!rawUrl.startsWith("https://")) {
-      return { success: false, output: "Webhook URL must use HTTPS." };
-    }
-
-    // Block private/loopback/link-local addresses to prevent SSRF
-    let hostname: string;
-    try {
-      hostname = new URL(rawUrl).hostname;
-    } catch {
-      return { success: false, output: "Invalid webhook URL." };
-    }
-    const privateRange =
-      /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|0\.|::1$|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:|::ffff:)/i;
-    if (privateRange.test(hostname)) {
-      return { success: false, output: "Webhook URL must point to a public host." };
+    if (!rawUrl || !isSafeUrl(rawUrl)) {
+      return {
+        success: false,
+        output: "URL not allowed (must be https:// and not an internal address)",
+      };
     }
 
     // Validate and normalize the JSON payload string

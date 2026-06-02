@@ -48,18 +48,23 @@ export function initContext(taskId: string, metadata: Record<string, unknown> = 
 /**
  * Stores a tool output under `outputVar` and appends to the step log.
  * If the total context exceeds 100 KB, old step log entries are trimmed first.
+ *
+ * @param sanitise Optional transform applied to the output before storing in outputVars.
+ *   Used by agent-loop to sanitise external read tool outputs before they enter the scratchpad.
  */
 export function updateContext(
   ctx: TaskContext,
   step: number,
   toolName: string,
   output: string,
-  outputVar?: string
+  outputVar?: string,
+  sanitise?: (v: string) => string
 ): TaskContext {
   const next = { ...ctx };
 
   if (outputVar) {
-    next.outputVars = { ...ctx.outputVars, [outputVar]: output };
+    const safeValue = sanitise ? sanitise(output) : output;
+    next.outputVars = { ...ctx.outputVars, [outputVar]: safeValue };
   }
 
   const entry: StepLogEntry = {
