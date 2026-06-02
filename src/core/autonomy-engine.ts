@@ -103,6 +103,59 @@ export function buildSystemNotification(
 }
 
 /**
+ * Check if the current wall-clock time falls within the user's quiet hours.
+ * quietStart / quietEnd are "HH:MM" strings (24-hour). tz is an IANA timezone.
+ * Returns false if either bound is unset (quiet hours disabled).
+ */
+export function isQuietHours(
+  quietStart?: string | null,
+  quietEnd?: string | null,
+  tz?: string | null
+): boolean {
+  if (!quietStart || !quietEnd) return false;
+  try {
+    const localTime = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz || "UTC",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+    const [h, m] = localTime.split(":").map(Number);
+    const current = h * 60 + m;
+    const [sh, sm] = quietStart.split(":").map(Number);
+    const [eh, em] = quietEnd.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    return startMin <= endMin
+      ? current >= startMin && current < endMin
+      : current >= startMin || current < endMin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build a Tier 2 pattern suggestion notification (uses patternId as routineId
+ * so the approve/dismiss action handlers can identify it).
+ */
+export function buildPatternNotification(patternId: string, suggestion: string): EmmaNotification {
+  return {
+    id: uid(),
+    timestamp: Date.now(),
+    type: "suggestion",
+    tier: 2,
+    title: "💡 I noticed something",
+    message: suggestion,
+    dismissed: false,
+    actions: [
+      { label: "Set it up", action: "approve" },
+      { label: "Dismiss", action: "dismiss" },
+    ],
+    routineId: patternId,
+  };
+}
+
+/**
  * Build an anomaly notification from vision.
  */
 export function buildAnomalyNotification(anomaly: string): EmmaNotification {

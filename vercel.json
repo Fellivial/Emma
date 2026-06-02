@@ -44,6 +44,12 @@
     },
     "src/app/api/emma/cron/memory-prune/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/emma/cron/reflection/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/emma/cron/heartbeat/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -70,6 +76,14 @@
     {
       "path": "/api/emma/cron/memory-prune",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/emma/cron/reflection",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/emma/cron/heartbeat",
+      "schedule": "*/30 * * * *"
     }
   ],
   "headers": [

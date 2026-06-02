@@ -902,4 +902,37 @@ on conflict (key) do nothing;
 -- These ALTER TABLE statements add the columns needed for the bidirectional loop.
 alter table ingested_whatsapp add column if not exists direction text not null default 'inbound' check (direction in ('inbound', 'outbound'));
 alter table ingested_whatsapp add column if not exists outbound_wamid text;
+
+-- ─── Autonomous & Proactive Systems (migration) ──────────────────────────────
+
+-- pattern_detections: add columns matching what persistPatterns() actually writes
+alter table public.pattern_detections add column if not exists suggestion text;
+alter table public.pattern_detections add column if not exists frequency integer not null default 1;
+alter table public.pattern_detections add column if not exists example_goals jsonb;
+alter table public.pattern_detections add column if not exists detected_at timestamptz;
+alter table public.pattern_detections add column if not exists shown_at timestamptz;
+
+-- Extend constraints to cover values the code actually uses
+alter table public.pattern_detections drop constraint if exists pattern_detections_pattern_type_check;
+alter table public.pattern_detections add constraint pattern_detections_pattern_type_check
+  check (pattern_type in ('daily','weekly','tool_sequence','daily_workflow','weekly_workflow','trigger_time','memory_reflection'));
+alter table public.pattern_detections drop constraint if exists pattern_detections_status_check;
+alter table public.pattern_detections add constraint pattern_detections_status_check
+  check (status in ('pending','detected','suggested','accepted','dismissed','scheduled','orphaned'));
+
+-- Quiet hours timezone on profiles (quiet_hours_start / end already exist)
+alter table public.profiles add column if not exists quiet_hours_tz text default 'UTC';
+
+-- Proactive daily cap: max 3 non-urgent surfaced suggestions per user per day
+create table if not exists public.proactive_daily (
+  user_id uuid references auth.users not null,
+  day date not null default current_date,
+  count integer not null default 0,
+  primary key (user_id, day)
+);
+alter table public.proactive_daily enable row level security;
+drop policy if exists "Users own proactive daily" on public.proactive_daily;
+create policy "Users own proactive daily" on public.proactive_daily
+  for all using (auth.uid() = user_id);
+create index if not exists idx_proactive_daily_user_day on public.proactive_daily (user_id, day);
 alter table ingested_whatsapp add column if not exists window_expires_at timestamptz;
