@@ -599,23 +599,25 @@ export default function EmmaPage() {
 
               // Commands parsed but no longer dispatched to physical devices
 
-              // Avatar expression
-              if (event.expression) {
-                avatar.setExpression(event.expression);
-              }
-
               // TTS + lip sync — audioBlob was already in-flight from top of onDone
+              // Expression is fired inside onAudioStart so it syncs with actual playback,
+              // not with response parse (~800ms–2s before audio begins).
               if (ttsEnabled && event.text) {
                 const audioBlob = await audioBlobPromise;
                 if (audioBlob) {
-                  avatar.startTalkingWithAudio(audioBlob);
+                  avatar.startTalkingWithAudio(audioBlob, () => {
+                    if (event.expression) avatar.setExpression(event.expression);
+                  });
                 } else {
                   // WebSpeech: drive avatar from actual utterance start/end events
                   // so mouth only moves when speech is actually playing.
                   voice.speakFallback(
                     event.text,
                     event.expression ?? undefined,
-                    () => avatar.startTalkingContinuous(),
+                    () =>
+                      avatar.startTalkingContinuous(() => {
+                        if (event.expression) avatar.setExpression(event.expression);
+                      }),
                     () => avatar.stopTalking()
                   );
                 }

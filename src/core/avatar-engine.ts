@@ -76,8 +76,8 @@ interface UseAvatarReturn {
   init: () => Promise<boolean>;
   setExpression: (expr: AvatarExpression) => void;
   startTalking: (text: string) => void;
-  startTalkingContinuous: () => void;
-  startTalkingWithAudio: (audioBlob: Blob) => void;
+  startTalkingContinuous: (onAudioStart?: () => void) => void;
+  startTalkingWithAudio: (audioBlob: Blob, onAudioStart?: () => void) => void;
   stopTalking: () => void;
   setListening: () => void;
   setLayout: (layout: AvatarLayout) => void;
@@ -467,7 +467,7 @@ export function useAvatar(): UseAvatarReturn {
   // ── Audio-Driven Lip Sync ──────────────────────────────────────────────────
 
   const startTalkingWithAudio = useCallback(
-    (audioBlob: Blob) => {
+    (audioBlob: Blob, onAudioStart?: () => void) => {
       resetIdleTimer();
       setState((s) => ({ ...s, talking: true }));
 
@@ -487,30 +487,36 @@ export function useAvatar(): UseAvatarReturn {
       const ctx = audioCtxRef.current;
       const source = ctx.createMediaElementSource(audio);
       const analyzer = ctx.createAnalyser();
-      analyzer.fftSize = 256;
+      analyzer.fftSize = 512;
       analyzer.smoothingTimeConstant = 0.5;
       source.connect(analyzer);
       analyzer.connect(ctx.destination);
 
       const dataArray = new Uint8Array(analyzer.frequencyBinCount);
 
+      // Lerp smoothing state — declared in closure so it persists across frames
+      let prevMouth = 0;
+
       const animate = () => {
         analyzer.getByteFrequencyData(dataArray);
 
-        // Average amplitude in speech range (85-300Hz → bins ~1-8 at 256 FFT / 44.1kHz)
+        // Average amplitude in speech range (85-300Hz → bins ~1-8 at 512 FFT / 44.1kHz)
         let sum = 0;
         const speechBins = Math.min(16, dataArray.length);
         for (let i = 0; i < speechBins; i++) {
           sum += dataArray[i];
         }
         const avg = sum / speechBins / 255; // 0-1
-        const mouthOpen = Math.min(1, avg * 2.5); // Amplify for visible movement
+        // Quintic easing for more natural jaw movement
+        const eased = Math.min(1, Math.pow(Math.min(1, avg * 3), 5));
+        // Lerp: 70% old value, 30% new — smooths sudden amplitude spikes
+        prevMouth = prevMouth * 0.7 + eased * 0.3;
 
         if (modelRef.current) {
           const core = modelRef.current?.internalModel?.coreModel;
           if (core) {
             try {
-              core.setParameterValueById("ParamMouthOpenY", mouthOpen);
+              core.addParameterValueById("ParamMouthOpenY", prevMouth, 0.8);
             } catch {}
           }
         }
@@ -520,6 +526,7 @@ export function useAvatar(): UseAvatarReturn {
 
       audio.onplay = async () => {
         if (ctx.state === "suspended") await ctx.resume();
+        onAudioStart?.(); // fire expression callback synced to audio playback
         animate();
       };
 
@@ -555,31 +562,36 @@ export function useAvatar(): UseAvatarReturn {
 
   // ── Continuous Lip Sync (WebSpeech — driven by utterance events, not timer) ──
 
-  const startTalkingContinuous = useCallback(() => {
-    resetIdleTimer();
-    setState((s) => ({ ...s, talking: true }));
+  const startTalkingContinuous = useCallback(
+    (onAudioStart?: () => void) => {
+      resetIdleTimer();
+      setState((s) => ({ ...s, talking: true }));
+      // Web Speech starts playing immediately — fire callback right away
+      onAudioStart?.();
 
-    if (modelRef.current) {
-      try {
-        modelRef.current.motion("Talk", 0, 2);
-      } catch {}
-    }
-
-    const animate = () => {
       if (modelRef.current) {
-        const phase = (Date.now() / 150) * Math.PI;
-        const mouthOpen = Math.abs(Math.sin(phase)) * 0.7;
-        const core = modelRef.current?.internalModel?.coreModel;
-        if (core) {
-          try {
-            core.setParameterValueById("ParamMouthOpenY", mouthOpen);
-          } catch {}
-        }
+        try {
+          modelRef.current.motion("Talk", 0, 2);
+        } catch {}
       }
-      lipSyncFrameRef.current = requestAnimationFrame(animate);
-    };
-    animate();
-  }, [resetIdleTimer]);
+
+      const animate = () => {
+        if (modelRef.current) {
+          const phase = (Date.now() / 150) * Math.PI;
+          const mouthOpen = Math.abs(Math.sin(phase)) * 0.7;
+          const core = modelRef.current?.internalModel?.coreModel;
+          if (core) {
+            try {
+              core.setParameterValueById("ParamMouthOpenY", mouthOpen);
+            } catch {}
+          }
+        }
+        lipSyncFrameRef.current = requestAnimationFrame(animate);
+      };
+      animate();
+    },
+    [resetIdleTimer]
+  );
 
   // ── Text-Based Lip Sync (fallback) ─────────────────────────────────────────
 
