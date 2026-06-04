@@ -62,6 +62,27 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: "documents",
+    label: "Documents",
+    href: "/settings/documents",
+    icon: (active: boolean) => (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <path
+          d="M4 2h6l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M10 2v3h3M6 8h4M6 11h4"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "integrations",
     label: "Integrations",
     href: "/settings/integrations",
@@ -186,6 +207,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/usage": "Usage",
   "/settings/billing": "Billing",
   "/settings/persona": "Persona",
+  "/settings/documents": "Documents",
   "/settings/integrations": "Integrations",
   "/settings/tasks": "Tasks",
   "/settings/workflows": "Workflows",

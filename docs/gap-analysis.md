@@ -282,24 +282,26 @@ Research recommends Inngest vs Trigger.dev vs QStash for durable task execution 
 
 ### 3. Document Ingestion (`document-ingestion-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED  
+**Status:** ✅ Complete  
 **Impact:** Medium
 
-Allows users to upload context documents (contracts, meeting notes, PDFs) and have Emma reference them in conversation. Pro/Enterprise feature.
+**Implemented:**
 
-**What remains:**
+- ✅ `ingested_documents` + `document_chunks` tables in `supabase/schema.sql`; pgvector `extensions.vector(1536)` column; HNSW index (`vector_cosine_ops`); `match_document_chunks` SQL function (cosine similarity, threshold 0.75, top-3)
+- ✅ `src/lib/embeddings.ts` — `embedText()` / `embedBatch()` via OpenRouter `openai/text-embedding-3-small`
+- ✅ `src/core/text-splitter.ts` — inline `recursiveCharacterSplit()` (1000-char chunks, 150 overlap, paragraph→line→word→char separator hierarchy)
+- ✅ `POST /api/emma/ingest/document` — plan gate (Pro/Enterprise), PDF (pdf-parse + OCR fallback), DOCX (mammoth), TXT, images (Tesseract.js); chunking + batch embed + store in both tables; fail-open if embeddings fail
+- ✅ `GET /api/emma/ingest/document` — list user's documents
+- ✅ `DELETE /api/emma/ingest/document?id=` — delete doc + chunks via CASCADE
+- ✅ Brain route — embed user message, `match_document_chunks` RPC (fail-open), inject top-3 chunks as `documentContext` into system prompt
+- ✅ `buildSystemPromptBlocks` — `documentContext` field on `PromptContext`; injected first in dynamic block with source labels
+- ✅ Settings UI — `/settings/documents` with plan gate, upload form, document list with chunk count + delete
+- ✅ Settings nav — "Documents" added to sidebar and breadcrumb map
 
-- ❌ File upload route (`POST /api/emma/ingest/document`)
-- ❌ pdfjs-dist integration (PDF text extraction)
-- ❌ Tesseract.js or OpenRouter vision for OCR (scanned PDFs)
-- ❌ mammoth for DOCX extraction
-- ❌ RecursiveCharacterTextSplitter for chunking (800–1000 chars, 150-char overlap)
-- ❌ OpenAI text-embedding-3-small via OpenRouter for chunk embedding
-- ❌ Supabase pgvector schema (`document_chunks` table, HNSW index)
-- ❌ Query-time semantic search (match_document_chunks RLS function)
-- ❌ Context injection into system prompt (top-3 chunks by similarity >0.75)
+**Deferred:**
 
-**Recommendation:** Phase 2–3 feature (~3–4 weeks).
+- ❌ Scanned PDF rasterisation (requires `sharp`/`canvas` native binaries — deferred to Phase 3)
+- ❌ Background ingestion queue for large files
 
 ---
 
@@ -451,7 +453,7 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 | **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI       |
 | **Conversation history**   | ✅ Complete | —        | —      | Shipped                                           |
 | **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                           |
-| **Document ingestion**     | ❌ 0%       | Medium   | 3–4w   | Phase 2–3 feature                                 |
+| **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI   |
 | **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                             |
 | **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                           |
 | **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                           |

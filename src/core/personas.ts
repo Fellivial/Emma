@@ -132,6 +132,8 @@ interface PromptContext {
   previousContext?: string;
   /** User-configured persona preferences (Pro/Enterprise). XML-sandboxed before insertion. */
   customPersona?: CustomPersona;
+  /** Top-k document chunks retrieved via semantic search for the current query. */
+  documentContext?: string;
 }
 
 export interface SystemBlock {
@@ -272,6 +274,15 @@ ${parts.join("\n")}
 
   // ── Dynamic suffix (per-turn, never cached) ────────────────────────────────
   const dynamicParts: string[] = [];
+
+  if (ctx.documentContext) {
+    dynamicParts.push(`## Document Context
+The following excerpts were retrieved from documents the user has uploaded. Use them as reference material when answering. Attribute information to the source document naturally.
+
+${ctx.documentContext}
+
+If the user's question is not covered by the above excerpts, answer from your general knowledge and note the documents did not contain relevant information.`);
+  }
 
   if (ctx.visionContext) {
     dynamicParts.push(`## Current Screen (from screen share)
