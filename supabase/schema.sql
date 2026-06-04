@@ -936,3 +936,27 @@ create policy "Users own proactive daily" on public.proactive_daily
   for all using (auth.uid() = user_id);
 create index if not exists idx_proactive_daily_user_day on public.proactive_daily (user_id, day);
 alter table ingested_whatsapp add column if not exists window_expires_at timestamptz;
+
+-- ─── Custom Persona Configuration (migration) ────────────────────────────────
+
+create table if not exists public.personas (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles on delete cascade not null unique,
+  name text,
+  base_persona_id text not null default 'neutral',
+  tone_adjectives text[] not null default '{}',
+  communication_style text not null default 'casual',
+  verbosity text not null default 'normal',
+  topics_emphasise text[] not null default '{}',
+  topics_avoid text[] not null default '{}',
+  language text not null default 'en',
+  voice_id text,
+  description text,
+  description_screened_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.personas enable row level security;
+drop policy if exists "Users own persona" on public.personas;
+create policy "Users own persona" on public.personas for all using (auth.uid() = user_id);
+create index if not exists idx_personas_user on public.personas (user_id);
