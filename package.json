@@ -40,7 +40,8 @@
     "react-dom": "^18.3.0",
     "resend": "^6.12.2",
     "tesseract.js": "^7.0.0",
-    "typescript-eslint": "^8.59.2"
+    "typescript-eslint": "^8.59.2",
+    "web-push": "^3.6.7"
   },
   "overrides": {
     "postcss": "^8.5.10"
@@ -53,6 +54,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.39.4",

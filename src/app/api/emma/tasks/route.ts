@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       result.approvals = (data || []).map(mapApproval);
     }
 
-    return NextResponse.json({ ...result, planId });
+    return NextResponse.json({ ...result, planId, clientId });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
