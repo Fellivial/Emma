@@ -17,8 +17,12 @@ import {
 import { loadClientConfigForUser } from "@/core/client-config";
 import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { decrypt } from "@/core/security/encryption";
+import { getPlan } from "@/core/pricing";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import { brainRatelimit } from "@/lib/ratelimit";
+import type { CustomPersona, ToneAdjective, TopicTag } from "@/types/persona";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -160,6 +164,61 @@ export async function POST(req: NextRequest) {
       ? getVertical(clientConfigForPrompt.verticalId)
       : undefined;
 
+    // Load custom persona (Pro/Enterprise only, fail-open)
+    let customPersona: CustomPersona | undefined;
+    if (userId) {
+      try {
+        const planId = clientConfigForPrompt?.planId ?? "free";
+        if (getPlan(planId).features.customPersona) {
+          const supabase = getSupabaseAdmin();
+          if (supabase) {
+            const { data: row } = await supabase
+              .from("personas")
+              .select("*")
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (row) {
+              customPersona = {
+                id: row.id as string,
+                userId: row.user_id as string,
+                name: (row.name as string | null) ?? undefined,
+                basePersonaId: (row.base_persona_id as "mommy" | "neutral") ?? "neutral",
+                toneAdjectives: (row.tone_adjectives as ToneAdjective[]) ?? [],
+                communicationStyle: (row.communication_style as "formal" | "casual") ?? "casual",
+                verbosity: (row.verbosity as "concise" | "normal" | "verbose") ?? "normal",
+                topicsEmphasise: (row.topics_emphasise as TopicTag[]) ?? [],
+                topicsAvoid: (row.topics_avoid as TopicTag[]) ?? [],
+                language: (row.language as string) ?? "en",
+                voiceId: row.voice_id
+                  ? (() => {
+                      try {
+                        return decrypt(row.voice_id as string);
+                      } catch {
+                        return undefined;
+                      }
+                    })()
+                  : undefined,
+                description: row.description
+                  ? (() => {
+                      try {
+                        return decrypt(row.description as string);
+                      } catch {
+                        return undefined;
+                      }
+                    })()
+                  : undefined,
+                descriptionScreenedAt: (row.description_screened_at as string | null) ?? undefined,
+                createdAt: row.created_at as string,
+                updatedAt: row.updated_at as string,
+              };
+            }
+          }
+        }
+      } catch {
+        // fail-open — continue without custom persona
+      }
+    }
+
     const systemPromptText = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
@@ -170,6 +229,7 @@ export async function POST(req: NextRequest) {
       vertical,
       customRoutines: clientConfigForPrompt?.customRoutines ?? [],
       previousContext: conversationSummary,
+      customPersona,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────

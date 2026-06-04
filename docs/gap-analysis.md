@@ -319,20 +319,23 @@ Allows users to upload context documents (contracts, meeting notes, PDFs) and ha
 
 ### 5. Custom Persona Configuration (`custom-persona-config-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED  
-**Impact:** Medium (Pro plan marketed feature, not delivered)
+**Status:** ✅ Complete  
+**Impact:** Medium (Pro plan marketed feature)
 
-**What remains:**
+**Implemented:**
 
-- ❌ `personas` table schema (name, basePersonaId, toneAdjectives, communicationStyle, topicsEmphasise, topicsAvoid, language, voiceId, description)
-- ❌ Settings UI for persona configuration
-- ❌ Input validation (regex blocklist, LLM classifier on free-text, 500-char limit)
-- ❌ Safe injection composition (XML sandboxing, explicit framing label)
-- ❌ Encryption of sensitive fields
-- ❌ Plan gating (Pro/Enterprise only)
-- ❌ Voice customisation tie-in
+- ✅ `personas` table schema — `supabase/schema.sql` (name, base_persona_id, tone_adjectives, communication_style, verbosity, topics_emphasise, topics_avoid, language, voice_id, description, description_screened_at); RLS `auth.uid() = user_id`
+- ✅ `src/types/persona.ts` — `ToneAdjective` / `TopicTag` allowlists, `SUPPORTED_LANGUAGES`, `CustomPersona` interface
+- ✅ `GET /api/emma/persona` — load with decrypt of voice_id + description
+- ✅ `PUT /api/emma/persona` — plan gate (Pro/Enterprise), allowlist filtering, regex injection blocklist (14 patterns), LLM classifier via `UTILITY_MODELS`, AES-256-GCM encryption of voice_id + description
+- ✅ `buildSystemPromptBlocks` extended — `customPersona` field on `PromptContext`; XML-sandboxed `<user_persona_preferences>` block injected last in stable prefix; `escapeXml()` on free-text fields
+- ✅ Brain route (`/api/emma/route.ts`) loads custom persona from DB (fail-open) and passes to `buildSystemPrompt`
+- ✅ Settings UI — `src/app/settings/persona/page.tsx` with plan gate, tone tag picker, segment controls, topic selectors, language dropdown, 500-char description textarea
+- ✅ Settings nav — "Persona" added to sidebar and breadcrumb map
 
-**Recommendation:** Phase 1 (~1–2 weeks): structured fields only (name, tone, topics, language). Phase 2: description field with mitigations. Phase 3: voice cloning.
+**Deferred:**
+
+- ❌ Voice cloning tie-in (Phase 3)
 
 ---
 
@@ -445,7 +448,7 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 | Supabase RLS               | ✅ Complete | —        | —      | Shipped                                           |
 | **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                           |
 | **Autonomous systems**     | ✅ Complete | —        | —      | Shipped                                           |
-| **Custom persona**         | ❌ 0%       | Medium   | 2–3w   | Phase 2: structured fields first                  |
+| **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI       |
 | **Conversation history**   | ✅ Complete | —        | —      | Shipped                                           |
 | **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                           |
 | **Document ingestion**     | ❌ 0%       | Medium   | 3–4w   | Phase 2–3 feature                                 |
