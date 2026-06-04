@@ -960,3 +960,70 @@ alter table public.personas enable row level security;
 drop policy if exists "Users own persona" on public.personas;
 create policy "Users own persona" on public.personas for all using (auth.uid() = user_id);
 create index if not exists idx_personas_user on public.personas (user_id);
+
+-- ─── Document Ingestion — pgvector RAG pipeline (migration) ──────────────────
+
+create extension if not exists vector with schema extensions;
+
+create table if not exists public.ingested_documents (
+  id              uuid default gen_random_uuid() primary key,
+  user_id         uuid references auth.users on delete cascade not null,
+  client_id       uuid references public.clients on delete set null,
+  label           text not null,
+  mime_type       text not null,
+  character_count integer not null default 0,
+  chunk_count     integer not null default 0,
+  extracted_text  text,
+  created_at      timestamptz not null default now()
+);
+alter table public.ingested_documents enable row level security;
+drop policy if exists "Users own documents" on public.ingested_documents;
+create policy "Users own documents" on public.ingested_documents
+  for all using (auth.uid() = user_id);
+create index if not exists idx_ingested_documents_user on public.ingested_documents (user_id);
+
+create table if not exists public.document_chunks (
+  id          uuid default gen_random_uuid() primary key,
+  user_id     uuid references auth.users on delete cascade not null,
+  doc_id      uuid references public.ingested_documents on delete cascade not null,
+  chunk_index integer not null,
+  chunk_text  text not null,
+  embedding   extensions.vector(1536),
+  created_at  timestamptz not null default now()
+);
+alter table public.document_chunks enable row level security;
+drop policy if exists "Users own chunks" on public.document_chunks;
+create policy "Users own chunks" on public.document_chunks
+  for all using (auth.uid() = user_id);
+create index if not exists idx_document_chunks_user on public.document_chunks (user_id);
+create index if not exists idx_document_chunks_doc on public.document_chunks (doc_id);
+create index if not exists idx_document_chunks_embedding on public.document_chunks
+  using hnsw (embedding extensions.vector_cosine_ops);
+
+create or replace function match_document_chunks(
+  query_embedding extensions.vector(1536),
+  match_user_id   uuid,
+  match_threshold float default 0.75,
+  match_count     int default 3
+)
+returns table (
+  id         uuid,
+  doc_id     uuid,
+  doc_label  text,
+  chunk_text text,
+  similarity float
+)
+language sql stable as $$
+  select
+    dc.id,
+    dc.doc_id,
+    d.label as doc_label,
+    dc.chunk_text,
+    1 - (dc.embedding <=> query_embedding) as similarity
+  from public.document_chunks dc
+  join public.ingested_documents d on d.id = dc.doc_id
+  where dc.user_id = match_user_id
+    and 1 - (dc.embedding <=> query_embedding) > match_threshold
+  order by dc.embedding <=> query_embedding asc
+  limit match_count;
+$$;

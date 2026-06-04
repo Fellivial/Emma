@@ -1,17 +1,16 @@
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getUser } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { parseDocument } from "@/core/integrations/docparser";
 import { extractTextFromImage, extractTextFromScannedPdf } from "@/core/integrations/ocr";
+import { recursiveCharacterSplit } from "@/core/text-splitter";
+import { embedBatch } from "@/lib/embeddings";
+import { getPlan } from "@/core/pricing";
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB — Vercel body limit is 4.5 MB
 
 const SUPPORTED_TYPES = [
   "application/pdf",
@@ -20,65 +19,46 @@ const SUPPORTED_TYPES = [
   "image/jpeg",
   "image/webp",
   "image/tiff",
+  "text/plain",
 ];
+
+async function getPlanId(userId: string): Promise<string> {
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return "free";
+    const { data } = await supabase
+      .from("client_members")
+      .select("client_id")
+      .eq("user_id", userId)
+      .single();
+    if (!data?.client_id) return "free";
+    const { data: client } = await supabase
+      .from("clients")
+      .select("plan_id")
+      .eq("id", data.client_id)
+      .single();
+    return (client?.plan_id as string) ?? "free";
+  } catch {
+    return "free";
+  }
+}
+
+// ─── POST — upload, extract, chunk, embed, store ──────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getUser();
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = user.id;
+    if (!user) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const label = (formData.get("label") as string | null) || "";
-
-    if (!file) {
+    const planId = await getPlanId(user.id);
+    if (!getPlan(planId).features.customPersona) {
       return NextResponse.json(
-        { success: false, error: "Missing required field: file" },
-        { status: 400 }
+        { success: false, error: "Document ingestion requires a Pro or Enterprise plan" },
+        { status: 403 }
       );
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { success: false, error: "File exceeds 10 MB limit" },
-        { status: 413 }
-      );
-    }
-
-    const mimeType = file.type;
-    if (!SUPPORTED_TYPES.includes(mimeType)) {
-      return NextResponse.json(
-        { success: false, error: `Unsupported file type: ${mimeType}` },
-        { status: 415 }
-      );
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    let text = "";
-    let ocrRequired = false;
-
-    if (mimeType === "application/pdf") {
-      const parsed = await parseDocument(buffer, mimeType);
-      text = parsed.text;
-      if (text.length < 100) {
-        ocrRequired = true;
-        const ocr = await extractTextFromScannedPdf(buffer);
-        text = ocr.text;
-      }
-    } else if (
-      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ) {
-      const parsed = await parseDocument(buffer, mimeType);
-      text = parsed.text;
-    } else {
-      const { text: ocrText } = await extractTextFromImage(buffer, mimeType);
-      text = ocrText;
-    }
-
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json(
         { success: false, error: "Database not configured" },
@@ -86,41 +66,158 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const label = (formData.get("label") as string | null)?.trim() || "";
+
+    if (!file) {
+      return NextResponse.json({ success: false, error: "Missing field: file" }, { status: 400 });
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, error: "File exceeds 4 MB limit" },
+        { status: 413 }
+      );
+    }
+    if (!SUPPORTED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { success: false, error: `Unsupported file type: ${file.type}` },
+        { status: 415 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const mimeType = file.type;
+    let extractedText = "";
+
+    if (mimeType === "application/pdf") {
+      const parsed = await parseDocument(buffer, mimeType);
+      extractedText = parsed.text;
+      if (extractedText.length < 100) {
+        const ocr = await extractTextFromScannedPdf(buffer);
+        extractedText = ocr.text;
+      }
+    } else if (
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const parsed = await parseDocument(buffer, mimeType);
+      extractedText = parsed.text;
+    } else if (mimeType === "text/plain") {
+      extractedText = buffer.toString("utf-8");
+    } else {
+      const { text } = await extractTextFromImage(buffer, mimeType);
+      extractedText = text;
+    }
+
+    if (!extractedText.trim()) {
+      return NextResponse.json(
+        { success: false, error: "Could not extract text from document" },
+        { status: 422 }
+      );
+    }
+
+    const chunks = recursiveCharacterSplit(extractedText, 1000, 150);
+
+    // Embed all chunks in one batch — fail-open (store without embeddings if API errors)
+    let embeddings: number[][] = [];
+    try {
+      embeddings = await embedBatch(chunks);
+    } catch (e) {
+      console.error("[ingest] embedding error:", (e as Error).message);
+    }
+
+    const { data: doc, error: docErr } = await supabase
       .from("ingested_documents")
       .insert({
-        user_id: userId,
+        user_id: user.id,
         label: label || file.name,
         mime_type: mimeType,
-        character_count: text.length,
-        extracted_text: text,
+        character_count: extractedText.length,
+        chunk_count: chunks.length,
+        extracted_text: extractedText,
       })
       .select("id")
       .single();
 
-    if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (docErr || !doc) {
+      return NextResponse.json(
+        { success: false, error: docErr?.message ?? "Insert failed" },
+        { status: 500 }
+      );
     }
 
-    if (ocrRequired) {
-      return NextResponse.json({
-        success: true,
-        documentId: data.id,
-        characterCount: text.length,
-        ocrRequired: true,
-        message: "Scanned PDF detected — OCR pipeline needed",
-        preview: text.slice(0, 500),
-      });
+    // Insert chunks in batches of 100 to avoid request-size limits
+    const rows = chunks.map((chunk_text, i) => ({
+      user_id: user.id,
+      doc_id: doc.id as string,
+      chunk_index: i,
+      chunk_text,
+      // pgvector expects a literal array string: '[0.1, 0.2, ...]'
+      embedding: embeddings[i] ? `[${embeddings[i].join(",")}]` : null,
+    }));
+
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error: chunkErr } = await supabase
+        .from("document_chunks")
+        .insert(rows.slice(i, i + 100));
+      if (chunkErr) console.error("[ingest] chunk insert error:", chunkErr.message);
     }
 
     return NextResponse.json({
       success: true,
-      documentId: data.id,
-      characterCount: text.length,
-      preview: text.slice(0, 500),
+      documentId: doc.id,
+      characterCount: extractedText.length,
+      chunkCount: chunks.length,
+      embeddingsGenerated: embeddings.length > 0,
+      preview: extractedText.slice(0, 300),
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, error: (err as Error)?.message ?? String(err) },
+      { status: 500 }
+    );
   }
+}
+
+// ─── GET — list user's ingested documents ────────────────────────────────────
+
+export async function GET() {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return NextResponse.json({ documents: [] });
+
+  const { data, error } = await supabase
+    .from("ingested_documents")
+    .select("id, label, mime_type, character_count, chunk_count, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ documents: data ?? [] });
+}
+
+// ─── DELETE — remove document and its chunks (CASCADE) ───────────────────────
+
+export async function DELETE(req: NextRequest) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const docId = new URL(req.url).searchParams.get("id");
+  if (!docId) return NextResponse.json({ error: "Missing ?id=" }, { status: 400 });
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return NextResponse.json({ error: "No DB" }, { status: 500 });
+
+  const { error } = await supabase
+    .from("ingested_documents")
+    .delete()
+    .eq("id", docId)
+    .eq("user_id", user.id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }

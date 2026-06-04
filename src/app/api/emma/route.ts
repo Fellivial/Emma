@@ -23,6 +23,7 @@ import { getPlan } from "@/core/pricing";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import { brainRatelimit } from "@/lib/ratelimit";
 import type { CustomPersona, ToneAdjective, TopicTag } from "@/types/persona";
+import { embedText } from "@/lib/embeddings";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -219,6 +220,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Retrieve document context via semantic search (Pro/Enterprise, fail-open)
+    let documentContext: string | undefined;
+    if (userId) {
+      try {
+        const planId = clientConfigForPrompt?.planId ?? "free";
+        if (getPlan(planId).features.customPersona) {
+          const queryText = getLastMessageText(messages);
+          if (queryText.trim()) {
+            const queryEmbedding = await embedText(queryText);
+            const supabase = getSupabaseAdmin();
+            if (supabase) {
+              type ChunkRow = { doc_label: string; chunk_text: string; similarity: number };
+              const { data: chunks } = await supabase.rpc("match_document_chunks", {
+                query_embedding: `[${queryEmbedding.join(",")}]`,
+                match_user_id: userId,
+                match_threshold: 0.75,
+                match_count: 3,
+              });
+              if (chunks && (chunks as ChunkRow[]).length > 0) {
+                documentContext = (chunks as ChunkRow[])
+                  .map((c, i) => `[Source: ${c.doc_label}, excerpt ${i + 1}]\n${c.chunk_text}`)
+                  .join("\n\n");
+              }
+            }
+          }
+        }
+      } catch {
+        // fail-open — continue without document context
+      }
+    }
+
     const systemPromptText = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
@@ -230,6 +262,7 @@ export async function POST(req: NextRequest) {
       customRoutines: clientConfigForPrompt?.customRoutines ?? [],
       previousContext: conversationSummary,
       customPersona,
+      documentContext,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
