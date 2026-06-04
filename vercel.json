@@ -50,6 +50,9 @@
     },
     "src/app/api/emma/cron/heartbeat/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/emma/cron/connection-health/route.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -84,6 +87,10 @@
     {
       "path": "/api/emma/cron/heartbeat",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/emma/cron/connection-health",
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [

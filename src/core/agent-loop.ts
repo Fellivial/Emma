@@ -196,33 +196,41 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   if (task.clientId && supabase) {
     const { data: mcpServers } = await supabase
       .from("client_integrations")
-      .select("service, mcp_url, access_token")
+      .select("service, mcp_url, access_token, metadata")
       .eq("client_id", task.clientId)
       .eq("status", "connected")
       .like("service", "mcp_%");
     if (mcpServers) {
       await Promise.all(
-        (mcpServers as Array<{ service: string; mcp_url?: string; access_token?: string }>).map(
-          async (server) => {
-            if (!server.mcp_url) return;
-            try {
-              const authToken = server.access_token ? decrypt(server.access_token) : undefined;
-              const serverTools = await listMcpTools(server.mcp_url, authToken);
-              for (const t of serverTools) {
-                const key = `mcp__${server.service}__${t.name}`;
-                mcpToolMap.set(key, {
-                  url: server.mcp_url,
-                  originalName: t.name,
-                  authToken,
-                  description: t.description,
-                  parameters: t.parameters,
-                });
-              }
-            } catch (err) {
-              console.warn(`[Agent] MCP server "${server.service}" unreachable:`, err);
+        (
+          mcpServers as Array<{
+            service: string;
+            mcp_url?: string;
+            access_token?: string;
+            metadata?: { allowedTools?: string[] | null } | null;
+          }>
+        ).map(async (server) => {
+          if (!server.mcp_url) return;
+          try {
+            const authToken = server.access_token ? decrypt(server.access_token) : undefined;
+            const serverTools = await listMcpTools(server.mcp_url, authToken);
+            const allowedTools = server.metadata?.allowedTools ?? null;
+            for (const t of serverTools) {
+              // Respect per-server tool allowlist (null = all tools enabled)
+              if (allowedTools !== null && !allowedTools.includes(t.name)) continue;
+              const key = `mcp__${server.service}__${t.name}`;
+              mcpToolMap.set(key, {
+                url: server.mcp_url,
+                originalName: t.name,
+                authToken,
+                description: t.description,
+                parameters: t.parameters,
+              });
             }
+          } catch (err) {
+            console.warn(`[Agent] MCP server "${server.service}" unreachable:`, err);
           }
-        )
+        })
       );
     }
   }

@@ -21,6 +21,11 @@ const KNOWN_SERVERS = [
   { name: "GitHub", url: "https://mcp.github.com/mcp", icon: "🐙" },
 ];
 
+interface ToolEntry {
+  name: string;
+  description: string;
+}
+
 export default function McpPage() {
   const supabase = useMemo(() => createClient(), []);
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -33,6 +38,14 @@ export default function McpPage() {
   const [connecting, setConnecting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  // Tool allowlist state — keyed by service name
+  const [expandedService, setExpandedService] = useState<string | null>(null);
+  const [toolsCache, setToolsCache] = useState<Record<string, ToolEntry[]>>({});
+  const [allowedToolsMap, setAllowedToolsMap] = useState<Record<string, string[] | null>>({});
+  const [loadingTools, setLoadingTools] = useState<string | null>(null);
+  const [savingTools, setSavingTools] = useState<string | null>(null);
+  const [toolSaveStatus, setToolSaveStatus] = useState<Record<string, string>>({});
 
   const fetchServers = useCallback(async () => {
     if (!supabase) return;
@@ -162,6 +175,61 @@ export default function McpPage() {
     setConnecting(false);
   };
 
+  const handleExpandTools = async (service: string) => {
+    if (expandedService === service) {
+      setExpandedService(null);
+      return;
+    }
+    setExpandedService(service);
+    if (toolsCache[service]) return; // already loaded
+    setLoadingTools(service);
+    try {
+      const res = await fetch(`/api/integrations/mcp/tools?service=${encodeURIComponent(service)}`);
+      if (res.ok) {
+        const d = (await res.json()) as { tools?: ToolEntry[]; allowedTools?: string[] | null };
+        setToolsCache((prev) => ({ ...prev, [service]: d.tools ?? [] }));
+        setAllowedToolsMap((prev) => ({ ...prev, [service]: d.allowedTools ?? null }));
+      }
+    } catch {}
+    setLoadingTools(null);
+  };
+
+  const toggleTool = (service: string, toolName: string) => {
+    const all = toolsCache[service] ?? [];
+    setAllowedToolsMap((prev) => {
+      const current = prev[service] ?? null;
+      if (current === null) {
+        // All allowed → disable this one (create explicit allowlist excluding it)
+        return { ...prev, [service]: all.map((t) => t.name).filter((n) => n !== toolName) };
+      }
+      return {
+        ...prev,
+        [service]: current.includes(toolName)
+          ? current.filter((n) => n !== toolName)
+          : [...current, toolName],
+      };
+    });
+  };
+
+  const handleSaveTools = async (service: string) => {
+    setSavingTools(service);
+    setToolSaveStatus((prev) => ({ ...prev, [service]: "" }));
+    try {
+      const res = await fetch("/api/integrations/mcp/tools", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service, allowedTools: allowedToolsMap[service] ?? null }),
+      });
+      setToolSaveStatus((prev) => ({
+        ...prev,
+        [service]: res.ok ? "Saved." : "Save failed.",
+      }));
+    } catch {
+      setToolSaveStatus((prev) => ({ ...prev, [service]: "Save failed." }));
+    }
+    setSavingTools(null);
+  };
+
   const prefillForm = (name: string, url: string) => {
     setFormName(name);
     setFormUrl(url);
@@ -196,39 +264,117 @@ export default function McpPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {servers.map((s) => (
-              <div key={s.id} className="rounded-xl border border-surface-border bg-surface p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emma-300/10 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] font-mono text-emma-300/60">MCP</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-emma-200/70">
-                          {s.service.replace(/^mcp_/, "").replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
-                          Connected
-                        </span>
+            {servers.map((s) => {
+              const isExpanded = expandedService === s.service;
+              const tools = toolsCache[s.service] ?? [];
+              const allowed = allowedToolsMap[s.service] ?? null;
+              const isToolEnabled = (name: string) => allowed === null || allowed.includes(name);
+              return (
+                <div key={s.id} className="rounded-xl border border-surface-border bg-surface p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emma-300/10 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-mono text-emma-300/60">MCP</span>
                       </div>
-                      <p className="text-[11px] font-light text-emma-200/25 mt-0.5 font-mono">
-                        {s.mcp_url}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-emma-200/70">
+                            {s.service.replace(/^mcp_/, "").replace(/_/g, " ")}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
+                            Connected
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-light text-emma-200/25 mt-0.5 font-mono">
+                          {s.mcp_url}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => handleExpandTools(s.service)}
+                        className="text-[11px] text-emma-300/40 hover:text-emma-300/70 cursor-pointer transition-colors"
+                      >
+                        {isExpanded ? "Hide tools" : "Tools ↓"}
+                      </button>
+                      <span className="text-[10px] text-emma-200/15">{fmtTime(s.created_at)}</span>
+                      <button
+                        onClick={() => handleDisconnect(s.id)}
+                        className="text-[11px] text-red-300/40 hover:text-red-300/70 cursor-pointer transition-colors"
+                      >
+                        Disconnect
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-[10px] text-emma-200/15">{fmtTime(s.created_at)}</span>
-                    <button
-                      onClick={() => handleDisconnect(s.id)}
-                      className="text-[11px] text-red-300/40 hover:text-red-300/70 cursor-pointer transition-colors"
-                    >
-                      Disconnect
-                    </button>
-                  </div>
+
+                  {/* Tool allowlist panel */}
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      {loadingTools === s.service ? (
+                        <p className="text-[11px] text-emma-200/25 py-2">Loading tools…</p>
+                      ) : tools.length === 0 ? (
+                        <p className="text-[11px] text-emma-200/25 py-2">
+                          No tools discovered — check the server URL.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-emma-200/30 mb-2 uppercase tracking-widest">
+                            Enabled tools
+                          </p>
+                          <div className="flex flex-col gap-1.5 mb-3">
+                            {tools.map((tool) => (
+                              <label
+                                key={tool.name}
+                                className="flex items-start gap-2.5 cursor-pointer group"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isToolEnabled(tool.name)}
+                                  onChange={() => toggleTool(s.service, tool.name)}
+                                  className="mt-0.5 accent-emma-300 shrink-0"
+                                />
+                                <div>
+                                  <span className="text-[11px] font-mono text-emma-200/60 group-hover:text-emma-200/80 transition-colors">
+                                    {tool.name}
+                                  </span>
+                                  {tool.description && (
+                                    <p className="text-[10px] text-emma-200/25 leading-snug">
+                                      {tool.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() =>
+                                setAllowedToolsMap((prev) => ({ ...prev, [s.service]: null }))
+                              }
+                              className="text-[10px] text-emma-200/30 hover:text-emma-200/55 transition-colors"
+                            >
+                              Allow all
+                            </button>
+                            <button
+                              onClick={() => handleSaveTools(s.service)}
+                              disabled={savingTools === s.service}
+                              className="px-3 py-1 rounded-lg bg-emma-300/10 border border-emma-300/15 text-[11px] text-emma-300 hover:bg-emma-300/15 transition-all disabled:opacity-40"
+                            >
+                              {savingTools === s.service ? "Saving…" : "Save"}
+                            </button>
+                            {toolSaveStatus[s.service] && (
+                              <span className="text-[10px] text-emma-200/35">
+                                {toolSaveStatus[s.service]}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
