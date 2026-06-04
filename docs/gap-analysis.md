@@ -380,17 +380,17 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ### 8. Realtime Push Notifications (`realtime-push-notifications-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED  
+**Status:** ✅ Complete  
 **Impact:** Low
 
-**What remains:**
-
-- ❌ Service worker registration
-- ❌ Push subscription management (Settings UI)
-- ❌ Backend Web Push endpoint
-- ❌ Notification click handling
-
-**Recommendation:** Phase 3+. Requires PWA infrastructure.
+- ✅ Service worker at `public/sw.js` — push event handler + notification click → opens `/app`
+- ✅ `ServiceWorkerRegistrar` client component wired into `app/layout.tsx`
+- ✅ `push_subscriptions` table with RLS; `GET/POST/DELETE /api/emma/push/subscribe`
+- ✅ `src/lib/push-notify.ts` — `pushToUser()` via web-push VAPID; stale 410 subscriptions auto-deleted
+- ✅ Settings → Notifications page — permission prompt, subscribe/unsubscribe toggle
+- ✅ Agent loop broadcasts on `user-{userId}` channel (instant) + `pushToUser` (tab closed)
+- ✅ `sw.js` served with `no-cache` + `Service-Worker-Allowed: /` headers
+- **Requires env vars:** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` (generate: `npx web-push generate-vapid-keys`)
 
 ---
 
@@ -409,10 +409,13 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ### 10. Realtime Supabase Subscriptions (`supabase-data-api-changes-research.md`)
 
-**Status:** ✅ RLS implemented, ❌ Realtime subscriptions NOT implemented  
+**Status:** ✅ Complete  
 **Impact:** Low-Medium
 
-**Recommendation:** Phase 3+. Current SSE + polling is sufficient.
+- ✅ `tasks` + `approvals` added to `supabase_realtime` publication (schema.sql)
+- ✅ App shell subscribes to `postgres_changes` on both tables; INSERT/UPDATE update local state without polling
+- ✅ Broadcast channel `user-{userId}` wired for instant in-tab delivery of approval requests
+- ✅ 15s poll replaced with 60s resilience fallback + Realtime as primary
 
 ---
 
@@ -452,9 +455,9 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 | **MCP/Connectors**         | ✅ 100%     | —        | done   | Tool allowlist/denylist, connection-expiry cron; Nango+scope-reconsent deferred |
 | **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI                                 |
 | **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                                                           |
-| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                                                         |
+| **Push notifications**     | ✅ 100%     | Low      | —      | SW + VAPID + Settings UI + agent loop wired                                     |
 | **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                                                         |
-| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                                                        |
+| **Realtime subscriptions** | ✅ 100%     | Low      | —      | postgres_changes + broadcast; 15s poll → 60s fallback                           |
 | **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                                                          |
 | **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                                                           |
 

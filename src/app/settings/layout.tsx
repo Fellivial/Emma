@@ -97,6 +97,27 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: "notifications",
+    label: "Notifications",
+    href: "/settings/notifications",
+    icon: (active: boolean) => (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <path
+          d="M8 2a4 4 0 00-4 4v3l-1 1.5h10L12 9V6a4 4 0 00-4-4z"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M6.5 12.5a1.5 1.5 0 003 0"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "tasks",
     label: "Tasks",
     href: "/settings/tasks",
@@ -209,6 +230,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/persona": "Persona",
   "/settings/documents": "Documents",
   "/settings/integrations": "Integrations",
+  "/settings/notifications": "Notifications",
   "/settings/tasks": "Tasks",
   "/settings/workflows": "Workflows",
   "/settings/mcp": "MCP Servers",

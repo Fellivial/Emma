@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Cormorant_Garamond } from "next/font/google";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased">
         <ErrorBoundary>{children}</ErrorBoundary>
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

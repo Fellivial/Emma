@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import type {
@@ -71,6 +72,8 @@ export default function EmmaPage() {
   const [autonomousTasks, setAutonomousTasks] = useState<AutonomousTask[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalDetails[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [realtimeIds, setRealtimeIds] = useState<{ userId: string; clientId: string } | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   // ── Memory (L2) ────────────────────────────────────────────────────────────
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
@@ -331,10 +334,13 @@ export default function EmmaPage() {
     setRoutineVersion((v) => v + 1);
   }, []);
 
-  // ── Tasks + approvals polling (15s, pauses when tab hidden) ─────────────────
+  // ── Tasks + approvals: initial load + 60s fallback poll ─────────────────────
+  const realtimeIdsSet = useRef(false);
   useEffect(() => {
+    if (!supabase) return;
     let cancelled = false;
-    const poll = async () => {
+
+    const fetchAll = async () => {
       if (document.hidden) return;
       try {
         const res = await fetch("/api/emma/tasks?type=all&limit=6");
@@ -342,15 +348,26 @@ export default function EmmaPage() {
           const data = await res.json();
           if (data.tasks) setAutonomousTasks(data.tasks);
           if (data.approvals) setPendingApprovals(data.approvals);
+          // Resolve IDs once for Realtime subscription
+          if (data.clientId && !realtimeIdsSet.current) {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (user && !cancelled) {
+              realtimeIdsSet.current = true;
+              setRealtimeIds({ userId: user.id, clientId: data.clientId });
+            }
+          }
         }
       } catch {
         /* silent */
       }
     };
-    poll();
-    const id = setInterval(poll, 15_000);
+
+    fetchAll();
+    const id = setInterval(fetchAll, 60_000);
     const onVisible = () => {
-      if (!document.hidden) poll();
+      if (!document.hidden) fetchAll();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -358,7 +375,83 @@ export default function EmmaPage() {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [supabase]);
+
+  // ── Realtime: postgres_changes + broadcast for live updates ──────────────────
+  useEffect(() => {
+    if (!supabase || !realtimeIds) return;
+    const { clientId, userId } = realtimeIds;
+
+    const mapRtTask = (r: Record<string, unknown>): AutonomousTask => ({
+      id: r.id as string,
+      goal: r.goal as string,
+      status: r.status as AutonomousTask["status"],
+      triggerType: r.trigger_type as AutonomousTask["triggerType"],
+      stepsTaken: (r.steps_taken as number) ?? 0,
+      totalTokens: (r.token_cost as number) ?? 0,
+      createdAt: r.created_at ? new Date(r.created_at as string).getTime() : 0,
+      completedAt: r.completed_at ? new Date(r.completed_at as string).getTime() : undefined,
+      currentTool: (r.current_tool as string | undefined) ?? undefined,
+    });
+
+    const changesChannel = supabase
+      .channel(`emma-rt-${clientId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "tasks" },
+        (payload: { new: Record<string, unknown> }) => {
+          setAutonomousTasks((prev) => [mapRtTask(payload.new), ...prev].slice(0, 6));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tasks" },
+        (payload: { new: Record<string, unknown> }) => {
+          setAutonomousTasks((prev) =>
+            prev.map((t) => (t.id === (payload.new.id as string) ? mapRtTask(payload.new) : t))
+          );
+        }
+      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "approvals" }, () => {
+        // Refetch approvals on any new insertion — DB is authoritative
+        fetch("/api/emma/tasks?type=approvals&limit=6")
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.approvals) setPendingApprovals(d.approvals);
+          })
+          .catch(() => {});
+      })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "approvals" },
+        (payload: { new: Record<string, unknown> }) => {
+          if ((payload.new.status as string) !== "pending") {
+            setPendingApprovals((prev) =>
+              prev.filter((a) => a.approvalId !== (payload.new.id as string))
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Broadcast channel: agent loop fires this immediately on approval creation
+    const broadcastChannel = supabase
+      .channel(`user-${userId}`)
+      .on("broadcast", { event: "approval_request" }, () => {
+        fetch("/api/emma/tasks?type=approvals&limit=6")
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.approvals) setPendingApprovals(d.approvals);
+          })
+          .catch(() => {});
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(changesChannel);
+      supabase.removeChannel(broadcastChannel);
+    };
+  }, [supabase, realtimeIds]);
 
   const handleApprove = useCallback(async (approvalId: string) => {
     const res = await fetch("/api/emma/agent", {

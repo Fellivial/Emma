@@ -37,6 +37,7 @@ import {
 } from "@/core/task-context";
 import { summarizeTask } from "@/core/task-summarizer";
 import { loadClientConfigForUser } from "@/core/client-config";
+import { pushToUser } from "@/lib/push-notify";
 import type { AutonomyTier } from "@/types/emma";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -764,7 +765,28 @@ async function createApproval(
     .select("id")
     .single();
 
-  return approval?.id || null;
+  const approvalId = approval?.id || null;
+
+  if (approvalId) {
+    // Broadcast to open tab — instant delivery via Realtime WebSocket
+    supabase
+      .channel(`user-${task.userId}`)
+      .send({
+        type: "broadcast",
+        event: "approval_request",
+        payload: { approvalId, taskId: task.id, tool: toolName },
+      })
+      .catch(() => {});
+
+    // Push notification for closed-tab delivery — fire-and-forget
+    pushToUser(task.userId, {
+      title: "EMMA needs your approval",
+      body: `Emma wants to run "${toolName}" — tap to review`,
+      url: "/app",
+    }).catch(() => {});
+  }
+
+  return approvalId;
 }
 
 // ─── Action Logging ──────────────────────────────────────────────────────────
