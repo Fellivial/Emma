@@ -26,7 +26,8 @@ const EXPRESSION_VOICE_SETTINGS: Record<
 // Short-lived cache so repeated TTS calls don't re-query Supabase on every message.
 interface TtsCacheEntry {
   apiKey: string;
-  voiceId: string | null;
+  voiceId: string | null; // from client_integrations.metadata.voiceId (global default)
+  personaVoiceId: string | null; // from personas.voice_id (per-persona override, higher priority)
   clientId: string;
   ts: number;
 }
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
 
     let apiKey: string | null = null;
     let storedVoiceId: string | null = null;
+    let personaVoiceId: string | null = null;
     let resolvedClientId: string | null = null;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest) {
     if (cached && Date.now() - cached.ts < TTS_CACHE_TTL) {
       apiKey = cached.apiKey;
       storedVoiceId = cached.voiceId;
+      personaVoiceId = cached.personaVoiceId;
       resolvedClientId = cached.clientId;
     } else if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey);
@@ -88,9 +91,24 @@ export async function POST(req: NextRequest) {
           if (decrypted && !decrypted.startsWith("[")) {
             apiKey = decrypted;
             storedVoiceId = (data?.metadata?.voiceId as string | null) || null;
+
+            // Load per-persona voice override (higher priority than integration default).
+            const { data: personaRow } = await supabase
+              .from("personas")
+              .select("voice_id")
+              .eq("user_id", sessionUser.id)
+              .maybeSingle();
+            if (personaRow?.voice_id) {
+              try {
+                const dec = decrypt(personaRow.voice_id as string);
+                if (dec && !dec.startsWith("[")) personaVoiceId = dec;
+              } catch {}
+            }
+
             ttsCache.set(sessionUser.id, {
               apiKey: decrypted,
               voiceId: storedVoiceId,
+              personaVoiceId,
               clientId: resolvedClientId!,
               ts: Date.now(),
             });
@@ -107,8 +125,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Call ElevenLabs ─────────────────────────────────────────────────
-    // Priority: request voiceId → stored voice_id → Rachel default
-    const voice = voiceId || storedVoiceId || DEFAULT_VOICE_ID;
+    // Priority: request voiceId → persona voice_id → integration default → Rachel
+    const voice = voiceId || personaVoiceId || storedVoiceId || DEFAULT_VOICE_ID;
     const voiceSettings =
       EXPRESSION_VOICE_SETTINGS[(expression as AvatarExpression) ?? "neutral"] ??
       EXPRESSION_VOICE_SETTINGS.neutral;

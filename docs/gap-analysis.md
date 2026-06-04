@@ -332,12 +332,9 @@ Research recommends Inngest vs Trigger.dev vs QStash for durable task execution 
 - ✅ `PUT /api/emma/persona` — plan gate (Pro/Enterprise), allowlist filtering, regex injection blocklist (14 patterns), LLM classifier via `UTILITY_MODELS`, AES-256-GCM encryption of voice_id + description
 - ✅ `buildSystemPromptBlocks` extended — `customPersona` field on `PromptContext`; XML-sandboxed `<user_persona_preferences>` block injected last in stable prefix; `escapeXml()` on free-text fields
 - ✅ Brain route (`/api/emma/route.ts`) loads custom persona from DB (fail-open) and passes to `buildSystemPrompt`
-- ✅ Settings UI — `src/app/settings/persona/page.tsx` with plan gate, tone tag picker, segment controls, topic selectors, language dropdown, 500-char description textarea
+- ✅ Settings UI — `src/app/settings/persona/page.tsx` with plan gate, tone tag picker, segment controls, topic selectors, language dropdown, voice picker, 500-char description textarea
 - ✅ Settings nav — "Persona" added to sidebar and breadcrumb map
-
-**Deferred:**
-
-- ❌ Voice cloning tie-in (Phase 3)
+- ✅ Voice cloning tie-in — `personas.voice_id` stored encrypted; persona page shows ElevenLabs voice picker (cloned voices listed first) when ElevenLabs is connected; TTS route queries `personas.voice_id` on cache miss and uses it with priority above the global integration default (`personaVoiceId` → `storedVoiceId` → Rachel)
 
 ---
 
@@ -430,36 +427,36 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ## SUMMARY TABLE
 
-| Area                       | Status      | Priority | Effort | Recommendation                                    |
-| -------------------------- | ----------- | -------- | ------ | ------------------------------------------------- |
-| OAuth refresh              | ✅ Complete | —        | —      | Shipped                                           |
-| Rate limiting              | ✅ Complete | —        | —      | Shipped                                           |
-| Memory extraction          | ✅ Complete | Medium   | 2–3d   | Key normalization (1d), soft-delete tracking (2d) |
-| Email deliverability       | ✅ Complete | —        | —      | Shipped                                           |
-| LemonSqueezy billing       | ✅ Complete | —        | —      | Shipped                                           |
-| Agent tools                | ✅ Complete | —        | —      | Shipped                                           |
-| Security audit             | ✅ Complete | —        | —      | Shipped                                           |
-| OpenRouter fallback        | ✅ Complete | —        | —      | Shipped                                           |
-| TTS/Live2D                 | ✅ Complete | —        | —      | Shipped                                           |
-| STT fixes                  | ✅ Complete | —        | —      | Shipped                                           |
-| Live2D idle                | ✅ Complete | —        | —      | Shipped                                           |
-| ElevenLabs BYOK            | ✅ Complete | —        | —      | Shipped                                           |
-| Vision                     | ✅ Complete | —        | —      | Shipped                                           |
-| Cron hardening             | ✅ Complete | —        | —      | Shipped                                           |
-| GDPR                       | ✅ Complete | —        | —      | Shipped                                           |
-| Supabase RLS               | ✅ Complete | —        | —      | Shipped                                           |
-| **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                           |
-| **Autonomous systems**     | ✅ Complete | —        | —      | Shipped                                           |
-| **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI       |
-| **Conversation history**   | ✅ Complete | —        | —      | Shipped                                           |
-| **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                           |
-| **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI   |
-| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                             |
-| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                           |
-| **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                           |
-| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                          |
-| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                            |
-| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                             |
+| Area                       | Status      | Priority | Effort | Recommendation                                                    |
+| -------------------------- | ----------- | -------- | ------ | ----------------------------------------------------------------- |
+| OAuth refresh              | ✅ Complete | —        | —      | Shipped                                                           |
+| Rate limiting              | ✅ Complete | —        | —      | Shipped                                                           |
+| Memory extraction          | ✅ Complete | Medium   | 2–3d   | Key normalization (1d), soft-delete tracking (2d)                 |
+| Email deliverability       | ✅ Complete | —        | —      | Shipped                                                           |
+| LemonSqueezy billing       | ✅ Complete | —        | —      | Shipped                                                           |
+| Agent tools                | ✅ Complete | —        | —      | Shipped                                                           |
+| Security audit             | ✅ Complete | —        | —      | Shipped                                                           |
+| OpenRouter fallback        | ✅ Complete | —        | —      | Shipped                                                           |
+| TTS/Live2D                 | ✅ Complete | —        | —      | Shipped                                                           |
+| STT fixes                  | ✅ Complete | —        | —      | Shipped                                                           |
+| Live2D idle                | ✅ Complete | —        | —      | Shipped                                                           |
+| ElevenLabs BYOK            | ✅ Complete | —        | —      | Shipped                                                           |
+| Vision                     | ✅ Complete | —        | —      | Shipped                                                           |
+| Cron hardening             | ✅ Complete | —        | —      | Shipped                                                           |
+| GDPR                       | ✅ Complete | —        | —      | Shipped                                                           |
+| Supabase RLS               | ✅ Complete | —        | —      | Shipped                                                           |
+| **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                                           |
+| **Autonomous systems**     | ✅ Complete | —        | —      | Shipped                                                           |
+| **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI, voice cloning tie-in |
+| **Conversation history**   | ✅ Complete | —        | —      | Shipped                                                           |
+| **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                                           |
+| **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI                   |
+| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                                             |
+| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                                           |
+| **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                                           |
+| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                                          |
+| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                                            |
+| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                                             |
 
 ---
 
