@@ -340,7 +340,7 @@ Research recommends Inngest vs Trigger.dev vs QStash for durable task execution 
 
 ### 6. Connector Integration / MCP (`connector-integration-research.md`)
 
-**Status:** ✅ Complete (Phase 1 + Phase 2 core)  
+**Status:** ✅ Complete (Phase 1 + Phase 2 + Phase 3 core)  
 **Impact:** Medium-High
 
 Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the agent loop.
@@ -350,15 +350,15 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 - ✅ PKCE on OAuth start/callback — `code_verifier` stored in `oauth_states`, `code_challenge` (S256) sent in all three provider auth URLs, `code_verifier` sent in all three token exchanges; `oauth_states.code_verifier` column added to schema
 - ✅ MCP client support in agent-loop — `src/core/integrations/mcp-client.ts` implements JSON-RPC 2.0 over HTTP (`listMcpTools`, `callMcpTool`); `runAgentLoop` queries `client_integrations` for `mcp_%` services, discovers tools at task start, extends the tools array, and dispatches `mcp__<service>__<tool>` calls to the remote server
 - ✅ `mcp_url` + encrypted `access_token` stored in `client_integrations`; token decrypted at dispatch time
+- ✅ **Tool allowlist/denylist** — `client_integrations.metadata.allowedTools: string[] | null` (null = all tools); agent-loop filters discovered MCP tools against allowlist before registering; `GET /api/integrations/mcp/tools?service=` discovers live tools + current filter; `PATCH /api/integrations/mcp/tools` persists allowedTools; MCP settings page shows per-server tool checkboxes with "Allow all" reset + Save
+- ✅ **Connection-expiry health checks** — `src/app/api/emma/cron/connection-health/route.ts` (hourly); queries `auth_expired` connections + `token_expires_at < now+4h`; inserts `pattern_detections` (type: `connection_expiry`) surfaced as Tier-2 proactive re-auth suggestions at next page mount; dedup: one per user+service per day; registered in `vercel.json`
 
-**Deferred (Phase 3):**
+**Explicitly deferred (not near-term):**
 
-- ❌ Tool allowlist/denylist via `needsApproval` gates
-- ❌ Connection-expiry health checks + proactive re-auth suggestions
-- ❌ Nango platform integration (as universal connector alternative)
-- ❌ OAuth scope re-consent flow
+- ❌ **Nango platform** — full infrastructure migration to replace hand-rolled OAuth/refresh; only worthwhile at 30+ integrations. Emma has 6 today.
+- ❌ **OAuth scope re-consent flow** — expanding to read scopes (`gmail.readonly`, `calendar.readonly`) requires user re-authorization; breaking change that needs a migration strategy.
 
-**Recommendation:** Phase 3: Nango platform for zero-code connector management.
+**Recommendation:** Revisit Nango when integration count exceeds ~15. Revisit scope expansion when proactive features (inbox scan, morning briefing) are prioritized.
 
 ---
 
@@ -427,36 +427,36 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ## SUMMARY TABLE
 
-| Area                       | Status      | Priority | Effort | Recommendation                                                    |
-| -------------------------- | ----------- | -------- | ------ | ----------------------------------------------------------------- |
-| OAuth refresh              | ✅ Complete | —        | —      | Shipped                                                           |
-| Rate limiting              | ✅ Complete | —        | —      | Shipped                                                           |
-| Memory extraction          | ✅ Complete | Medium   | 2–3d   | Key normalization (1d), soft-delete tracking (2d)                 |
-| Email deliverability       | ✅ Complete | —        | —      | Shipped                                                           |
-| LemonSqueezy billing       | ✅ Complete | —        | —      | Shipped                                                           |
-| Agent tools                | ✅ Complete | —        | —      | Shipped                                                           |
-| Security audit             | ✅ Complete | —        | —      | Shipped                                                           |
-| OpenRouter fallback        | ✅ Complete | —        | —      | Shipped                                                           |
-| TTS/Live2D                 | ✅ Complete | —        | —      | Shipped                                                           |
-| STT fixes                  | ✅ Complete | —        | —      | Shipped                                                           |
-| Live2D idle                | ✅ Complete | —        | —      | Shipped                                                           |
-| ElevenLabs BYOK            | ✅ Complete | —        | —      | Shipped                                                           |
-| Vision                     | ✅ Complete | —        | —      | Shipped                                                           |
-| Cron hardening             | ✅ Complete | —        | —      | Shipped                                                           |
-| GDPR                       | ✅ Complete | —        | —      | Shipped                                                           |
-| Supabase RLS               | ✅ Complete | —        | —      | Shipped                                                           |
-| **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                                           |
-| **Autonomous systems**     | ✅ Complete | —        | —      | Shipped                                                           |
-| **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI, voice cloning tie-in |
-| **Conversation history**   | ✅ Complete | —        | —      | Shipped                                                           |
-| **MCP/Connectors**         | ✅ Complete | —        | —      | Shipped                                                           |
-| **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI                   |
-| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                                             |
-| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                                           |
-| **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                                           |
-| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                                          |
-| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                                            |
-| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                                             |
+| Area                       | Status      | Priority | Effort | Recommendation                                                                  |
+| -------------------------- | ----------- | -------- | ------ | ------------------------------------------------------------------------------- |
+| OAuth refresh              | ✅ Complete | —        | —      | Shipped                                                                         |
+| Rate limiting              | ✅ Complete | —        | —      | Shipped                                                                         |
+| Memory extraction          | ✅ Complete | Medium   | 2–3d   | Key normalization (1d), soft-delete tracking (2d)                               |
+| Email deliverability       | ✅ Complete | —        | —      | Shipped                                                                         |
+| LemonSqueezy billing       | ✅ Complete | —        | —      | Shipped                                                                         |
+| Agent tools                | ✅ Complete | —        | —      | Shipped                                                                         |
+| Security audit             | ✅ Complete | —        | —      | Shipped                                                                         |
+| OpenRouter fallback        | ✅ Complete | —        | —      | Shipped                                                                         |
+| TTS/Live2D                 | ✅ Complete | —        | —      | Shipped                                                                         |
+| STT fixes                  | ✅ Complete | —        | —      | Shipped                                                                         |
+| Live2D idle                | ✅ Complete | —        | —      | Shipped                                                                         |
+| ElevenLabs BYOK            | ✅ Complete | —        | —      | Shipped                                                                         |
+| Vision                     | ✅ Complete | —        | —      | Shipped                                                                         |
+| Cron hardening             | ✅ Complete | —        | —      | Shipped                                                                         |
+| GDPR                       | ✅ Complete | —        | —      | Shipped                                                                         |
+| Supabase RLS               | ✅ Complete | —        | —      | Shipped                                                                         |
+| **PKCE on OAuth**          | ✅ Complete | —        | —      | Shipped                                                                         |
+| **Autonomous systems**     | ✅ Complete | —        | —      | Shipped                                                                         |
+| **Custom persona**         | ✅ 100%     | Medium   | done   | DB, API, injection mitigations, Settings UI, voice cloning tie-in               |
+| **Conversation history**   | ✅ Complete | —        | —      | Shipped                                                                         |
+| **MCP/Connectors**         | ✅ 100%     | —        | done   | Tool allowlist/denylist, connection-expiry cron; Nango+scope-reconsent deferred |
+| **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI                                 |
+| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                                                           |
+| **Push notifications**     | ❌ 0%       | Low      | 2–3d   | Phase 3+ (requires PWA)                                                         |
+| **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                                                         |
+| **Realtime subscriptions** | ❌ 0%       | Low      | 2–3d   | Phase 3+                                                                        |
+| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                                                          |
+| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                                                           |
 
 ---
 
