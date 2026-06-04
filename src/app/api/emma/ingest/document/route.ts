@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 90 s: scanned PDFs with up to 5 pages can take ~35 s for mupdf rasterization + Tesseract OCR.
+export const maxDuration = 90;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
