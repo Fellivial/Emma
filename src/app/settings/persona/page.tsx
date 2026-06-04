@@ -133,6 +133,12 @@ function SegmentControl<T extends string>({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+interface VoiceEntry {
+  voiceId: string;
+  name: string;
+  category: "cloned" | "generated" | "premade" | "professional";
+}
+
 type FormState = {
   name: string;
   basePersonaId: "mommy" | "neutral";
@@ -142,6 +148,7 @@ type FormState = {
   topicsEmphasise: TopicTag[];
   topicsAvoid: TopicTag[];
   language: string;
+  voiceId: string;
   description: string;
 };
 
@@ -155,6 +162,7 @@ function defaultForm(): FormState {
     topicsEmphasise: [],
     topicsAvoid: [],
     language: "en",
+    voiceId: "",
     description: "",
   };
 }
@@ -169,6 +177,7 @@ function personaToForm(p: CustomPersona): FormState {
     topicsEmphasise: p.topicsEmphasise,
     topicsAvoid: p.topicsAvoid,
     language: p.language,
+    voiceId: p.voiceId ?? "",
     description: p.description ?? "",
   };
 }
@@ -179,6 +188,9 @@ export default function PersonaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [voices, setVoices] = useState<VoiceEntry[]>([]);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [elConnected, setElConnected] = useState(false);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -196,6 +208,21 @@ export default function PersonaPage() {
         // continue with defaults
       } finally {
         setLoading(false);
+      }
+
+      // Load ElevenLabs voices after form is ready (non-blocking)
+      setVoiceLoading(true);
+      try {
+        const vr = await fetch("/api/integrations/elevenlabs/voices");
+        if (vr.ok) {
+          const vd = (await vr.json()) as { voices?: VoiceEntry[] };
+          setVoices(vd.voices ?? []);
+          setElConnected(true);
+        }
+      } catch {
+        // ElevenLabs not connected — voice picker hidden
+      } finally {
+        setVoiceLoading(false);
       }
     };
     void loadAll();
@@ -220,6 +247,7 @@ export default function PersonaPage() {
           topicsEmphasise: form.topicsEmphasise,
           topicsAvoid: form.topicsAvoid,
           language: form.language,
+          voiceId: form.voiceId || undefined,
           description: form.description || undefined,
         }),
       });
@@ -347,6 +375,61 @@ export default function PersonaPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Voice */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-emma-200/50 uppercase tracking-widest">
+            Voice
+          </label>
+          {voiceLoading ? (
+            <p className="text-[11px] text-emma-200/25">Loading voices…</p>
+          ) : !elConnected ? (
+            <p className="text-[11px] text-emma-200/35">
+              Connect{" "}
+              <a
+                href="/settings/integrations"
+                className="text-emma-300/60 hover:text-emma-300/80 underline underline-offset-2 transition-colors"
+              >
+                ElevenLabs
+              </a>{" "}
+              in Integrations to use a custom cloned voice.
+            </p>
+          ) : (
+            <>
+              <select
+                value={form.voiceId}
+                onChange={(e) => set("voiceId", e.target.value)}
+                className="w-full bg-emma-950/60 border border-surface-border rounded-xl px-4 py-2.5 text-sm text-emma-200/80 focus:outline-none focus:border-emma-300/30 transition-colors"
+              >
+                <option value="">None — use integration default</option>
+                {voices.filter((v) => v.category === "cloned" || v.category === "generated")
+                  .length > 0 && (
+                  <optgroup label="Your voices">
+                    {voices
+                      .filter((v) => v.category === "cloned" || v.category === "generated")
+                      .map((v) => (
+                        <option key={v.voiceId} value={v.voiceId}>
+                          {v.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                <optgroup label="Premade">
+                  {voices
+                    .filter((v) => v.category !== "cloned" && v.category !== "generated")
+                    .map((v) => (
+                      <option key={v.voiceId} value={v.voiceId}>
+                        {v.name}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+              <p className="text-[10px] text-emma-200/25">
+                Overrides the voice set in Integrations → ElevenLabs for this persona.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Description */}
