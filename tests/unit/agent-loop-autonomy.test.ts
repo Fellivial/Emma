@@ -18,16 +18,24 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
 }));
 
+// Chainable+thenable query builder — supports .eq().eq().like() and direct await.
+function makeChainable(
+  data: unknown[] = [],
+  error: unknown = null
+): Promise<{ data: unknown; error: unknown }> & { eq: unknown; like: unknown; single: unknown } {
+  const result = { data, error };
+  const obj = Object.assign(Promise.resolve(result), {
+    eq: () => makeChainable(data, error),
+    like: () => Promise.resolve(result),
+    single: () => Promise.resolve({ data: data?.[0] ?? null, error }),
+  });
+  return obj as ReturnType<typeof makeChainable>;
+}
+
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: () => ({
-    from: (table: string) => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => Promise.resolve({ data: [], error: null }),
-          single: () => Promise.resolve({ data: null, error: null }),
-        }),
-        single: () => Promise.resolve({ data: null, error: null }),
-      }),
+    from: () => ({
+      select: () => makeChainable(),
       insert: () => ({
         select: () => ({
           single: () => Promise.resolve({ data: { id: "mock-approval-id" }, error: null }),
@@ -36,6 +44,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
     }),
+    channel: () => ({ send: () => Promise.resolve() }),
   }),
 }));
 
