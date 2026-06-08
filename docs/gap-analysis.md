@@ -265,18 +265,16 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 ### 2. Background Workers (`background-workers-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED (current state acceptable)  
+**Status:** ✅ Complete  
 **Impact:** Low (for current scale)
 
-Research recommends Inngest vs Trigger.dev vs QStash for durable task execution with retry semantics and step memoization.
+**Implemented:**
 
-**What remains:**
-
-- ❌ Inngest integration (50k executions/month free tier)
-- ❌ Step-level retry semantics (no checkpoint/memoization)
-- ❌ Concurrency locking (two cron instances can overlap and double-process tasks)
-
-**Recommendation:** Defer. Stay on Vercel cron; adopt Inngest when the first reliability issue is hit or user count exceeds ~200.
+- ✅ `src/inngest/client.ts` — `Inngest` instance (`id: "emma-app"`)
+- ✅ `src/inngest/functions.ts` — 9 durable functions (Inngest v4 `triggers` array API) mirroring all Vercel cron schedules; each calls the corresponding cron route via `step.run()` for memoization + retry
+- ✅ `src/app/api/inngest/route.ts` — `serve()` handler exposing GET/POST/PUT for Inngest SDK handshake
+- ✅ Per-function retry counts match cron criticality (2 for tasks/email/patterns/reflection; 1 for heartbeat/health/approvals/cleanup)
+- **To enable:** Set `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY` env vars from inngest.com dashboard. Vercel crons remain active and are safe to run in parallel (cron routes are idempotent).
 
 ---
 
@@ -364,17 +362,17 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ### 7. STT Fallback (`stt-fallback-research.md`)
 
-**Status:** ❌ NOT IMPLEMENTED  
+**Status:** ✅ Complete  
 **Impact:** Low-Medium
 
-**What remains:**
+**Implemented:**
 
-- ❌ Deepgram API integration (free tier: 600 requests/month)
-- ❌ Google Cloud Speech-to-Text integration
-- ❌ Fallback trigger logic (on Web Speech failure or confidence < threshold)
-- ❌ Streaming audio handling
-
-**Recommendation:** Defer. Web Speech API adequate for MVP.
+- ✅ `POST /api/emma/stt` — plan-gated (Starter+) OpenAI Whisper endpoint; Starter → `gpt-4o-mini-transcribe`, Pro/Enterprise → `gpt-4o-transcribe`; returns `{ transcript: string }`
+- ✅ `voice-engine.ts` — `getSupportedMimeType()` detects browser MIME support; `listenViaServer()` captures audio via MediaRecorder with AudioContext silence detection (2s RMS < 15) and POSTs to `/api/emma/stt`
+- ✅ `service-not-allowed` handler persists `emma_voice_sna` to localStorage and switches to server path transparently
+- ✅ 403/501 responses from the server endpoint disable the server path and show the user an appropriate fallback message
+- ✅ `vercel.json` — `maxDuration: 30` added for the STT route
+- **Requires env var:** `OPENAI_API_KEY` (separate from OpenRouter — OpenRouter doesn't expose audio endpoints)
 
 ---
 
@@ -421,10 +419,19 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ### 11. Security Audit Agent (`security-audit-agent.md`)
 
-**Status:** ❌ NOT IMPLEMENTED (manual audit done in P11)  
+**Status:** ✅ Complete (all 8 findings addressed)  
 **Impact:** Low-Medium
 
-**Recommendation:** Defer. Manual review per PR is sufficient for current velocity.
+**Implemented (this branch):**
+
+- ✅ **Finding 1 — Indirect prompt injection (OWASP LLM03/06):** `EXTERNAL_READ_TOOLS` set in `agent-loop.ts`; external tool output wrapped in `[EXTERNAL DATA]...[/EXTERNAL DATA]` message envelope; system prompt (`AGENT_SYSTEM`) includes quarantine instructions; `buildStateSummary()` suppresses external data from history compression
+- ✅ **Finding 2 — Tier-2 gate missing:** `agent-loop.ts` now correctly pauses tier-2 on moderate tools (same `createApproval` + `awaiting_approval` path as dangerous tools — previous code fell through to execution)
+- ✅ **Finding 4 — Risk label bypass:** Removed `[Risk: ...]` suffix from `getToolsForClaude()` in `tool-registry.ts`; labels were enabling injection attacks ("use only tools labeled safe")
+- ✅ **Finding 5 — 8k output cap:** Tool output capped at `MAX_TOOL_OUTPUT = 8_000` chars before storing in context or appending to messages; prevents context flooding and system-prompt eviction
+- ✅ **Finding 6 — Context pollution:** External tool output stored in `outputVars` via `sanitiseInput()` truncation before interpolation into subsequent tool parameters
+- ✅ **Finding 7 — Injection scan + logging:** High-threat injection attempts logged to `action_log` table with `event_type: "injection_attempt"`
+- ✅ **Finding 3 — HITL raw params:** Already done in P11 (ApprovalBubble renders raw params)
+- ✅ **Finding 8 — SSRF:** Already done in P11 (web_fetch blocklist covers RFC-1918 + 169.254 + IPv6 ULA)
 
 ---
 
@@ -454,12 +461,12 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 | **Conversation history**   | ✅ Complete | —        | —      | Shipped                                                                         |
 | **MCP/Connectors**         | ✅ 100%     | —        | done   | Tool allowlist/denylist, connection-expiry cron; Nango+scope-reconsent deferred |
 | **Document ingestion**     | ✅ 100%     | Medium   | done   | pgvector RAG, chunking, embeddings, Settings UI                                 |
-| **STT fallback**           | ❌ 0%       | Low      | 2–3d   | Defer                                                                           |
+| **STT fallback**           | ✅ 100%     | Low      | done   | Whisper via `/api/emma/stt`; MediaRecorder + silence detection in voice-engine  |
 | **Push notifications**     | ✅ 100%     | Low      | —      | SW + VAPID + Settings UI + agent loop wired                                     |
 | **WhatsApp reply loop**    | ✅ Complete | —        | —      | Shipped                                                                         |
 | **Realtime subscriptions** | ✅ 100%     | Low      | —      | postgres_changes + broadcast; 15s poll → 60s fallback                           |
-| **Background workers**     | ❌ 0%       | Low      | 3–5d   | Defer until ~200 users                                                          |
-| **Security audit agent**   | ❌ 0%       | Low      | 3–5d   | Defer                                                                           |
+| **Background workers**     | ✅ 100%     | Low      | done   | Inngest v4: 9 durable functions, step retry, `/api/inngest` serve endpoint      |
+| **Security audit agent**   | ✅ 100%     | Low      | done   | All 8 findings: injection quarantine, tier-2 gate, 8k cap, risk label removal   |
 
 ---
 

@@ -160,23 +160,52 @@ function getChunkConfig(chunk: string, base: VoiceParams): VoiceParams & { gapMs
   return { ...base, gapMs: 80 };
 }
 
+// Pick the best audio MIME type supported by this browser's MediaRecorder.
+function getSupportedMimeType(): string {
+  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+  return (
+    types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) ??
+    ""
+  );
+}
+
 export function useVoice(): UseVoiceReturn {
   const [mode, setMode] = useState<VoiceMode>("idle");
   const [supported, setSupported] = useState(false);
   const [error, setError] = useState<VoiceError>(null);
+
+  // true → listen() should use the MediaRecorder → /api/emma/stt path instead of Web Speech
+  const usesServerSttRef = useRef(false);
+  // false after the server responds 403 (Free plan) or 501 (no key); disables server path for session
+  const serverSttAvailableRef = useRef(true);
+
   useEffect(() => {
     const w = window as Window & { webkitSpeechRecognition?: unknown };
     const hasSR = !!(window.SpeechRecognition || w.webkitSpeechRecognition);
-    // Firefox exposes SpeechRecognition in types but disables it by default;
-    // treat it as unsupported so the mic button is hidden rather than silently broken.
     const isFirefox = /firefox/i.test(navigator.userAgent);
-    setSupported(hasSR && !isFirefox);
+    const webSpeechOk = hasSR && !isFirefox;
+
+    // MediaRecorder-based server STT is available in all modern browsers including Firefox.
+    const hasMR =
+      typeof MediaRecorder !== "undefined" && typeof navigator.mediaDevices !== "undefined";
+
+    // localStorage flag: set when service-not-allowed fires, cleared if user upgrades/re-enables.
+    const snaFlag =
+      typeof localStorage !== "undefined" && localStorage.getItem("emma_voice_sna") === "1";
+
+    const serverSttPathOk = hasMR && serverSttAvailableRef.current;
+
+    setSupported(webSpeechOk || serverSttPathOk);
+    usesServerSttRef.current = (!webSpeechOk || snaFlag) && serverSttPathOk;
   }, []);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // MediaRecorder refs for the server STT path
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   // After a 501 (ElevenLabs not configured), skip all future TTS requests this session.
   const elevenLabsUnavailableRef = useRef(false);
 
@@ -201,9 +230,125 @@ export function useVoice(): UseVoiceReturn {
     }
   }, []);
 
+  // ── Server-side STT via MediaRecorder → /api/emma/stt ────────────────────────
+
+  const listenViaServer = useCallback((): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setError(null);
+      setMode("listening");
+
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          mediaStreamRef.current = stream;
+          const mimeType = getSupportedMimeType();
+          const recorder = mimeType
+            ? new MediaRecorder(stream, { mimeType })
+            : new MediaRecorder(stream);
+          mediaRecorderRef.current = recorder;
+          const chunks: Blob[] = [];
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          // Silence detection: stop after 2s of quiet
+          const audioCtx = new AudioContext();
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          const freqData = new Uint8Array(analyser.frequencyBinCount);
+          let silenceMs = 0;
+          const SILENCE_THRESHOLD = 15;
+          const SILENCE_LIMIT = 2000;
+          const silenceInterval = setInterval(() => {
+            analyser.getByteFrequencyData(freqData);
+            const avg = freqData.reduce((a, b) => a + b, 0) / freqData.length;
+            if (avg < SILENCE_THRESHOLD) {
+              silenceMs += 200;
+              if (silenceMs >= SILENCE_LIMIT) {
+                clearInterval(silenceInterval);
+                recorder.stop();
+              }
+            } else {
+              silenceMs = 0;
+            }
+          }, 200);
+
+          recorder.onstop = async () => {
+            clearInterval(silenceInterval);
+            stream.getTracks().forEach((t) => t.stop());
+            audioCtx.close().catch(() => {});
+            mediaRecorderRef.current = null;
+            mediaStreamRef.current = null;
+            setMode("thinking");
+
+            if (chunks.length === 0) {
+              setMode("idle");
+              resolve(null);
+              return;
+            }
+
+            const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+            const form = new FormData();
+            form.append("audio", blob, `audio.${mimeType.includes("mp4") ? "m4a" : "webm"}`);
+            form.append("mimeType", mimeType || "audio/webm");
+
+            try {
+              const res = await fetch("/api/emma/stt", { method: "POST", body: form });
+              if (res.status === 403 || res.status === 501) {
+                // Free plan or key not configured — disable server STT for this session
+                serverSttAvailableRef.current = false;
+                usesServerSttRef.current = false;
+                setSupported(false);
+                setMode("idle");
+                resolve(null);
+                return;
+              }
+              if (!res.ok) {
+                setMode("idle");
+                resolve(null);
+                return;
+              }
+              const data = (await res.json()) as { transcript?: string };
+              setMode("idle");
+              resolve(data.transcript || null);
+            } catch {
+              setMode("idle");
+              resolve(null);
+            }
+          };
+
+          recorder.onerror = () => {
+            clearInterval(silenceInterval);
+            stream.getTracks().forEach((t) => t.stop());
+            audioCtx.close().catch(() => {});
+            mediaRecorderRef.current = null;
+            mediaStreamRef.current = null;
+            setError("hardware");
+            setMode("idle");
+            resolve(null);
+          };
+
+          recorder.start(200);
+        })
+        .catch(() => {
+          setError("not-allowed");
+          setMode("idle");
+          resolve(null);
+        });
+    });
+  }, []);
+
   // ── STT with silence timeout ───────────────────────────────────────────────
 
   const listen = useCallback((): Promise<string | null> => {
+    // Route to server STT when Web Speech is unavailable (Firefox, service-not-allowed)
+    if (usesServerSttRef.current && serverSttAvailableRef.current) {
+      return listenViaServer();
+    }
+
     return new Promise((resolve) => {
       const r = recognitionRef.current;
       if (!r) {
@@ -235,9 +380,20 @@ export function useVoice(): UseVoiceReturn {
         } else if (errEvent.error === "no-speech") {
           setError("no-speech");
         } else if (errEvent.error === "service-not-allowed") {
-          // Firefox: recognition API present but disabled — hide the mic button
           setError("service-not-allowed");
-          setSupported(false);
+          // Persist so we skip Web Speech init next session
+          try {
+            localStorage.setItem("emma_voice_sna", "1");
+          } catch {}
+          // Switch to MediaRecorder/server path if available; otherwise hide mic button
+          const hasMR =
+            typeof MediaRecorder !== "undefined" && typeof navigator.mediaDevices !== "undefined";
+          if (hasMR && serverSttAvailableRef.current) {
+            usesServerSttRef.current = true;
+            setSupported(true);
+          } else {
+            setSupported(false);
+          }
         } else {
           setError("hardware");
         }
@@ -271,7 +427,7 @@ export function useVoice(): UseVoiceReturn {
         resolve(null);
       }, SILENCE_TIMEOUT);
     });
-  }, []);
+  }, [listenViaServer]);
 
   // ── Fetch ElevenLabs audio blob (for avatar lip sync) ──────────────────────
 
@@ -511,6 +667,14 @@ export function useVoice(): UseVoiceReturn {
     try {
       recognitionRef.current?.abort();
     } catch {}
+    // Stop server STT recording if active
+    try {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    } catch {}
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
     setMode("idle");
   }, []);
 
@@ -535,6 +699,7 @@ export function useVoice(): UseVoiceReturn {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 

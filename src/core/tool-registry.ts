@@ -115,7 +115,7 @@ export function getToolsForClaude(connectedIntegrations?: Set<string>): Array<{
       type: "function" as const,
       function: {
         name: t.name,
-        description: `${t.description} [Risk: ${t.riskLevel}]`,
+        description: t.description,
         parameters: t.inputSchema,
       },
     }));

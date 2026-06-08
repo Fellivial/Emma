@@ -1,0 +1,28 @@
+import { serve } from "inngest/next";
+import { inngest } from "@/inngest/client";
+import {
+  scheduledTasks,
+  heartbeat,
+  connectionHealth,
+  emailSequences,
+  approvalsExpiry,
+  patternDetection,
+  leadsCleanup,
+  memoryPrune,
+  reflection,
+} from "@/inngest/functions";
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions: [
+    scheduledTasks,
+    heartbeat,
+    connectionHealth,
+    emailSequences,
+    approvalsExpiry,
+    patternDetection,
+    leadsCleanup,
+    memoryPrune,
+    reflection,
+  ],
+});

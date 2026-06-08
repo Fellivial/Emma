@@ -17,15 +17,25 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
 }));
 
+// Chainable+thenable query builder for the Supabase mock.
+// Supports .eq().eq().like() chains while remaining directly awaitable.
+function makeChainable(
+  data: unknown[] = [],
+  error: unknown = null
+): Promise<{ data: unknown; error: unknown }> & { eq: unknown; like: unknown; single: unknown } {
+  const result = { data, error };
+  const obj = Object.assign(Promise.resolve(result), {
+    eq: () => makeChainable(data, error),
+    like: () => Promise.resolve(result),
+    single: () => Promise.resolve({ data: data?.[0] ?? null, error }),
+  });
+  return obj as ReturnType<typeof makeChainable>;
+}
+
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: () => ({
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          single: () => Promise.resolve({ data: null, error: null }),
-          eq: () => Promise.resolve({ data: [], error: null }),
-        }),
-      }),
+      select: () => makeChainable(),
       insert: () => ({
         select: () => ({
           single: () => Promise.resolve({ data: { id: "mock-approval-id" }, error: null }),
@@ -34,6 +44,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
     }),
+    channel: () => ({ send: () => Promise.resolve() }),
   }),
 }));
 
@@ -147,9 +158,11 @@ describe("runAgentLoop — approval gate", () => {
   it("executes safe tool immediately and completes when complete_task is called", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
-      )
+      vi
+        .fn()
+        .mockResolvedValue(
+          makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
+        )
     );
 
     const result = await runAgentLoop(BASE_TASK);
