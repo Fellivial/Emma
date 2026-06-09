@@ -13,7 +13,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BRAIN_MODELS } from "@/core/models";
+import { BRAIN_MODELS, UTILITY_MODELS } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { fetchWithRetry } from "@/lib/errors";
@@ -589,7 +589,28 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 contextSnapshot: ctx,
               };
             }
-            // tier 3: fall through to execution below
+            // tier 3: run pre-execution evaluator, then fall through to execution below
+            const evaluation = await evaluateTool(task.goal, toolName, resolvedInput, steps);
+            if (!evaluation.proceed) {
+              messages.push({
+                role: "tool",
+                tool_call_id: toolId,
+                content: `Pre-execution evaluator rejected this action: ${evaluation.reason}. Reconsider and try a different approach.`,
+              });
+              const skippedResult: AgentStepResult = {
+                step,
+                toolName,
+                input: resolvedInput,
+                output: `Evaluator rejected: ${evaluation.reason}`,
+                riskLevel: toolDef.riskLevel,
+                status: "failed",
+                tokenCost: inputTokens + outputTokens,
+                durationMs: Date.now() - stepStart,
+              };
+              steps.push(skippedResult);
+              await logAction(supabase, task.id, skippedResult);
+              continue;
+            }
           }
 
           if (toolDef.riskLevel === "dangerous") {
@@ -933,4 +954,72 @@ async function logAction(
     duration_ms: step.durationMs,
     completed_at: step.status !== "awaiting_approval" ? new Date().toISOString() : null,
   });
+}
+
+// ─── Pre-Execution Evaluator ─────────────────────────────────────────────────
+
+// Lightweight LLM check before auto-executing a moderate tool at autonomy tier 3.
+// Fail-open: any error or timeout returns { proceed: true } so the agent is never
+// blocked by evaluator unavailability.
+async function evaluateTool(
+  goal: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  completedSteps: AgentStepResult[]
+): Promise<{ proceed: boolean; reason: string }> {
+  const stepSummary =
+    completedSteps.length === 0
+      ? "None yet."
+      : completedSteps.map((s) => `- ${s.toolName}: ${s.output.slice(0, 80)}`).join("\n");
+
+  const userContent = `Task goal: ${goal}
+
+Steps completed so far:
+${stepSummary}
+
+Proposed next action:
+Tool: ${toolName}
+Input: ${JSON.stringify(toolInput).slice(0, 400)}
+
+Does this action directly advance the goal? Is the input well-formed?
+Reply with EXACTLY one of:
+PROCEED
+SKIP: <one-line reason why this action should be skipped>`;
+
+  try {
+    const res = await fetchWithRetry(
+      OPENROUTER_URL,
+      {
+        method: "POST",
+        headers: openRouterHeaders(),
+        body: JSON.stringify({
+          models: UTILITY_MODELS,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a pre-execution safety evaluator for an autonomous agent. Be permissive — only reject actions that are clearly wrong or harmful given the goal. Most actions should PROCEED.",
+            },
+            { role: "user", content: userContent },
+          ],
+          max_tokens: 80,
+          temperature: 0,
+        }),
+      },
+      { maxRetries: 0, connectionTimeoutMs: 8_000 }
+    );
+
+    if (!res.ok) return { proceed: true, reason: "evaluator unavailable" };
+
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = (data.choices?.[0]?.message?.content ?? "").trim();
+
+    if (text.toUpperCase().startsWith("SKIP")) {
+      const reason = text.includes(":") ? text.split(":").slice(1).join(":").trim() : text;
+      return { proceed: false, reason: reason || "evaluator rejected" };
+    }
+    return { proceed: true, reason: "evaluator approved" };
+  } catch {
+    return { proceed: true, reason: "evaluator timed out — proceeding" };
+  }
 }
