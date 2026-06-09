@@ -107,7 +107,7 @@ export async function getMemoriesForUser(
     return [];
   }
 
-  return (data || []).map(rowToMemoryEntry);
+  return (data || []).map(rowToMemoryEntry).filter((e): e is MemoryEntry => e !== null);
 }
 
 // â"€â"€â"€ Write â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -122,6 +122,35 @@ export async function addMemoryForUser(
   const normalizedKey = normalizeKey(entry.key);
   const newId = entry.id || `mem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const encryptedValue = encrypt(entry.value);
+
+  // Enforce per-user memory cap — prevents unbounded system-prompt growth.
+  // If at capacity, soft-delete the oldest low-confidence entry to make room.
+  const MAX_ACTIVE_MEMORIES = 200;
+  const { count } = await supabase
+    .from("memories")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if ((count ?? 0) >= MAX_ACTIVE_MEMORIES) {
+    // Evict the oldest entry with the lowest confidence score
+    const { data: oldest } = await supabase
+      .from("memories")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("confidence", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+
+    if (oldest) {
+      await supabase
+        .from("memories")
+        .update({ status: "superseded", updated_at: new Date().toISOString() })
+        .eq("id", oldest.id);
+    }
+  }
 
   // Check for an existing active memory with the same key
   const { data: existing } = await supabase
@@ -390,13 +419,25 @@ export async function getConversationMessages(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function rowToMemoryEntry(row: Record<string, unknown>): MemoryEntry {
+// Sentinel strings returned by decrypt() on failure — never valid memory values.
+const DECRYPT_SENTINELS = new Set([
+  "[decryption failed]",
+  "[encrypted — key missing]",
+  "[malformed encrypted data]",
+]);
+
+function rowToMemoryEntry(row: Record<string, unknown>): MemoryEntry | null {
+  const value = decrypt(row.value as string);
+  if (DECRYPT_SENTINELS.has(value)) {
+    console.warn("[Memory DB] Skipping corrupt memory entry:", row.id);
+    return null;
+  }
   return {
     id: row.id as string,
     timestamp: new Date(row.created_at as string).getTime(),
     category: row.category as MemoryCategory,
     key: row.key as string,
-    value: decrypt(row.value as string),
+    value,
     confidence: row.confidence as number,
     source: row.source as "extracted" | "explicit" | "observed",
     lastAccessed: row.last_accessed ? new Date(row.last_accessed as string).getTime() : undefined,

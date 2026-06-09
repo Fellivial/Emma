@@ -876,7 +876,10 @@ async function createApproval(
     .insert({
       task_id: task.id,
       action_log_id: logEntry.id,
+      client_id: task.clientId,
       user_id: task.userId,
+      tool_name: toolName,
+      tool_input: toolInput,
       action: toolName,
       input: toolInput,
       risk_level: riskLevel,

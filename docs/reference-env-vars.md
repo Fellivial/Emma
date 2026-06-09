@@ -106,11 +106,15 @@ Create at [notion.so/my-integrations](https://www.notion.so/my-integrations) as 
 
 ## HubSpot
 
-| Variable          | Purpose                                                           |
-| ----------------- | ----------------------------------------------------------------- |
-| `HUBSPOT_API_KEY` | Private app token (Portal Settings → Integrations → Private Apps) |
+| Variable                | Purpose                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `HUBSPOT_API_KEY`       | Private app token (Portal Settings → Integrations → Private Apps)             |
+| `HUBSPOT_CLIENT_ID`     | OAuth 2.0 Client ID — required for token refresh flow (Portal → App settings) |
+| `HUBSPOT_CLIENT_SECRET` | OAuth 2.0 Client Secret — required for token refresh flow                     |
 
-No OAuth flow — server-side only. Required scopes: `crm.objects.contacts.read/write`, `crm.objects.deals.read/write`, `crm.objects.notes.write`.
+`HUBSPOT_API_KEY` is used for direct API calls. `HUBSPOT_CLIENT_ID` and `HUBSPOT_CLIENT_SECRET` are required by the OAuth token-refresh path in `src/lib/oauth-refresh.ts` — without them, HubSpot access tokens cannot be automatically renewed after expiry.
+
+Required scopes: `crm.objects.contacts.read/write`, `crm.objects.deals.read/write`, `crm.objects.notes.write`.
 
 ---
 

@@ -56,6 +56,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No audio provided" }, { status: 400 });
   }
 
+  // OpenAI Whisper rejects files larger than 25 MB
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+  if (audio.size > MAX_AUDIO_BYTES) {
+    return NextResponse.json({ error: "Audio file too large (max 25 MB)" }, { status: 413 });
+  }
+
   // Starter → cheaper model; Pro/Enterprise → higher accuracy model
   const model = planId === "starter" ? "gpt-4o-mini-transcribe" : "gpt-4o-transcribe";
   const ext = mimeToExtension(mimeType);
