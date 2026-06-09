@@ -42,9 +42,6 @@
     "src/app/api/emma/cron/pattern-detection/route.ts": {
       "maxDuration": 120
     },
-    "src/app/api/emma/cron/leads-cleanup/route.ts": {
-      "maxDuration": 30
-    },
     "src/app/api/emma/cron/memory-prune/route.ts": {
       "maxDuration": 60
     },
@@ -74,10 +71,6 @@
     {
       "path": "/api/emma/cron/pattern-detection",
       "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/emma/cron/leads-cleanup",
-      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/emma/cron/memory-prune",

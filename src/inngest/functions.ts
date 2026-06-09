@@ -80,13 +80,6 @@ export const patternDetection = inngest.createFunction(
   }
 );
 
-export const leadsCleanup = inngest.createFunction(
-  { id: "emma-leads-cleanup", retries: 1, triggers: [{ cron: "TZ=UTC 0 3 * * *" }] },
-  async ({ step }) => {
-    await step.run("clean-leads", () => callCron("/api/emma/cron/leads-cleanup"));
-  }
-);
-
 export const memoryPrune = inngest.createFunction(
   { id: "emma-memory-prune", retries: 1, triggers: [{ cron: "TZ=UTC 0 4 * * *" }] },
   async ({ step }) => {
