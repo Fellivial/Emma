@@ -12,10 +12,12 @@ import {
   type IntegrationService,
   type AdapterResult,
   IntegrationAuthExpiredError,
+  IntegrationInsufficientScopesError,
   getIntegrationTokens,
   markIntegrationUsed,
   markIntegrationError,
   markIntegrationExpired,
+  markIntegrationNeedsReauth,
 } from "./adapter";
 
 function getSupabase() {
@@ -118,6 +120,28 @@ async function googleFetch(
     if (res.status === 401) throw new IntegrationAuthExpiredError(service);
   }
 
+  if (res.status === 403) {
+    // Clone so the caller can still read the body if needed
+    const body = await res.clone().text();
+    let parsed: { error?: { status?: string; details?: Array<{ reason?: string }> } } = {};
+    try {
+      parsed = JSON.parse(body);
+    } catch {}
+    const isScopeError =
+      parsed.error?.status === "PERMISSION_DENIED" ||
+      parsed.error?.details?.some((d) => d.reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT");
+    if (isScopeError) {
+      const REQUIRED_SCOPES: Partial<Record<IntegrationService, string[]>> = {
+        gmail: ["https://www.googleapis.com/auth/gmail.send"],
+        google_calendar: ["https://www.googleapis.com/auth/calendar.events"],
+        google_drive: ["https://www.googleapis.com/auth/drive.file"],
+      };
+      const scopes = REQUIRED_SCOPES[service] ?? [];
+      await markIntegrationNeedsReauth(clientId, service, scopes);
+      throw new IntegrationInsufficientScopesError(service, scopes);
+    }
+  }
+
   return res;
 }
 
@@ -191,9 +215,13 @@ export class GmailAdapter implements IntegrationAdapter {
 
       await markIntegrationUsed(clientId, "gmail");
       return { success: true, output: `Email sent to ${to}` };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "gmail", err);
       return { success: false, output: `Email failed: ${err.message}` };
     }
@@ -275,9 +303,13 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: `File "${filename}" uploaded to Google Drive`,
         data: { fileId: data.id, name: data.name, mimeType: data.mimeType },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "google_drive", err);
       return { success: false, output: `Drive upload failed: ${err.message}` };
     }
@@ -328,9 +360,13 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: `Found ${files.length} files:\n${formatted}`,
         data: { count: files.length, files },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "google_drive", err);
       return { success: false, output: `Drive list failed: ${err.message}` };
     }
@@ -360,9 +396,13 @@ export class GoogleDriveAdapter implements IntegrationAdapter {
         output: content.slice(0, 10_000),
         data: { fileId: file_id, truncated: content.length > 10_000 },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "google_drive", err);
       return { success: false, output: `Drive read failed: ${err.message}` };
     }
@@ -439,9 +479,13 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
         output: `Event created: "${title}" on ${date}`,
         data: { eventId: created.id, htmlLink: created.htmlLink },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "google_calendar", err);
       return { success: false, output: `Calendar failed: ${err.message}` };
     }
@@ -504,9 +548,13 @@ export class GoogleCalendarAdapter implements IntegrationAdapter {
         output: formatted,
         data: { count: events.length, events },
       };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err instanceof IntegrationAuthExpiredError) throw err;
+      if (
+        err instanceof IntegrationAuthExpiredError ||
+        err instanceof IntegrationInsufficientScopesError
+      )
+        throw err;
       await markIntegrationError(clientId, "google_calendar", err);
       return { success: false, output: `Calendar read failed: ${err.message}` };
     }

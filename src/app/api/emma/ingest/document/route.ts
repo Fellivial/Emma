@@ -77,7 +77,12 @@ export async function POST(req: NextRequest) {
     }
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { success: false, error: "File exceeds 4 MB limit" },
+        {
+          success: false,
+          error: "File exceeds 4 MB limit",
+          asyncRequired: true,
+          hint: "Use GET /api/emma/ingest/document/presign to upload files up to 20 MB asynchronously",
+        },
         { status: 413 }
       );
     }

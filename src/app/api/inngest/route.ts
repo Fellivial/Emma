@@ -10,6 +10,7 @@ import {
   leadsCleanup,
   memoryPrune,
   reflection,
+  documentProcess,
 } from "@/inngest/functions";
 
 export const { GET, POST, PUT } = serve({
@@ -24,5 +25,6 @@ export const { GET, POST, PUT } = serve({
     leadsCleanup,
     memoryPrune,
     reflection,
+    documentProcess,
   ],
 });
