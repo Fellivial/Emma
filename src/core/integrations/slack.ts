@@ -7,10 +7,24 @@ import {
   type IntegrationAdapter,
   type IntegrationService,
   type AdapterResult,
+  IntegrationInsufficientScopesError,
   getIntegrationTokens,
   markIntegrationUsed,
   markIntegrationError,
+  markIntegrationNeedsReauth,
 } from "./adapter";
+
+// Slack surfaces missing scopes via `error: "missing_scope"` + `needed` field.
+async function checkSlackScopeError(
+  clientId: string,
+  data: { ok: boolean; error?: string; needed?: string }
+): Promise<void> {
+  if (!data.ok && data.error === "missing_scope") {
+    const needed = data.needed ? data.needed.split(",").map((s) => s.trim()) : [];
+    await markIntegrationNeedsReauth(clientId, "slack", needed);
+    throw new IntegrationInsufficientScopesError("slack", needed);
+  }
+}
 
 export class SlackAdapter implements IntegrationAdapter {
   service: IntegrationService = "slack";
@@ -46,6 +60,7 @@ export class SlackAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      await checkSlackScopeError(clientId, data);
       if (!data.ok) {
         await markIntegrationError(clientId, "slack", new Error(data.error));
         return { success: false, output: `Slack error: ${data.error}` };
@@ -68,6 +83,7 @@ export class SlackAdapter implements IntegrationAdapter {
         },
       };
     } catch (err) {
+      if (err instanceof IntegrationInsufficientScopesError) throw err;
       await markIntegrationError(clientId, "slack", err as Error);
       return { success: false, output: `Slack list channels failed: ${(err as Error).message}` };
     }
@@ -101,6 +117,7 @@ export class SlackAdapter implements IntegrationAdapter {
       });
 
       const urlData = await urlRes.json();
+      await checkSlackScopeError(clientId, urlData);
       if (!urlData.ok) {
         await markIntegrationError(clientId, "slack", new Error(urlData.error));
         return { success: false, output: `Slack upload URL error: ${urlData.error}` };
@@ -124,6 +141,7 @@ export class SlackAdapter implements IntegrationAdapter {
       });
 
       const completeData = await completeRes.json();
+      await checkSlackScopeError(clientId, completeData);
       if (!completeData.ok) {
         await markIntegrationError(clientId, "slack", new Error(completeData.error));
         return { success: false, output: `Slack complete upload error: ${completeData.error}` };
@@ -136,6 +154,7 @@ export class SlackAdapter implements IntegrationAdapter {
         data: { fileId: urlData.file_id, filename, channel },
       };
     } catch (err) {
+      if (err instanceof IntegrationInsufficientScopesError) throw err;
       await markIntegrationError(clientId, "slack", err as Error);
       return { success: false, output: `Slack upload failed: ${(err as Error).message}` };
     }
@@ -170,6 +189,7 @@ export class SlackAdapter implements IntegrationAdapter {
       }
 
       const data = await res.json();
+      await checkSlackScopeError(clientId, data);
       if (!data.ok) {
         await markIntegrationError(clientId, "slack", new Error(data.error));
         return { success: false, output: `Slack error: ${data.error}` };
@@ -182,6 +202,7 @@ export class SlackAdapter implements IntegrationAdapter {
         data: { ts: data.ts, channel: data.channel },
       };
     } catch (err) {
+      if (err instanceof IntegrationInsufficientScopesError) throw err;
       await markIntegrationError(clientId, "slack", err as Error);
       return { success: false, output: `Slack failed: ${(err as Error).message}` };
     }

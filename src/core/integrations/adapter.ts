@@ -47,6 +47,19 @@ export class IntegrationAuthExpiredError extends Error {
   }
 }
 
+export class IntegrationInsufficientScopesError extends Error {
+  service: IntegrationService;
+  requiredScopes: string[];
+  constructor(service: IntegrationService, requiredScopes: string[]) {
+    super(
+      `Insufficient OAuth scopes for ${service}. Required: ${requiredScopes.join(", ")}. Please reconnect the integration to grant the necessary permissions.`
+    );
+    this.name = "IntegrationInsufficientScopesError";
+    this.service = service;
+    this.requiredScopes = requiredScopes;
+  }
+}
+
 // ─── Supabase ────────────────────────────────────────────────────────────────
 
 function getSupabase() {
@@ -147,6 +160,25 @@ export async function markIntegrationExpired(
     .from("client_integrations")
     .update({
       status: "auth_expired",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("client_id", clientId)
+    .eq("service", service);
+}
+
+export async function markIntegrationNeedsReauth(
+  clientId: string,
+  service: IntegrationService,
+  requiredScopes: string[]
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  await supabase
+    .from("client_integrations")
+    .update({
+      status: "needs_reauth",
+      last_error: `Insufficient scopes: ${requiredScopes.join(", ")}`,
+      metadata: { required_scopes: requiredScopes },
       updated_at: new Date().toISOString(),
     })
     .eq("client_id", clientId)
