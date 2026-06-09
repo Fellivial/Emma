@@ -13,7 +13,14 @@ create index if not exists chat_messages_user_created
 
 alter table public.chat_messages enable row level security;
 
-create policy "Users manage own messages"
-  on public.chat_messages for all
-  using  (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'chat_messages' and policyname = 'Users manage own messages'
+  ) then
+    create policy "Users manage own messages"
+      on public.chat_messages for all
+      using  (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end $$;
