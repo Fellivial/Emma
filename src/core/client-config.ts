@@ -10,21 +10,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { AutonomyTier, Routine } from "@/types/emma";
 
-export interface FormField {
-  id: string;
-  label: string;
-  type: "text" | "email" | "tel" | "textarea" | "select" | "radio";
-  required: boolean;
-  savesTo: "name" | "contact" | "notes" | string;
-  options?: string[];
-}
-
-export interface FormStep {
-  id: string;
-  title: string;
-  fields: FormField[];
-}
-
 export interface ClientConfig {
   id: string;
   slug: string;
@@ -40,10 +25,6 @@ export interface ClientConfig {
   planId: string;
   autonomyTier: AutonomyTier;
   proactiveVision: boolean;
-  verticalId: string | null;
-  formSteps: FormStep[] | null;
-  ownerEmail: string | null;
-  sheetsId: string | null;
   customRoutines: Routine[];
 }
 
@@ -62,10 +43,6 @@ const DEFAULT_CONFIG: ClientConfig = {
   planId: "free",
   autonomyTier: 3,
   proactiveVision: false,
-  verticalId: null,
-  formSteps: null,
-  ownerEmail: null,
-  sheetsId: null,
   customRoutines: [],
 };
 
@@ -106,10 +83,6 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       planId: data.plan_id || "free",
       autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: data.proactive_vision ?? false,
-      verticalId: data.vertical_id ?? null,
-      formSteps: (data.form_steps as FormStep[] | null) ?? null,
-      ownerEmail: data.owner_email ?? null,
-      sheetsId: data.sheets_id ?? null,
       customRoutines: (data.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
@@ -149,10 +122,6 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       plan_id: string | null;
       autonomy_tier: number | null;
       proactive_vision: boolean | null;
-      vertical_id: string | null;
-      form_steps: FormStep[] | null;
-      owner_email: string | null;
-      sheets_id: string | null;
       custom_routines: Routine[] | null;
     };
     return {
@@ -170,10 +139,6 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       planId: c.plan_id || "free",
       autonomyTier: (c.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: c.proactive_vision ?? false,
-      verticalId: c.vertical_id ?? null,
-      formSteps: (c.form_steps as FormStep[] | null) ?? null,
-      ownerEmail: c.owner_email ?? null,
-      sheetsId: c.sheets_id ?? null,
       customRoutines: (c.custom_routines as Routine[] | null) ?? [],
     };
   } catch {

@@ -3,10 +3,8 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getAllVerticals, applyVertical } from "@/core/verticals/templates";
-import type { IntakeQuestion, VerticalConfig } from "@/core/verticals/templates";
 
-type Step = "intro" | "name" | "vibe" | "vertical" | "intake" | "confirm";
+type Step = "intro" | "name" | "vibe" | "confirm";
 
 const VIBE_OPTIONS = [
   {
@@ -29,73 +27,28 @@ const VIBE_OPTIONS = [
   },
 ];
 
-const PLAN_BADGE: Record<string, string> = {
-  starter: "Starter",
-  pro: "Pro",
-  enterprise: "Enterprise",
-};
-
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("intro");
   const [name, setName] = useState("");
   const [vibe, setVibe] = useState<string | null>(null);
-  const [selectedVerticalId, setSelectedVerticalId] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiDisclosureAcknowledged, setAiDisclosureAcknowledged] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
-  const verticals = useMemo(() => getAllVerticals(), []);
-  const selectedVertical = useMemo(
-    () => verticals.find((v) => v.id === selectedVerticalId) ?? null,
-    [verticals, selectedVerticalId]
-  );
-
-  const intakeQuestions = useMemo<IntakeQuestion[]>(() => {
-    if (!selectedVerticalId) return [];
-    const result = applyVertical(selectedVerticalId);
-    return result?.intake_questions ?? [];
-  }, [selectedVerticalId]);
-
-  const intakeComplete = useMemo(() => {
-    return intakeQuestions
-      .filter((q) => q.required)
-      .every((q) => {
-        const ans = answers[q.id];
-        if (!ans) return false;
-        if (Array.isArray(ans)) return ans.length > 0;
-        return String(ans).trim().length > 0;
-      });
-  }, [intakeQuestions, answers]);
-
-  const STEPS: Step[] = ["intro", "name", "vibe", "vertical", "intake", "confirm"];
+  const STEPS: Step[] = ["intro", "name", "vibe", "confirm"];
   const stepIndex = STEPS.indexOf(step);
 
   const STEP_LABELS: Record<Step, string> = {
     intro: "Intro",
     name: "Your name",
     vibe: "Your vibe",
-    vertical: "Use case",
-    intake: "Quick questions",
     confirm: "All set",
   };
 
-  const setAnswer = (id: string, value: string | string[]) => {
-    setAnswers((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const toggleMulti = (id: string, option: string) => {
-    const current = (answers[id] as string[] | undefined) ?? [];
-    const updated = current.includes(option)
-      ? current.filter((v) => v !== option)
-      : [...current, option];
-    setAnswer(id, updated);
-  };
-
   const finish = async () => {
-    if (!supabase || !selectedVerticalId) return;
+    if (!supabase) return;
     setSaving(true);
     setError(null);
 
@@ -126,51 +79,6 @@ export default function OnboardingPage() {
           confidence: 1.0,
           source: "explicit",
         });
-      }
-
-      const verticalConfig = applyVertical(selectedVerticalId);
-      if (verticalConfig) {
-        const { data: clientRow } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("owner_id", user.id)
-          .maybeSingle();
-
-        if (clientRow) {
-          await supabase
-            .from("clients")
-            .update({
-              vertical_id: selectedVerticalId,
-              persona_name: verticalConfig.persona_name,
-              persona_prompt: verticalConfig.persona_prompt,
-              persona_greeting: verticalConfig.persona_greeting,
-              tools_enabled: verticalConfig.tools_enabled,
-            })
-            .eq("id", clientRow.id);
-        }
-      }
-
-      const memoryUpserts = intakeQuestions
-        .filter((q) => {
-          const ans = answers[q.id];
-          return ans !== undefined && ans !== "" && !(Array.isArray(ans) && ans.length === 0);
-        })
-        .map((q) => {
-          const raw = answers[q.id];
-          const value = Array.isArray(raw) ? raw.join(", ") : String(raw);
-          return {
-            id: `mem-onboard-${q.savesTo}-${user.id}`,
-            user_id: user.id,
-            category: "preference" as const,
-            key: q.savesTo,
-            value,
-            confidence: 1.0,
-            source: "explicit",
-          };
-        });
-
-      if (memoryUpserts.length > 0) {
-        await supabase.from("memories").upsert(memoryUpserts);
       }
 
       router.push("/app");
@@ -321,7 +229,7 @@ export default function OnboardingPage() {
                   Back
                 </button>
                 <button
-                  onClick={() => setStep("vertical")}
+                  onClick={() => setStep("confirm")}
                   disabled={!vibe}
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer disabled:opacity-30"
                 >
@@ -331,80 +239,8 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* ── vertical ────────────────────────────────────────── */}
-          {step === "vertical" && (
-            <div className="animate-fade-in">
-              <p className="text-sm text-emma-200/50 font-light mb-1">Almost there.</p>
-              <h2 className="text-lg font-medium text-emma-200/80 mb-6">
-                What will you use Emma for?
-              </h2>
-              <div className="flex flex-col gap-2 mb-4 max-h-72 overflow-y-auto pr-1">
-                {verticals.map((v) => (
-                  <VerticalCard
-                    key={v.id}
-                    vertical={v}
-                    selected={selectedVerticalId === v.id}
-                    onSelect={() => setSelectedVerticalId(v.id)}
-                  />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setStep("vibe")}
-                  className="flex-1 py-2.5 rounded-xl border border-surface-border text-sm font-light text-emma-200/30 cursor-pointer hover:text-emma-200/50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStep("intake")}
-                  disabled={!selectedVerticalId}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer disabled:opacity-30"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── intake ──────────────────────────────────────────── */}
-          {step === "intake" && selectedVertical && (
-            <div className="animate-fade-in">
-              <div className="flex items-center gap-2 mb-1">
-                <span>{selectedVertical.icon}</span>
-                <p className="text-sm text-emma-200/50 font-light">{selectedVertical.name}</p>
-              </div>
-              <h2 className="text-lg font-medium text-emma-200/80 mb-6">A few quick questions.</h2>
-              <div className="flex flex-col gap-4 mb-4 max-h-80 overflow-y-auto pr-1">
-                {intakeQuestions.map((q) => (
-                  <IntakeField
-                    key={q.id}
-                    question={q}
-                    value={answers[q.id]}
-                    onChange={(val) => setAnswer(q.id, val)}
-                    onToggle={(opt) => toggleMulti(q.id, opt)}
-                  />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setStep("vertical")}
-                  className="flex-1 py-2.5 rounded-xl border border-surface-border text-sm font-light text-emma-200/30 cursor-pointer hover:text-emma-200/50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStep("confirm")}
-                  disabled={!intakeComplete}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer disabled:opacity-30"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* ── confirm ─────────────────────────────────────────── */}
-          {step === "confirm" && selectedVertical && (
+          {step === "confirm" && (
             <div className="animate-fade-in">
               <h2 className="text-lg font-medium text-emma-200/80 mb-2 text-center">
                 Perfect, {name || "baby"}.
@@ -412,39 +248,6 @@ export default function OnboardingPage() {
               <p className="text-sm font-light text-emma-200/40 leading-relaxed mb-6 text-center">
                 I&apos;ll remember everything from here. Let&apos;s get started.
               </p>
-
-              <div className="rounded-xl border border-surface-border bg-surface p-4 mb-6">
-                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-surface-border">
-                  <span className="text-2xl">{selectedVertical.icon}</span>
-                  <div>
-                    <div className="text-xs font-medium text-emma-200/60">
-                      {selectedVertical.name}
-                    </div>
-                    <div className="text-[11px] font-light text-emma-200/25">
-                      {selectedVertical.description}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {intakeQuestions
-                    .filter((q) => answers[q.id] && answers[q.id] !== "")
-                    .map((q) => {
-                      const ans = answers[q.id];
-                      const display = Array.isArray(ans) ? ans.join(", ") : String(ans);
-                      return (
-                        <div
-                          key={q.id}
-                          className="flex items-center justify-between gap-3 text-[11px]"
-                        >
-                          <span className="text-emma-200/25 truncate">{q.question}</span>
-                          <span className="text-emma-200/60 font-medium shrink-0 max-w-[45%] truncate text-right">
-                            {display}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
 
               {error && <p className="text-[11px] text-red-300/60 mb-3 text-center">{error}</p>}
 
@@ -456,7 +259,7 @@ export default function OnboardingPage() {
                 {saving ? "Setting up…" : "Launch Emma →"}
               </button>
               <button
-                onClick={() => setStep("intake")}
+                onClick={() => setStep("vibe")}
                 className="w-full mt-2 text-xs text-emma-200/20 hover:text-emma-200/40 cursor-pointer transition-colors"
               >
                 ← Edit answers
@@ -465,117 +268,6 @@ export default function OnboardingPage() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Vertical card ─────────────────────────────────────────────────────────────
-
-function VerticalCard({
-  vertical,
-  selected,
-  onSelect,
-}: {
-  vertical: VerticalConfig;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all cursor-pointer ${
-        selected
-          ? "border-emma-300/30 bg-emma-300/8"
-          : "border-surface-border bg-surface hover:bg-surface-hover"
-      }`}
-    >
-      <span className="text-2xl shrink-0">{vertical.icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-emma-200/70">{vertical.name}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-emma-300/15 text-emma-300/50">
-            {PLAN_BADGE[vertical.suggestedPlan] ?? vertical.suggestedPlan}
-          </span>
-        </div>
-        <p className="text-[11px] font-light text-emma-200/25 truncate">{vertical.description}</p>
-      </div>
-      {selected && (
-        <span className="w-4 h-4 rounded-full bg-emma-300 flex items-center justify-center shrink-0">
-          <span className="text-emma-950 text-[10px] font-bold">✓</span>
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ── Intake field ──────────────────────────────────────────────────────────────
-
-function IntakeField({
-  question,
-  value,
-  onChange,
-  onToggle,
-}: {
-  question: IntakeQuestion;
-  value: string | string[] | undefined;
-  onChange: (val: string) => void;
-  onToggle: (opt: string) => void;
-}) {
-  const selectedArr = Array.isArray(value) ? value : [];
-  const strVal = typeof value === "string" ? value : "";
-
-  return (
-    <div>
-      <label className="text-[11px] text-emma-200/40 block mb-1.5">
-        {question.question}
-        {question.required && <span className="text-emma-300/50 ml-1">*</span>}
-      </label>
-
-      {question.type === "text" && (
-        <input
-          type="text"
-          value={strVal}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-surface border border-surface-border rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 placeholder:text-emma-200/15 outline-none focus:border-emma-300/25 transition-colors"
-        />
-      )}
-
-      {question.type === "select" && question.options && (
-        <select
-          value={strVal}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-surface border border-surface-border rounded-xl px-4 py-2.5 text-sm font-light text-emma-100 outline-none focus:border-emma-300/25 transition-colors appearance-none cursor-pointer"
-        >
-          <option value="">Select…</option>
-          {question.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )}
-
-      {question.type === "multi_select" && question.options && (
-        <div className="flex flex-wrap gap-2">
-          {question.options.map((opt) => {
-            const checked = selectedArr.includes(opt);
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => onToggle(opt)}
-                className={`px-3 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-all ${
-                  checked
-                    ? "border-emma-300/30 bg-emma-300/10 text-emma-300"
-                    : "border-surface-border bg-surface text-emma-200/35 hover:text-emma-200/55"
-                }`}
-              >
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

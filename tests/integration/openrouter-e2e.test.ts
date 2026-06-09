@@ -40,12 +40,7 @@ vi.mock("@/core/usage-enforcer", () => ({
 }));
 
 vi.mock("@/core/client-config", () => ({
-  loadClientConfigForUser: () =>
-    Promise.resolve({ planId: "free", verticalId: null }),
-}));
-
-vi.mock("@/core/verticals/templates", () => ({
-  getVertical: () => undefined,
+  loadClientConfigForUser: () => Promise.resolve({ planId: "free" }),
 }));
 
 vi.mock("@/core/security/audit", () => ({
@@ -56,7 +51,9 @@ vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }),
-      insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: "x" }, error: null }) }) }),
+      insert: () => ({
+        select: () => ({ single: () => Promise.resolve({ data: { id: "x" }, error: null }) }),
+      }),
       update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
     }),
   }),
@@ -226,7 +223,10 @@ describeE2E("Agent loop — end-to-end via real OpenRouter", () => {
     });
 
     console.log("[E2E agent] status:", result.status);
-    console.log("[E2E agent] steps:", result.steps.map((s) => s.toolName));
+    console.log(
+      "[E2E agent] steps:",
+      result.steps.map((s) => s.toolName)
+    );
     console.log("[E2E agent] summary:", result.summary);
     console.log("[E2E agent] tokens:", result.totalTokens);
 

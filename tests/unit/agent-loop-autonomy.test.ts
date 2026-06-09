@@ -98,10 +98,6 @@ vi.mock("@/core/client-config", () => ({
       planId: "free",
       autonomyTier: mockClientConfig.autonomyTier,
       proactiveVision: false,
-      verticalId: null,
-      formSteps: null,
-      ownerEmail: null,
-      sheetsId: null,
       customRoutines: mockClientConfig.customRoutines,
     }),
   DEFAULT_CONFIG: {
