@@ -512,8 +512,12 @@ _Updated 2026-06-09 — all features listed at audit time have now shipped._
 **Remaining deferred items (Phase 4):**
 
 - LangGraph `interrupt()` for durable approval flows
-- Evaluator-optimizer pre-execution check in agent loop
-- Scanned PDF rasterisation (requires `sharp`/`canvas` native binaries)
-- Background ingestion queue for large files
-- OAuth scope re-consent flow (expanding to read scopes)
+- Evaluator-optimizer pre-execution check in agent loop (pre-task relevance check for scheduled tasks)
+- Background ingestion queue for files >4 MB (requires client-side Storage upload + polling — Inngest is wired, missing presign endpoint + frontend)
+- OAuth scope re-consent flow (expanding to read scopes — breaking change, needs migration strategy)
 - Nango platform migration (revisit at ~15+ integrations)
+
+**Already shipped (previously listed as deferred):**
+
+- ✅ Scanned PDF rasterisation — shipped in `src/core/integrations/ocr.ts` using `mupdf` (pure-WASM, no native binaries) + Tesseract.js; up to 5 pages, 90-second timeout.
+- ✅ Document dedup guard — SHA-256 content hash stored in `ingested_documents.content_hash`; duplicate uploads for the same user return early without re-processing.

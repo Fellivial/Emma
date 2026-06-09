@@ -101,7 +101,6 @@ export function useAvatar(): UseAvatarReturn {
     talking: false,
     layout: "side",
     visible: true,
-    // eslint-disable-next-line react-hooks/purity
     idleSince: Date.now(),
   });
 
@@ -217,7 +216,6 @@ export function useAvatar(): UseAvatarReturn {
 
     // Schedule next idle behavior
     const nextDelay = MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN);
-    // eslint-disable-next-line react-hooks/immutability
     idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), nextDelay);
   }, []);
 
