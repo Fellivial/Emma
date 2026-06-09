@@ -53,7 +53,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",
-              "media-src 'self' blob:",
+              "media-src 'self' blob: https://storage.googleapis.com",
               "connect-src 'self'" +
                 " https://openrouter.ai" +
                 " https://api.elevenlabs.io" +

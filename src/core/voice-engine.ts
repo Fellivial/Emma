@@ -440,8 +440,13 @@ export function useVoice(): UseVoiceReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, clientId, expression }),
         });
-        if (res.status === 204 || res.status === 501) {
+        if (res.status === 501) {
+          // 501 = TTS endpoint permanently disabled — skip for rest of session
           elevenLabsUnavailableRef.current = true;
+          return null;
+        }
+        if (res.status === 204) {
+          // 204 = no key right now (auth_expired / not connected) — transient, retry next call
           return null;
         }
         if (!res.ok) return null;

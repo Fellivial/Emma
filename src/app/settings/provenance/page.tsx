@@ -7,10 +7,9 @@ import type { ProvenanceChain, ProvenanceStep } from "@/core/provenance";
 
 interface ChainRow {
   id: string;
-  task_id: string;
-  goal: string;
+  chain_id: string;
+  data: { goal?: string; steps?: unknown[] } | null;
   status: string;
-  chain: unknown;
   started_at: string;
   completed_at: string | null;
 }
@@ -33,7 +32,7 @@ function ProvenancePage() {
 
     const { data } = await supabase
       .from("provenance_chains")
-      .select("id, task_id, goal, status, chain, started_at, completed_at")
+      .select("id, chain_id, data, status, started_at, completed_at")
       .eq("user_id", user.id)
       .order("started_at", { ascending: false })
       .limit(20);
@@ -42,7 +41,7 @@ function ProvenancePage() {
     setChains(rows);
 
     if (preselectedTaskId) {
-      const match = rows.find((r: ChainRow) => r.task_id === preselectedTaskId);
+      const match = rows.find((r: ChainRow) => r.chain_id === preselectedTaskId);
       if (match) setSelectedId(match.id);
     } else if (rows.length > 0) {
       setSelectedId((prev) => prev ?? rows[0].id);
@@ -59,10 +58,11 @@ function ProvenancePage() {
   const selectedChain = chains.find((c) => c.id === selectedId) ?? null;
 
   const parsedChain = useMemo((): ProvenanceChain | null => {
-    if (!selectedChain?.chain) return null;
+    if (!selectedChain?.data) return null;
     try {
-      if (typeof selectedChain.chain === "object") return selectedChain.chain as ProvenanceChain;
-      return JSON.parse(String(selectedChain.chain)) as ProvenanceChain;
+      if (typeof selectedChain.data === "object")
+        return selectedChain.data as unknown as ProvenanceChain;
+      return JSON.parse(String(selectedChain.data)) as ProvenanceChain;
     } catch {
       return null;
     }
@@ -107,7 +107,9 @@ function ProvenancePage() {
                   </span>
                 </div>
                 <p className="text-[11px] font-light text-emma-200/60 leading-snug line-clamp-2">
-                  {c.goal.length > 60 ? c.goal.slice(0, 60) + "…" : c.goal}
+                  {(c.data?.goal ?? "").length > 60
+                    ? (c.data?.goal ?? "").slice(0, 60) + "…"
+                    : (c.data?.goal ?? "")}
                 </p>
               </button>
             ))}
@@ -127,14 +129,14 @@ function ProvenancePage() {
                     <StatusBadge status={selectedChain.status} />
                   </div>
                   <h2 className="text-sm font-medium text-emma-200/80 leading-snug mb-2">
-                    {selectedChain.goal}
+                    {selectedChain.data?.goal ?? ""}
                   </h2>
                   <div className="flex items-center gap-4 text-[11px] text-emma-200/20">
                     <span>Started {fmtRelative(selectedChain.started_at)}</span>
                     {selectedChain.completed_at && (
                       <span>Completed {fmtRelative(selectedChain.completed_at)}</span>
                     )}
-                    <span className="font-mono text-emma-200/15">{selectedChain.task_id}</span>
+                    <span className="font-mono text-emma-200/15">{selectedChain.chain_id}</span>
                   </div>
                 </div>
 
