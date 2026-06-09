@@ -495,9 +495,25 @@ Emma connects to 6 services via OAuth and any MCP Streamable HTTP server via the
 
 ## STRATEGIC OBSERVATIONS
 
-1. **P1–P18 focused on foundation, not expansion.** Core reliability shipped; research covers expansion features.
-2. **Memory extraction is the highest-leverage next improvement.** Few-shot prompt engineering is a 1-day fix with outsized impact.
-3. **MCP connector work is the natural Phase 2.** Pairs naturally with PKCE security hardening.
-4. **Autonomous systems research is mature but undeployed.** Pattern-suggestion surfacing would be a low-risk Phase 1.
-5. **Custom persona is a marketed Pro feature with zero implementation.** Direct product gap vs. advertised capability.
-6. **Document ingestion is a feature tier unlock.** Becomes a Pro/Enterprise differentiator at scale.
+_Updated 2026-06-09 — all features listed at audit time have now shipped._
+
+1. **All P1–P18 + expansion features are complete.** Foundation (security, billing, OAuth, rate limiting) and all expansion tiers (autonomous systems, document ingestion, custom persona, MCP connectors, push notifications, Inngest workers) are implemented and merged to `main`.
+
+2. **Memory extraction shipped with key normalization + soft-delete tracking.** The 1-day estimate was accurate. Semantic dedup remains deferred — key normalization solves most duplicates without embedding cost.
+
+3. **MCP connector Phase 1–3 shipped.** PKCE hardening, tool allowlist/denylist, connection-expiry health cron, and per-server tool filtering are live. Nango migration deferred until ~15+ integrations.
+
+4. **Autonomous systems Phase 1–3 shipped.** Pattern surfacing, quiet hours, daily message discipline, memory reflection cron, and heartbeat cron are live. Phase 4 (LangGraph `interrupt()`, evaluator-optimizer pre-execution check) remains deferred.
+
+5. **Custom persona shipped as a Pro feature.** DB, API, injection mitigations, Settings UI, and voice cloning tie-in all implemented. No product gap.
+
+6. **Document ingestion shipped as a Pro/Enterprise differentiator.** pgvector RAG, chunking, OCR, embeddings, and Settings UI live. Scanned PDF rasterisation and background ingestion queue remain deferred.
+
+**Remaining deferred items (Phase 4):**
+
+- LangGraph `interrupt()` for durable approval flows
+- Evaluator-optimizer pre-execution check in agent loop
+- Scanned PDF rasterisation (requires `sharp`/`canvas` native binaries)
+- Background ingestion queue for large files
+- OAuth scope re-consent flow (expanding to read scopes)
+- Nango platform migration (revisit at ~15+ integrations)
