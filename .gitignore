@@ -11,3 +11,4 @@ data/
 .gstack/
 .claude/
 ruvector.db
+.temp/

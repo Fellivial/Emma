@@ -146,13 +146,91 @@ export async function POST(req: NextRequest) {
 
     if (res.status === 401) {
       ttsCache.delete(sessionUser.id);
+      const errBody = await res.text().catch(() => "");
+      console.error("[EMMA TTS] ElevenLabs 401 body:", errBody || "(empty)");
+      let elErrDetail = "API key invalid or revoked";
+      let isPlanRestriction = false;
+      try {
+        const parsed = JSON.parse(errBody) as { detail?: { status?: string; message?: string } };
+        if (parsed?.detail?.status === "missing_permissions") {
+          elErrDetail =
+            "API key is missing the text_to_speech scope — reconnect with a key that has Text to Speech scope enabled";
+        } else if (parsed?.detail?.message) {
+          elErrDetail = parsed.detail.message;
+          const msg = elErrDetail.toLowerCase();
+          // Plan/subscription restrictions affect the voice, not the API key itself.
+          if (
+            msg.includes("not available on your current plan") ||
+            msg.includes("upgrade your subscription") ||
+            msg.includes("cloned voices") ||
+            msg.includes("professional voices")
+          ) {
+            isPlanRestriction = true;
+          }
+        }
+      } catch {}
+
+      if (isPlanRestriction && voice !== DEFAULT_VOICE_ID) {
+        // The API key is valid — only this voice requires a higher plan.
+        // Fall back to Rachel rather than disconnecting the integration.
+        console.warn(`[EMMA TTS] Voice ${voice} plan-restricted, falling back to Rachel`);
+        // Best-effort: clear the stored voiceId so future calls use Rachel directly.
+        if (resolvedClientId && supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          supabase
+            .from("client_integrations")
+            .select("metadata")
+            .eq("client_id", resolvedClientId)
+            .eq("service", "elevenlabs")
+            .single()
+            .then(({ data: ci }) => {
+              if (!ci?.metadata) return;
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const {
+                voiceId: _v,
+                voiceName: _n,
+                ...rest
+              } = ci.metadata as Record<string, unknown>;
+              return supabase
+                .from("client_integrations")
+                .update({
+                  metadata: { ...rest, voiceName: "Rachel (default)" },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("client_id", resolvedClientId!)
+                .eq("service", "elevenlabs");
+            })
+            .catch(() => {});
+        }
+        const fallbackRes = await fetch(`${ELEVENLABS_API}/text-to-speech/${DEFAULT_VOICE_ID}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "xi-api-key": apiKey },
+          body: JSON.stringify({
+            text: text.slice(0, 1000),
+            model_id: "eleven_turbo_v2_5",
+            voice_settings: { ...voiceSettings, use_speaker_boost: true },
+          }),
+        });
+        if (fallbackRes.ok) {
+          const fallbackBuffer = await fallbackRes.arrayBuffer();
+          return new NextResponse(fallbackBuffer, {
+            status: 200,
+            headers: {
+              "Content-Type": "audio/mpeg",
+              "Content-Length": fallbackBuffer.byteLength.toString(),
+            },
+          });
+        }
+        return new NextResponse(null, { status: 204 });
+      }
+
       if (resolvedClientId && supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         await supabase
           .from("client_integrations")
           .update({
             status: "auth_expired",
-            last_error: "API key invalid or revoked",
+            last_error: elErrDetail,
             updated_at: new Date().toISOString(),
           })
           .eq("client_id", resolvedClientId)

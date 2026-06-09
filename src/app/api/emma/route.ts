@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
-import { getMemoriesForUser, incrementUsage, getLatestConversationSummary } from "@/core/memory-db";
+import { getMemoriesForUser, getLatestConversationSummary } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
@@ -529,8 +529,6 @@ export async function POST(req: NextRequest) {
 
           // Persist usage tracking (non-blocking)
           if (userId) {
-            incrementUsage(userId, 1, inputTokens + outputTokens).catch(() => {});
-
             // Multi-window tracking
             const planId = enforcementResult?.planId || "free";
             recordUsage(

@@ -73,6 +73,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not verify key — try again" }, { status: 400 });
     }
 
+    // Verify TTS scope — a key with only Voices scope passes /voices but fails on generation.
+    // Rachel (21m00Tcm4TlvDq8ikWAM) is available on all plans; "ok" minimises character use.
+    const ttsCheckRes = await fetch(`${ELEVENLABS_API}/text-to-speech/21m00Tcm4TlvDq8ikWAM`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "xi-api-key": trimmedKey },
+      body: JSON.stringify({ text: "ok", model_id: "eleven_turbo_v2_5" }),
+    });
+    if (ttsCheckRes.status === 401) {
+      const ttsBody = await ttsCheckRes.text().catch(() => "");
+      console.error("[elevenlabs] TTS scope check failed (401):", ttsBody);
+      let ttsParsed: { detail?: { status?: string } } = {};
+      try {
+        ttsParsed = JSON.parse(ttsBody);
+      } catch {}
+      const missingScope = ttsParsed?.detail?.status === "missing_permissions";
+      return NextResponse.json(
+        {
+          error: missingScope
+            ? "API key is missing the Text to Speech scope — enable it at elevenlabs.io/app/settings/api-keys"
+            : "API key was rejected for TTS generation — check your ElevenLabs dashboard",
+        },
+        { status: 400 }
+      );
+    }
+    if (!ttsCheckRes.ok && ttsCheckRes.status !== 429) {
+      // 429 = quota exhausted but key is valid — allow connect so user can see quota state
+      const ttsErrBody = await ttsCheckRes.text().catch(() => "");
+      console.error(`[elevenlabs] TTS check returned ${ttsCheckRes.status}:`, ttsErrBody);
+      return NextResponse.json(
+        { error: "Could not verify TTS access — try again" },
+        { status: 400 }
+      );
+    }
+    // Discard the audio response body to free the connection
+    await ttsCheckRes.body?.cancel().catch(() => {});
+
     // Best-effort: fetch subscription quota for usage bar visibility.
     // Requires "User" scope; silently skipped if unavailable.
     const subscriptionMeta: Record<string, unknown> = {};
@@ -225,6 +261,24 @@ export async function PATCH(req: NextRequest) {
     }
     const voiceInfo = await voiceRes.json();
     const verifiedVoiceName: string = voiceInfo.name || voiceId;
+
+    // Verify voice is usable for TTS on this plan before saving.
+    // GET /voices/{id} succeeds even for plan-restricted voices; TTS is the true gate.
+    const ttsPatchCheck = await fetch(`${ELEVENLABS_API}/text-to-speech/${voiceId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "xi-api-key": apiKey },
+      body: JSON.stringify({ text: "ok", model_id: "eleven_turbo_v2_5" }),
+    });
+    if (!ttsPatchCheck.ok && ttsPatchCheck.status !== 429) {
+      const ttsErr = await ttsPatchCheck.text().catch(() => "");
+      let ttsErrMsg = "This voice cannot be used for TTS on your current ElevenLabs plan";
+      try {
+        const p = JSON.parse(ttsErr) as { detail?: { message?: string } };
+        if (p?.detail?.message) ttsErrMsg = p.detail.message;
+      } catch {}
+      return NextResponse.json({ error: ttsErrMsg }, { status: 400 });
+    }
+    await ttsPatchCheck.body?.cancel().catch(() => {});
 
     const updatedMetadata = {
       ...(integration.metadata || {}),
