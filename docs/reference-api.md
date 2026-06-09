@@ -179,7 +179,7 @@ Detects emotional state from voice transcription or text. Uses Claude Haiku.
 
 ### `GET /api/emma/usage`
 
-Returns token and message usage for all three windows.
+Returns token and message usage for the current window, plan limits, and any active extra packs.
 
 **Auth:** Required
 
@@ -187,19 +187,45 @@ Returns token and message usage for all three windows.
 
 ```json
 {
-  "windows": [
-    {
+  "windows": {
+    "daily": {
       "windowType": "daily",
+      "windowStart": "2026-06-10T10:00:00.000Z",
       "tokensUsed": 45000,
-      "tokensLimit": 107142,
+      "tokensLimit": 35714,
       "messagesUsed": 12,
       "messagesLimit": 40,
-      "pct": 42
-    }
-  ],
-  "planId": "starter"
+      "tokenPct": 63,
+      "messagePct": 30,
+      "pct": 63,
+      "warningSent": false
+    },
+    "weekly": null,
+    "monthly": null
+  },
+  "extraPacks": {
+    "totalTokensRemaining": 500000,
+    "packs": [
+      {
+        "id": "uuid",
+        "tokensGranted": 500000,
+        "tokensRemaining": 500000,
+        "validUntil": "2026-07-10T10:00:00.000Z"
+      }
+    ]
+  },
+  "planId": "starter",
+  "limits": {
+    "daily": { "tokens": 35714, "messages": 40 },
+    "weekly": { "tokens": 250000, "messages": 200 },
+    "monthly": { "tokens": 1000000, "messages": 1200 }
+  }
 }
 ```
+
+**Note:** Only the `daily` window is actively enforced (5-hour UTC-aligned rolling window). The `weekly` and `monthly` keys are always `null` in the current enforcer; `limits` provides the per-plan quota reference for display.
+
+````
 
 ---
 
@@ -247,7 +273,7 @@ Creates a new autonomous task.
   "description": "Find the top 5 competitors...",
   "schedule": "2026-05-24T09:00:00Z" // Optional; null = run immediately
 }
-```
+````
 
 ### `GET /api/emma/tasks/[id]`
 
@@ -327,7 +353,7 @@ Returns a signed download URL for a file (works for files created by code execut
 
 ### `POST /api/emma/tts`
 
-Generates speech audio from text.
+Generates speech audio using ElevenLabs. Resolves the user's API key server-side from the `client_integrations` Supabase table — the client never sends the key.
 
 **Auth:** Required
 
@@ -336,12 +362,16 @@ Generates speech audio from text.
 ```json
 {
   "text": "...",
-  "voice_id": "...", // ElevenLabs voice ID
-  "api_key": "..." // User's ElevenLabs API key (BYOK)
+  "voiceId": "...", // Optional — ElevenLabs voice ID; falls back to persona default, then integration default, then Rachel
+  "expression": "..." // Optional — one of the 10 avatar expressions; adjusts voice speed/style
 }
 ```
 
-**Response:** Audio stream (MP3).
+**Response:** Audio stream (MP3) with `Content-Type: audio/mpeg`.
+
+**204 response:** Returned when no ElevenLabs API key is connected. The client falls back to the browser Web Speech API silently.
+
+**Plan-restricted voices:** If the configured voice requires a higher ElevenLabs subscription tier, the route falls back to Rachel (voice ID `21m00Tcm4TlvDq8ikWAM`) rather than failing. The stored `voiceId` in `client_integrations.metadata` is cleared so future calls use Rachel directly.
 
 ---
 
@@ -546,41 +576,6 @@ WhatsApp Business webhook. Receives incoming messages and routes them to Emma.
 
 ---
 
-## SMB Intake (Public)
-
-### `POST /api/intake/[slug]/chat`
-
-Handles a chat message for the intake widget. No auth required.
-
-**Rate limit:** 20 messages/minute per IP+slug (in-memory).
-
-**Request body:**
-
-```json
-{
-  "message": "...",
-  "sessionId": "uuid"
-}
-```
-
-**Response:** SSE stream (same format as brain route).
-
-### `POST /api/intake/[slug]/form`
-
-Submits a completed intake form directly (non-chat path).
-
-**Request body:**
-
-```json
-{
-  "name": "Jane Smith",
-  "contact": "jane@example.com",
-  "reason": "..."
-}
-```
-
----
-
 ## Admin
 
 ### `GET /api/admin`
@@ -604,7 +599,6 @@ All cron routes are authenticated via `Authorization: Bearer <CRON_SECRET>` head
 | `POST /api/emma/cron/connection-health` | hourly           | Checks for expiring OAuth tokens, queues re-auth nudge |
 | `POST /api/emma/cron/pattern-detection` | daily 02:00 UTC  | Analyzes usage patterns, generates suggestions         |
 | `POST /api/emma/cron/reflection`        | daily 03:30 UTC  | Memory reflection — surfaces unresolved commitments    |
-| `POST /api/emma/cron/leads-cleanup`     | daily 03:00 UTC  | Purges stale leads                                     |
 | `POST /api/emma/cron/memory-prune`      | daily 04:00 UTC  | Prunes stale/superseded memory entries                 |
 
 ---

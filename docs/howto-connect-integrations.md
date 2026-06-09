@@ -138,11 +138,47 @@ Ask Emma: "Get my HubSpot contacts" to verify.
 
 ---
 
+## ElevenLabs (voice TTS)
+
+ElevenLabs is BYOK (bring your own key) — Emma has no server-side ElevenLabs key. The user connects their own API key through the settings UI. The key is stored AES-256-GCM encrypted in `client_integrations` and decrypted server-side at call time only.
+
+**No env vars required.** ElevenLabs is entirely user-configured.
+
+### 1. Get an ElevenLabs API key
+
+Go to [elevenlabs.io](https://elevenlabs.io) → your profile → API Keys → Create new key. The Free tier works; higher tiers unlock cloned and professional voices.
+
+Ensure the key has the **Text to Speech** scope enabled. Keys missing this scope fail with a `missing_permissions` error and the integration stays connected but non-functional.
+
+### 2. Connect in Emma
+
+`/settings/integrations` → ElevenLabs → Connect. Paste your API key.
+
+Emma saves it encrypted. The integration page also lets you select a default voice from your ElevenLabs library (cloned and generated voices sort first).
+
+### 3. Verify
+
+After connecting, Emma's voice output switches from the browser Web Speech API to ElevenLabs audio. Ask Emma anything — you should hear the ElevenLabs voice instead of the system TTS.
+
+### Voice selection and plan restrictions
+
+Voice priority (highest to lowest):
+
+1. `voiceId` passed in the TTS request (per-message override)
+2. `voice_id` from the user's custom persona (`personas` table)
+3. Default voice saved in `client_integrations.metadata.voiceId`
+4. Rachel (`21m00Tcm4TlvDq8ikWAM`) — built-in fallback
+
+If the configured voice requires a higher ElevenLabs subscription tier than the connected key supports, Emma automatically falls back to Rachel rather than failing or disconnecting the integration. The stored voice preference is cleared so future calls use Rachel directly until the user picks a new voice.
+
+---
+
 ## Custom MCP Servers
 
 Emma supports any remote MCP server via the `user_mcp_servers` Supabase table. Add servers at `/settings/mcp`.
 
 Requirements:
+
 - Must be HTTP (SSE or Streamable HTTP transport)
 - Must have a public HTTPS URL
 - For authenticated servers, provide a Bearer token — it's encrypted at rest
@@ -160,6 +196,10 @@ Enterprise customers with internal tools behind a firewall can use [MCP Tunnels]
 **Tool calls silently doing nothing** — check that the right API scopes were granted during OAuth. Gmail `send_email` requires `https://www.googleapis.com/auth/gmail.send`.
 
 **Local dev** — OAuth redirect URIs must match exactly. For local dev use `http://localhost:3000/api/integrations/[service]/oauth/callback` and add it to your OAuth app's authorized URIs.
+
+**ElevenLabs "missing_permissions"** — the API key was created without the Text to Speech scope. Delete the key in ElevenLabs, create a new one with TTS scope enabled, and reconnect.
+
+**ElevenLabs voice silently falls back to Rachel** — the selected voice requires a higher ElevenLabs subscription tier than your key supports. Upgrade your ElevenLabs plan or pick a premade voice that your tier includes. The integration stays connected; only the voice preference is cleared.
 
 ---
 

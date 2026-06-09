@@ -131,19 +131,9 @@ On Enterprise plans, `features.encryption = true` enables field-level encryption
 
 ## Row-Level Security
 
-All Supabase tables use Row Level Security (RLS). Users can only access their own data. The `leads` table is write-only via service role — no user (including the business owner) can read leads directly from the database; they're delivered via email or the `/business/[slug]/leads` page.
+All Supabase tables use Row Level Security (RLS). Users can only access their own data.
 
 Policies are defined in `supabase/schema.sql`. The service role key (used by server-side API routes) bypasses RLS — which is why it must be kept server-side and never exposed in `NEXT_PUBLIC_*` variables.
-
----
-
-## Tennessee SB 2652 Compliance
-
-The SMB intake widget at `/intake/[slug]` displays the required AI disclosure:
-
-> "This service uses artificial intelligence. You are interacting with an AI, not a human."
-
-This appears at the top of every intake chat session to comply with Tennessee SB 2652, which requires disclosure when AI is used to interact with Tennessee residents.
 
 ---
 

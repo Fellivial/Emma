@@ -128,7 +128,7 @@ Visit `/login`. Create an account. Emma will now remember facts about you across
 
 `/settings/profile` — set your name, timezone, and preferences (Emma uses these in conversation)  
 `/settings/usage` — see your token usage across daily, weekly, and monthly windows  
-`/settings/integrations` — connect Gmail, Google Calendar, Slack, Notion, or HubSpot  
+`/settings/integrations` — connect Gmail, Google Calendar, Slack, Notion, HubSpot, or ElevenLabs (voice TTS)  
 `/settings/billing` — manage your subscription plan  
 `/settings/mcp` — add custom MCP server tools  
 `/settings/persona` — configure tone, style, and voice (Pro/Enterprise)  
@@ -193,5 +193,4 @@ A running Emma instance with:
 
 - [Connect integrations](howto-connect-integrations.md) to let Emma take real actions (send email, check calendar, post to Slack)
 - [Set up billing](howto-add-billing.md) to gate features by plan
-- [Deploy the SMB intake widget](howto-smb-intake.md) for lead capture
 - [Architecture overview](explanation-architecture.md) to understand how the brain route works

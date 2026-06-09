@@ -18,9 +18,9 @@ sanitiseInput()          ← src/core/security/sanitise.ts
        │
        ▼
 checkUsage()             ← src/core/usage-enforcer.ts
-  - read three windows (daily/weekly/monthly) from usage_windows
-  - if any window ≥ 100% → return blocked
-  - if any window ≥ 80% and warning not sent → return warning
+  - read current 5-hour UTC-aligned window from usage_windows
+  - if window ≥ 100% → return blocked
+  - if window ≥ 80% and warning not sent → return warning
   - fail-open on DB error
        │
        ▼
@@ -90,7 +90,9 @@ Available expressions: `neutral`, `smirk`, `warm`, `concerned`, `amused`, `skept
 
 ## Usage Enforcement: Fail-Open
 
-The enforcer checks three windows before every brain call. **The enforcement is intentionally fail-open:** if the Supabase database is unreachable, `checkUsage()` returns `{ status: "ok" }` and the request proceeds.
+The enforcer checks a **single 5-hour UTC-aligned rolling window** before every brain call. Windows align to UTC blocks: 00:00–04:59, 05:00–09:59, 10:00–14:59, 15:00–19:59, 20:00–23:59. Using one window per-period (rather than three concurrent daily/weekly/monthly windows) simplifies enforcement and avoids edge cases around timezone-aware window boundaries.
+
+**The enforcement is intentionally fail-open:** if the Supabase database is unreachable, `checkUsage()` returns `{ status: "ok" }` and the request proceeds.
 
 This is a deliberate availability trade-off: a broken metering database should not cause Emma to stop working for users. The alternative — blocking all requests when metering fails — would be worse for users and indistinguishable from an outage.
 
@@ -126,14 +128,16 @@ The chat panel shows pulsing skeleton bubbles while `historyReady === null` and 
 
 1. Refreshes the Supabase session cookie if needed
 2. Redirects unauthenticated requests to `/login` (except public paths)
-3. Handles subdomain routing: `{slug}.{SMB_DOMAIN}` → `/intake/{slug}`
+3. Redirects waitlisted users (not yet approved) to `/waitlist`
+4. Redirects already-authenticated users hitting `/login`, `/`, or `/landing` back to `/app`
 
 Public paths that bypass auth:
 
-- `/login`, `/auth/callback`, `/register`
+- `/login`, `/register`, `/auth/callback`
 - `/landing`, `/waitlist`
-- `/intake/*`
 - `/api/waitlist`, `/api/emma/webhook`, `/api/emma/unsubscribe`
+
+API routes (`/api/*`) bypass the middleware redirect — each route handler performs its own auth check internally.
 
 When `NEXT_PUBLIC_SUPABASE_URL` is not set, the middleware is a no-op — useful for local dev without Supabase.
 
