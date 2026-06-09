@@ -158,18 +158,38 @@ export async function POST(req: NextRequest) {
           // Resume the agent loop from where it paused
           const task = approval.tasks;
           if (task && task.status === "awaiting_approval") {
-            // Build resume messages: load persisted transcript and append the tool result
+            // Build resume messages: load persisted transcript and inject the tool result.
+            // Use the proper OpenAI tool-result format (role:"tool" + tool_call_id) so the
+            // model receives the outcome in the same slot it expected, rather than as a
+            // synthetic user message. Extract tool_call_id from the last assistant message
+            // in the transcript that references this tool.
             const priorMessages = (task.step_transcript || []) as Array<Record<string, unknown>>;
-            const resumeMessages =
-              priorMessages.length > 0
-                ? [
-                    ...priorMessages,
-                    {
+            let resumeMessages: Array<Record<string, unknown>> | undefined;
+            if (priorMessages.length > 0) {
+              let toolCallId: string | undefined;
+              for (let i = priorMessages.length - 1; i >= 0; i--) {
+                const msg = priorMessages[i];
+                if (msg.role === "assistant" && Array.isArray(msg.tool_calls)) {
+                  const match = (
+                    msg.tool_calls as Array<{ id: string; function: { name: string } }>
+                  ).find((tc) => tc.function.name === approval.action);
+                  if (match) {
+                    toolCallId = match.id;
+                    break;
+                  }
+                }
+              }
+
+              resumeMessages = [
+                ...priorMessages,
+                toolCallId
+                  ? { role: "tool" as const, tool_call_id: toolCallId, content: result.output }
+                  : {
                       role: "user" as const,
                       content: `The tool "${approval.action}" was approved and executed. Result: ${result.output}. Continue from where you left off.`,
                     },
-                  ]
-                : undefined;
+              ];
+            }
 
             // Re-run agent loop to continue from the next step
             const agentTask: AgentTask = {
