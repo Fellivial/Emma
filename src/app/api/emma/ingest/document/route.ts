@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 // 90 s: scanned PDFs with up to 5 pages can take ~35 s for mupdf rasterization + Tesseract OCR.
 export const maxDuration = 90;
 
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -89,6 +90,30 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const mimeType = file.type;
+
+    // ── Deduplication guard ──────────────────────────────────────────────────
+    // Hash the raw bytes before doing any expensive OCR/parsing work.
+    // If this user already has a document with the same hash, return it.
+    const contentHash = createHash("sha256").update(buffer).digest("hex");
+    const { data: existingDoc } = await supabase
+      .from("ingested_documents")
+      .select("id, label, character_count, chunk_count")
+      .eq("user_id", user.id)
+      .eq("content_hash", contentHash)
+      .maybeSingle();
+
+    if (existingDoc) {
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        documentId: existingDoc.id,
+        characterCount: existingDoc.character_count,
+        chunkCount: existingDoc.chunk_count,
+        message: `Duplicate of existing document "${existingDoc.label}" (id: ${existingDoc.id})`,
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     let extractedText = "";
 
     if (mimeType === "application/pdf") {
@@ -136,6 +161,7 @@ export async function POST(req: NextRequest) {
         character_count: extractedText.length,
         chunk_count: chunks.length,
         extracted_text: extractedText,
+        content_hash: contentHash,
       })
       .select("id")
       .single();
