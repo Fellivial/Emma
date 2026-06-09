@@ -15,7 +15,6 @@ import {
   type EnforcementResult,
 } from "@/core/usage-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
-import { getVertical } from "@/core/verticals/templates";
 import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { decrypt } from "@/core/security/encryption";
@@ -152,18 +151,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Load per-client config and resolve vertical (fail-open)
+    // Load per-client config (fail-open)
     let clientConfigForPrompt = null;
     if (userId) {
       try {
         clientConfigForPrompt = await loadClientConfigForUser(userId);
       } catch {
-        // continue without vertical
+        // continue without config
       }
     }
-    const vertical = clientConfigForPrompt?.verticalId
-      ? getVertical(clientConfigForPrompt.verticalId)
-      : undefined;
 
     // Load custom persona (Pro/Enterprise only, fail-open)
     let customPersona: CustomPersona | undefined;
@@ -258,7 +254,6 @@ export async function POST(req: NextRequest) {
       visionContext,
       activeUser,
       emotionState,
-      vertical,
       customRoutines: clientConfigForPrompt?.customRoutines ?? [],
       previousContext: conversationSummary,
       customPersona,

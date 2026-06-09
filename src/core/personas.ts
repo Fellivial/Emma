@@ -9,7 +9,6 @@
 } from "@/types/emma";
 import { serializeMemories } from "./memory-shared";
 import { BUILT_IN_ROUTINES } from "./routines-engine";
-import type { VerticalConfig } from "@/core/verticals/templates";
 import type { CustomPersona } from "@/types/persona";
 import { SUPPORTED_LANGUAGES } from "@/types/persona";
 
@@ -125,7 +124,6 @@ interface PromptContext {
   visionContext?: string;
   activeUser?: UserProfile;
   emotionState?: EmotionState;
-  vertical?: VerticalConfig;
   /** Per-request custom routines loaded from DB — overrides module-level state. */
   customRoutines?: Routine[];
   /** LLM-generated summary of prior conversation session(s), injected for cross-session continuity. */
@@ -201,15 +199,6 @@ Use tool_search to find the right tool before calling it. Available categories:
 - User MCP servers: additional tools vary by what the user has connected
 
 Integration tools only work if the user has connected the relevant service. Do not call an integration tool if you are not confident the user has connected it.`;
-
-  if (ctx.vertical) {
-    stable += `
-
-## Industry Context
-${ctx.vertical.personaPrompt}
-
-Pay special attention to: ${ctx.vertical.memoryFocusAreas.join(", ")}`;
-  }
 
   if (ctx.previousContext) {
     stable += `

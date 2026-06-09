@@ -3,7 +3,6 @@ import { getUser } from "@/lib/supabase/server";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
-import { applyVertical, getAllVerticals } from "@/core/verticals/templates";
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,16 +55,7 @@ export async function GET() {
       usage.monthlyCost = Math.round((usage.monthlyTokens / 1_000_000) * 6 * 100) / 100;
     }
 
-    return NextResponse.json({
-      config,
-      usage,
-      verticals: getAllVerticals().map((v) => ({
-        id: v.id,
-        name: v.name,
-        icon: v.icon,
-        description: v.description,
-      })),
-    });
+    return NextResponse.json({ config, usage });
   } catch (err) {
     console.error("[/api/emma/settings GET]", err);
     return NextResponse.json({ error: "Failed to load settings" }, { status: 500 });
@@ -82,7 +72,6 @@ function parseSettingsBody(raw: unknown): {
   voiceId?: string;
   autonomyTier?: 1 | 2 | 3;
   proactiveVision?: boolean;
-  verticalId?: string;
 } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const b = raw as Record<string, unknown>;
@@ -96,7 +85,6 @@ function parseSettingsBody(raw: unknown): {
     out.autonomyTier = b.autonomyTier as 1 | 2 | 3;
   }
   if (typeof b.proactiveVision === "boolean") out.proactiveVision = b.proactiveVision;
-  if (typeof b.verticalId === "string") out.verticalId = b.verticalId;
   return out;
 }
 
@@ -130,20 +118,17 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!membership) {
-      // No client yet — create one, optionally from a vertical template
-      const vertical = body.verticalId ? applyVertical(body.verticalId) : null;
-
+      // No client yet — create one
       const { data: newClient, error: createErr } = await supabase
         .from("clients")
         .insert({
           slug: `client-${user.id.slice(0, 8)}`,
           name: body.name || "My Emma",
           owner_id: user.id,
-          persona_name: vertical?.persona_name || body.personaName || "Emma",
-          persona_prompt: vertical?.persona_prompt || body.personaPrompt || null,
-          persona_greeting: vertical?.persona_greeting || body.personaGreeting || null,
+          persona_name: body.personaName || "Emma",
+          persona_prompt: body.personaPrompt || null,
+          persona_greeting: body.personaGreeting || null,
           voice_id: body.voiceId || null,
-          tools_enabled: vertical?.tools_enabled || undefined,
           autonomy_tier: body.autonomyTier ?? 2,
           proactive_vision: body.proactiveVision ?? false,
         })

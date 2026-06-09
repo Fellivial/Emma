@@ -67,10 +67,6 @@ const BASE_ROW = {
   plan_id: "starter",
   autonomy_tier: 2,
   proactive_vision: false,
-  vertical_id: null,
-  form_steps: null,
-  owner_email: null,
-  sheets_id: null,
   custom_routines: null,
 };
 

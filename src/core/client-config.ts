@@ -25,7 +25,6 @@ export interface ClientConfig {
   planId: string;
   autonomyTier: AutonomyTier;
   proactiveVision: boolean;
-  verticalId: string | null;
   customRoutines: Routine[];
 }
 
@@ -44,7 +43,6 @@ const DEFAULT_CONFIG: ClientConfig = {
   planId: "free",
   autonomyTier: 3,
   proactiveVision: false,
-  verticalId: null,
   customRoutines: [],
 };
 
@@ -85,7 +83,6 @@ export async function loadClientConfig(slug?: string): Promise<ClientConfig> {
       planId: data.plan_id || "free",
       autonomyTier: (data.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: data.proactive_vision ?? false,
-      verticalId: data.vertical_id ?? null,
       customRoutines: (data.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
@@ -125,7 +122,6 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       plan_id: string | null;
       autonomy_tier: number | null;
       proactive_vision: boolean | null;
-      vertical_id: string | null;
       custom_routines: Routine[] | null;
     };
     return {
@@ -143,7 +139,6 @@ export async function loadClientConfigForUser(userId: string): Promise<ClientCon
       planId: c.plan_id || "free",
       autonomyTier: (c.autonomy_tier as AutonomyTier) ?? 2,
       proactiveVision: c.proactive_vision ?? false,
-      verticalId: c.vertical_id ?? null,
       customRoutines: (c.custom_routines as Routine[] | null) ?? [],
     };
   } catch {
