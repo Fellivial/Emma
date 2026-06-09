@@ -165,6 +165,8 @@ create table if not exists public.tasks (
 alter table public.tasks add column if not exists context_snapshot jsonb;
 alter table public.tasks add column if not exists task_summary text;
 alter table public.tasks add column if not exists steps_taken integer not null default 0;
+alter table public.tasks add column if not exists started_at timestamptz;
+alter table public.tasks add column if not exists step_transcript jsonb;
 
 
 -- ─── 7. Action Log (tool call history) ──────────────────────────────────────
@@ -179,7 +181,7 @@ create table if not exists public.action_log (
   input jsonb not null default '{}',
   output jsonb,
   token_cost integer not null default 0,
-  status text not null default 'pending' check (status in ('pending', 'running', 'completed', 'failed', 'awaiting_approval', 'approved', 'rejected')),
+  status text not null default 'pending' check (status in ('pending', 'running', 'completed', 'failed', 'awaiting_approval', 'approved', 'rejected', 'injection_detected', 'skipped_low_autonomy', 'moderate_executed')),
   risk_level text not null default 'safe' check (risk_level in ('safe', 'moderate', 'dangerous')),
   trigger_type text not null default 'manual' check (trigger_type in ('manual', 'scheduled', 'webhook', 'agent')),
   error text,
@@ -406,7 +408,7 @@ create table if not exists public.rate_limit_counters (
 create table if not exists public.client_integrations (
   id uuid default gen_random_uuid() primary key,
   client_id uuid references public.clients on delete cascade not null,
-  service text not null constraint client_integrations_service_check check (service in ('gmail','google_calendar','slack','notion','hubspot','elevenlabs') or service like 'mcp_%'),
+  service text not null constraint client_integrations_service_check check (service in ('gmail','google_calendar','google_drive','slack','notion','hubspot','elevenlabs') or service like 'mcp_%'),
   status text not null default 'disconnected' check (status in ('connected','disconnected','auth_expired','error')),
   access_token text,
   refresh_token text,
@@ -795,9 +797,18 @@ alter table public.client_integrations add column if not exists mcp_url text def
 alter table public.client_integrations drop constraint if exists client_integrations_service_check;
 alter table public.client_integrations add constraint client_integrations_service_check
   check (
-    service in ('gmail', 'google_calendar', 'slack', 'notion', 'hubspot', 'elevenlabs')
+    service in ('gmail', 'google_calendar', 'google_drive', 'slack', 'notion', 'hubspot', 'elevenlabs')
     or service like 'mcp_%'
   );
+
+-- action_log: extend status constraint to cover agent-loop-specific values
+alter table public.action_log drop constraint if exists action_log_status_check;
+alter table public.action_log add constraint action_log_status_check
+  check (status in (
+    'pending', 'running', 'completed', 'failed',
+    'awaiting_approval', 'approved', 'rejected',
+    'injection_detected', 'skipped_low_autonomy', 'moderate_executed'
+  ));
 
 
 -- ═══════════════════════════════════════════════════════════════════════════

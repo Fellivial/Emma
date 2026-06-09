@@ -19,7 +19,12 @@ function initVapid() {
 
   if (!pub || !priv) return false;
 
-  webpush.setVapidDetails(contact, pub, priv);
+  try {
+    webpush.setVapidDetails(contact, pub, priv);
+  } catch (err) {
+    console.error("[push-notify] Failed to initialise VAPID — check key format:", err);
+    return false;
+  }
   return true;
 }
 
@@ -51,7 +56,15 @@ export async function pushToUser(userId: string, payload: PushPayload): Promise<
       } catch (err: unknown) {
         const status = (err as { statusCode?: number })?.statusCode;
         if (status === 410 || status === 404) {
+          // Subscription is gone — clean it up
           await supabase.from("push_subscriptions").delete().eq("id", id);
+        } else {
+          // Log unexpected errors (e.g. 429 rate limit, 400 bad request, network failure)
+          // so operators can detect push delivery issues in production logs.
+          console.error(
+            `[push-notify] sendNotification failed (status=${status ?? "network"}):`,
+            err
+          );
         }
       }
     })

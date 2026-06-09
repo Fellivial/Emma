@@ -263,7 +263,7 @@ Cancels a pending task.
 
 ### `POST /api/emma/agent`
 
-Executes a single step of the autonomous agent loop. Called internally by the task runner and by the frontend for real-time agentic sessions.
+Manages the autonomous agent loop — create tasks, approve/reject pending actions, query status, and browse history. Returns JSON (not a stream).
 
 **Auth:** Required
 
@@ -271,13 +271,29 @@ Executes a single step of the autonomous agent loop. Called internally by the ta
 
 ```json
 {
-  "taskId": "uuid",
-  "messages": [ ... ],  // Current conversation context
-  "tools": [ ... ]      // Tool subset for this step
+  "action": "create" | "approve" | "reject" | "status" | "history",
+  "goal": "Research competitors and send summary",  // create only
+  "context": "Focus on pricing",                    // create only, optional
+  "triggerSource": "user_request",                  // create only, optional
+  "approvalId": "uuid",                             // approve / reject only
+  "taskId": "uuid",                                 // status only
+  "limit": 20                                       // history only, default 20
 }
 ```
 
-**Response:** SSE stream — same format as the brain route, plus `tool_executed` events for each tool call.
+**Actions:**
+
+| `action`  | Description                                                                       |
+| --------- | --------------------------------------------------------------------------------- |
+| `create`  | Starts a new agent task. Runs the loop synchronously and returns the result.      |
+| `approve` | Approves a pending dangerous/moderate action and resumes the loop from that step. |
+| `reject`  | Rejects a pending action and cancels the task.                                    |
+| `status`  | Returns a task record with its full `action_log`.                                 |
+| `history` | Returns recent tasks + any pending approvals for the user.                        |
+
+**`create` response:** `AgentResult` — `{ taskId, status, steps[], summary, totalTokens }`
+
+**`history` response:** `{ tasks: Task[], approvals: Approval[] }`
 
 ---
 
@@ -326,6 +342,117 @@ Generates speech audio from text.
 ```
 
 **Response:** Audio stream (MP3).
+
+---
+
+## Speech-to-Text
+
+### `POST /api/emma/stt`
+
+Server-side STT fallback using OpenAI Whisper. Used when the browser Web Speech API returns `service-not-allowed` (e.g. Linux, some mobile browsers).
+
+**Auth:** Required  
+**Plan gate:** Starter and above
+
+**Request body:** `multipart/form-data` with `audio` field (WebM, MP4, or WAV blob recorded via `MediaRecorder`).
+
+**Response:** `{ "transcript": "..." }`
+
+**Model selection:** Starter → `gpt-4o-mini-transcribe`; Pro/Enterprise → `gpt-4o-transcribe`.
+
+**Requires env var:** `OPENAI_API_KEY` (separate from `OPENROUTER_API_KEY` — OpenRouter does not expose audio endpoints).
+
+---
+
+## Push Notifications
+
+### `GET /api/emma/push/subscribe`
+
+Returns the user's current push subscription status.
+
+**Auth:** Required
+
+**Response:** `{ "subscribed": true | false }`
+
+### `POST /api/emma/push/subscribe`
+
+Registers a Web Push subscription for the authenticated user. Called by the service worker registrar after the browser grants push permission.
+
+**Auth:** Required
+
+**Request body:** The `PushSubscription` JSON object from `registration.pushManager.subscribe()`.
+
+**Response:** `{ "ok": true }`
+
+### `DELETE /api/emma/push/subscribe`
+
+Removes the user's push subscription.
+
+**Auth:** Required
+
+**Response:** `{ "ok": true }`
+
+---
+
+## Custom Persona
+
+### `GET /api/emma/persona`
+
+Returns the authenticated user's custom persona configuration (decrypted).
+
+**Auth:** Required
+
+**Response:** `{ "persona": CustomPersona | null }`
+
+### `PUT /api/emma/persona`
+
+Creates or replaces the user's custom persona. Validates tone adjectives and topic tags against allowlists, runs an LLM injection classifier on the free-text description, and encrypts `voice_id` and `description` at rest.
+
+**Auth:** Required  
+**Plan gate:** Pro and above
+
+**Request body:**
+
+```json
+{
+  "name": "My Persona",
+  "base_persona_id": "mommy" | "neutral",
+  "tone_adjectives": ["warm", "concise"],
+  "communication_style": "casual" | "professional" | "playful",
+  "verbosity": "brief" | "balanced" | "detailed",
+  "topics_emphasise": ["fitness", "cooking"],
+  "topics_avoid": ["politics"],
+  "language": "en",
+  "voice_id": "ElevenLabs-voice-id",
+  "description": "Optional freetext persona note (max 500 chars)"
+}
+```
+
+**Response:** `{ "ok": true }`
+
+---
+
+## Proactive Patterns
+
+### `GET /api/emma/patterns`
+
+Returns the top unseen proactive suggestion for the authenticated user. Called on app mount to surface pattern-based nudges.
+
+**Auth:** Required
+
+**Response:** `{ "pattern": PatternDetection | null }` — `null` during quiet hours or when the daily message cap (3/day) is reached.
+
+---
+
+## GDPR
+
+### `DELETE /api/emma/gdpr`
+
+Permanently erases all data for the authenticated user: memories, chat history (`chat_messages` + encrypted `messages`/`conversations`), usage windows, tasks, integrations, persona, and the Supabase auth account.
+
+**Auth:** Required
+
+**Response:** `{ "ok": true }`
 
 ---
 
@@ -468,12 +595,17 @@ Returns aggregate usage stats and user list.
 
 All cron routes are authenticated via `Authorization: Bearer <CRON_SECRET>` header.
 
-| Route                                   | Schedule     | Purpose                                        |
-| --------------------------------------- | ------------ | ---------------------------------------------- |
-| `POST /api/emma/cron/scheduled-tasks`   | every minute | Runs pending scheduled tasks                   |
-| `POST /api/emma/cron/pattern-detection` | daily        | Analyzes usage patterns, generates suggestions |
-| `POST /api/emma/cron/email-sequences`   | hourly       | Sends drip email sequences                     |
-| `POST /api/emma/cron/leads-cleanup`     | daily        | Purges stale leads                             |
+| Route                                   | Schedule         | Purpose                                                |
+| --------------------------------------- | ---------------- | ------------------------------------------------------ |
+| `POST /api/emma/cron/scheduled-tasks`   | every minute     | Runs pending scheduled tasks                           |
+| `POST /api/emma/cron/approvals-expiry`  | every 5 minutes  | Expires stale pending approvals                        |
+| `POST /api/emma/cron/heartbeat`         | every 30 minutes | Creates nudge suggestions for tasks due soon           |
+| `POST /api/emma/cron/email-sequences`   | every 15 minutes | Sends drip email sequences                             |
+| `POST /api/emma/cron/connection-health` | hourly           | Checks for expiring OAuth tokens, queues re-auth nudge |
+| `POST /api/emma/cron/pattern-detection` | daily 02:00 UTC  | Analyzes usage patterns, generates suggestions         |
+| `POST /api/emma/cron/reflection`        | daily 03:30 UTC  | Memory reflection — surfaces unresolved commitments    |
+| `POST /api/emma/cron/leads-cleanup`     | daily 03:00 UTC  | Purges stale leads                                     |
+| `POST /api/emma/cron/memory-prune`      | daily 04:00 UTC  | Prunes stale/superseded memory entries                 |
 
 ---
 

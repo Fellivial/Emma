@@ -1,5 +1,21 @@
 # Code Review: feat/openrouter-migration
 
+> **Status: Historical — retained for traceability.**
+> This review was conducted on 2026-05-26 against the `feat/openrouter-migration` branch.
+> All 10 findings below have since been addressed in subsequent branches (P11–P18 and beyond).
+> Verified against `main` as of 2026-06-09:
+>
+> - Finding 1 (duplicate assistant message): fixed — `messages.push(assistantMessage)` moved outside tool-call loop
+> - Finding 2 (MODEL_UTILITY tool schema): mitigated — fallback arrays added; model choice documented in `models.ts`
+> - Finding 3 (`checkAutonomousAccess` not called): fixed — called in `agent/route.ts` on every `create` action
+> - Finding 4 (`hasDocuments` image coercion): fixed — array content extracted via text-filter before overwrite
+> - Finding 5 (sequential cron loop timeout): fixed — `generateSuggestionsViaBatch` batches all patterns in a single call
+> - Finding 6 (rate-limit window 1_000_000 ms): fixed — intake route removed/corrected
+> - Finding 7 (missing OPENROUTER_API_KEY guard): fixed — guard restored in pattern-detector
+> - Finding 8 (`startsWith('[')` key guard): improved — error now logged at line 116 of `tts/route.ts`; null-key path is intentional
+> - Finding 9 (`refused`/`contextWindowExceeded` never emitted): fixed — both derived from `finishReason` in brain route (lines 520–521)
+> - Finding 10 (missing OPENROUTER_API_KEY fast-fail): improved — `console.error` in `openRouterHeaders()` + Sentry on the resulting 502
+
 **Branch:** `feat/openrouter-migration`
 **Reviewed:** 2026-05-26
 **Scope:** 94 files changed, 3682 insertions / 5542 deletions

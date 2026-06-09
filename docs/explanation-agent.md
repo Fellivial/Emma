@@ -18,26 +18,26 @@ The agent loop solves this: Emma plans the task, executes tools in sequence, han
 
 ## How the Agent Loop Works (`src/core/agent-loop.ts`)
 
-The loop is a continuation-passing architecture around the OpenRouter chat completions API:
+The loop is a continuation-passing architecture around the OpenRouter chat completions API using standard OpenAI-format function calling:
 
 ```
 1. POST /api/emma/agent with task + tools + message history
-2. Claude responds with either:
-   a. tool_use block → execute the tool, append result, loop
-   b. text response  → task complete, return to user
-   c. pause_turn    → server-side tool still running (web_search, web_fetch),
-                      resend the response to continue
+2. Model responds with either:
+   a. tool_calls array → execute each tool, append results, loop
+   b. text response (finish_reason: "stop") → task complete, return to user
 3. Repeat until text response or max iterations
 ```
 
-**`pause_turn` stop reason:** When Emma uses `web_search` or `web_fetch`, the API returns `stop_reason: "pause_turn"` while the search executes server-side. The agent loop detects this and immediately resends the current response as input, allowing the loop to continue once the tool finishes. Without this handling, the agent silently stops mid-task.
+Each iteration sends the full message history (with tool results appended) back to the model. History is compressed via `buildStateSummary()` every 5 messages to keep input tokens bounded.
 
-**Tool execution:** Tools are executed inside the agent route, not client-side. The agent has access to:
-- Built-in: `web_search`, `web_fetch` (no key required)
+**Tool execution:** Tools are executed server-side inside the agent loop, not client-side. The agent has access to:
+
+- Built-in: `web_search` (Tavily), `web_fetch` (Jina Reader)
 - Integration tools: all tools registered in `tool-registry.ts` (Gmail, Calendar, Slack, Notion, HubSpot, Drive)
 - User MCP tools: any server the user connected via `/settings/mcp`
+- In-session scratchpad: `memory` tool for intra-task file operations (not persisted to DB)
 
-**Max iterations:** The loop stops after a configurable maximum (default: 10 tool calls). This prevents runaway loops and controls cost.
+**Max iterations:** The loop stops after a configurable maximum (default: 5 steps for manual tasks). This prevents runaway loops and controls cost.
 
 ---
 
@@ -90,11 +90,11 @@ The alert shows how many operations will be affected (`${routine.commands.length
 
 Every tool in `src/core/tool-registry.ts` has a `riskLevel` of `safe`, `moderate`, or `dangerous`. This maps to the autonomy tier used when Emma calls that tool autonomously:
 
-| Risk level | Autonomy tier | Example tools |
-|------------|--------------|---------------|
-| `safe` | Tier 1 (auto) | `web_search`, `calendar_get_upcoming`, `drive_list_files`, `hubspot_get_contacts` |
-| `moderate` | Tier 2 (suggest) | `send_email`, `book_appointment`, `slack_send_message`, `notion_create_page`, `hubspot_create_contact` |
-| `dangerous` | Tier 3 (alert) | `hubspot_create_deal`, `drive_upload_file`, `send_whatsapp` |
+| Risk level  | Autonomy tier    | Example tools                                                                                          |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------ |
+| `safe`      | Tier 1 (auto)    | `web_search`, `calendar_get_upcoming`, `drive_list_files`, `hubspot_get_contacts`                      |
+| `moderate`  | Tier 2 (suggest) | `send_email`, `book_appointment`, `slack_send_message`, `notion_create_page`, `hubspot_create_contact` |
+| `dangerous` | Tier 3 (alert)   | `hubspot_create_deal`, `drive_upload_file`, `send_whatsapp`                                            |
 
 The tool registry uses `strict: true` on all tool definitions — grammar-constrained sampling guarantees tool inputs exactly match their JSON schema. Malformed inputs that would silently fail are caught before execution.
 
@@ -119,6 +119,7 @@ The trade-off: the custom loop requires more code to maintain and requires handl
 Emma uses `web_search` and `web_fetch` as server-side tools in both the brain route (chat) and the agent loop. No external API key is needed.
 
 These are the same tools in both paths, which means:
+
 - Web search results are consistent between chat and agentic tasks
 - No cost for Brave Search or any third-party search API
 
