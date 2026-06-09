@@ -293,6 +293,107 @@ export class HubSpotAdapter implements IntegrationAdapter {
     }
   }
 
+  async createContact(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { email, firstname, lastname, company, phone } = params as {
+      email: string;
+      firstname?: string;
+      lastname?: string;
+      company?: string;
+      phone?: string;
+    };
+
+    const properties: Record<string, string> = { email };
+    if (firstname) properties.firstname = firstname;
+    if (lastname) properties.lastname = lastname;
+    if (company) properties.company = company;
+    if (phone) properties.phone = phone;
+
+    try {
+      const res = await callWithTokenRefresh(clientId, "hubspot", (token) =>
+        fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ properties }),
+        })
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "hubspot", new Error(errText));
+        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
+      }
+
+      const data = await res.json();
+      await markIntegrationUsed(clientId, "hubspot");
+      return {
+        success: true,
+        output: `Contact created with ID: ${data.id}`,
+        data: { contactId: data.id, email },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      if (err instanceof IntegrationExpiredError) {
+        return { success: false, output: "HubSpot requires re-authorization" };
+      }
+      await markIntegrationError(clientId, "hubspot", err);
+      return { success: false, output: `HubSpot create contact failed: ${err.message}` };
+    }
+  }
+
+  async logActivity(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
+    const { contact_id, activity_type, note } = params as {
+      contact_id: string;
+      activity_type?: string;
+      note: string;
+    };
+
+    const activityType = activity_type || "note";
+    const noteBody = `[${activityType.toUpperCase()}] ${note}`.trim();
+
+    try {
+      const res = await callWithTokenRefresh(clientId, "hubspot", (token) =>
+        fetch("https://api.hubapi.com/crm/v3/objects/notes", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            properties: {
+              hs_note_body: noteBody,
+              hs_timestamp: Date.now().toString(),
+            },
+            associations: [
+              {
+                to: { id: contact_id },
+                // 202 = HUBSPOT_DEFINED contact association type for notes
+                types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 202 }],
+              },
+            ],
+          }),
+        })
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        await markIntegrationError(clientId, "hubspot", new Error(errText));
+        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
+      }
+
+      const data = await res.json();
+      await markIntegrationUsed(clientId, "hubspot");
+      return {
+        success: true,
+        output: `Activity logged successfully (note ID: ${data.id})`,
+        data: { noteId: data.id, contactId: contact_id, activityType },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      if (err instanceof IntegrationExpiredError) {
+        return { success: false, output: "HubSpot requires re-authorization" };
+      }
+      await markIntegrationError(clientId, "hubspot", err);
+      return { success: false, output: `HubSpot log activity failed: ${err.message}` };
+    }
+  }
+
   async send(clientId: string, params: Record<string, unknown>): Promise<AdapterResult> {
     const { note, deal_id } = params as {
       note: string;

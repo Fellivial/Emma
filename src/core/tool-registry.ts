@@ -400,35 +400,9 @@ registerTool({
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
-      const { getIntegrationTokens } = await import("@/core/integrations/adapter");
-      const { accessToken } = await getIntegrationTokens(context.clientId || "", "hubspot");
-
-      const properties: Record<string, string> = { email: input.email as string };
-      if (input.firstname) properties.firstname = input.firstname as string;
-      if (input.lastname) properties.lastname = input.lastname as string;
-      if (input.company) properties.company = input.company as string;
-      if (input.phone) properties.phone = input.phone as string;
-
-      const res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ properties }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
-      }
-
-      const data = await res.json();
-      return {
-        success: true,
-        output: `Contact created with ID: ${data.id}`,
-        data: { contactId: data.id, email: input.email },
-      };
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+      return adapter.createContact(context.clientId || "", input);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
@@ -436,12 +410,6 @@ registerTool({
           success: false,
           output:
             "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
-        };
-      }
-      if (err.name === "IntegrationAuthExpiredError") {
-        return {
-          success: false,
-          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
         };
       }
       return { success: false, output: `HubSpot create contact failed: ${err.message}` };
@@ -477,44 +445,9 @@ registerTool({
   riskLevel: "moderate",
   handler: async (input, context) => {
     try {
-      const { getIntegrationTokens } = await import("@/core/integrations/adapter");
-      const { accessToken } = await getIntegrationTokens(context.clientId || "", "hubspot");
-
-      const activityType = (input.activity_type as string) || "note";
-      const noteBody = `[${activityType.toUpperCase()}] ${input.note as string}`.trim();
-
-      const res = await fetch("https://api.hubapi.com/crm/v3/objects/notes", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          properties: {
-            hs_note_body: noteBody,
-            hs_timestamp: Date.now().toString(),
-          },
-          associations: [
-            {
-              to: { id: input.contact_id as string },
-              // 202 = HUBSPOT_DEFINED contact association type for notes
-              types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 202 }],
-            },
-          ],
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return { success: false, output: `HubSpot API error ${res.status}: ${errText}` };
-      }
-
-      const data = await res.json();
-      return {
-        success: true,
-        output: `Activity logged successfully (note ID: ${data.id})`,
-        data: { noteId: data.id, contactId: input.contact_id, activityType },
-      };
+      const { HubSpotAdapter } = await import("@/core/integrations/hubspot");
+      const adapter = new HubSpotAdapter();
+      return adapter.logActivity(context.clientId || "", input);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.name === "IntegrationNotConfiguredError") {
@@ -522,12 +455,6 @@ registerTool({
           success: false,
           output:
             "HubSpot integration not connected. Go to Settings → Integrations to connect HubSpot.",
-        };
-      }
-      if (err.name === "IntegrationAuthExpiredError") {
-        return {
-          success: false,
-          output: "HubSpot auth expired. Go to Settings → Integrations to reconnect.",
         };
       }
       return { success: false, output: `HubSpot log activity failed: ${err.message}` };
