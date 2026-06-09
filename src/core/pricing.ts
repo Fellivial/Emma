@@ -41,6 +41,14 @@ export interface PlanFeatures {
   scheduledTasks: boolean;
   apiAccess: boolean;
   multiUser: boolean;
+  /**
+   * Gates both custom persona configuration AND document ingestion (RAG).
+   * Both are Pro/Enterprise features — `customPersona` is intentionally reused
+   * as the Pro+ gate for document ingestion in `ingest/document/route.ts` and
+   * the document retrieval block in `route.ts` (brain route).
+   * If these ever need separate gating, add `documentIngestion: boolean` here
+   * and update those two call sites.
+   */
   customPersona: boolean;
   elevenlabs: boolean;
   encryption: boolean;

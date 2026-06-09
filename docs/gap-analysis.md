@@ -237,7 +237,9 @@ The gap is **architectural rather than tactical** — the implemented features a
 
 ---
 
-## NOT YET IMPLEMENTED (GAPS)
+## IMPLEMENTED — FORMERLY LISTED AS GAPS
+
+All items below shipped in branches subsequent to this audit's original date. They are preserved here for traceability.
 
 ### 1. Autonomous & Proactive Systems (`autonomous-proactive-systems-research.md`)
 

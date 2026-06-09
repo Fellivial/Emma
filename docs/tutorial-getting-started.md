@@ -39,7 +39,8 @@ npm run dev
 Open [localhost:3000](http://localhost:3000). You'll see Emma's chat interface immediately.
 
 **What you just got:**
-- Streaming chat via OpenRouter (Claude Sonnet by default)
+
+- Streaming chat via OpenRouter (`openai/gpt-oss-120b:free` by default in dev; swap `MODEL_BRAIN` in `src/core/models.ts` for a paid model such as `anthropic/claude-sonnet-4-5` before launching)
 - Live2D avatar with 10 expressions reacting to every response
 - Web search and web fetch (no extra key)
 - In-persona greeting on first load
@@ -66,6 +67,7 @@ For user accounts, persistent memory, and billing, you need Supabase.
 ### 5a. Create a Supabase project
 
 Go to [supabase.com](https://supabase.com), create a project, and collect:
+
 - **Project URL** — looks like `https://xxxx.supabase.co`
 - **Anon key** — from Settings → API → `anon` key
 - **Service role key** — from Settings → API → `service_role` key (keep this secret)
@@ -129,18 +131,66 @@ Visit `/login`. Create an account. Emma will now remember facts about you across
 `/settings/integrations` — connect Gmail, Google Calendar, Slack, Notion, or HubSpot  
 `/settings/billing` — manage your subscription plan  
 `/settings/mcp` — add custom MCP server tools  
+`/settings/persona` — configure tone, style, and voice (Pro/Enterprise)  
+`/settings/documents` — upload PDFs/DOCX for RAG context injection (Pro/Enterprise)  
+`/settings/notifications` — enable Web Push notifications for agent task updates
+
+---
+
+## Step 7: Optional features
+
+### Whisper STT fallback (Starter+)
+
+Emma's voice input uses the browser Web Speech API by default. For browsers that don't support it (Firefox) or for higher accuracy, add an OpenAI key to enable Whisper transcription server-side:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+Starter plans use `gpt-4o-mini-transcribe`; Pro/Enterprise use `gpt-4o-transcribe`.
+
+### Web Push notifications
+
+To receive push notifications when autonomous tasks complete (even when the tab is closed), generate VAPID keys and add them:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+```
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+```
+
+Users then opt in via `/settings/notifications`.
+
+### Inngest background workers (optional)
+
+By default, Emma uses Vercel cron jobs for background tasks (memory pruning, pattern detection, email sequences). Inngest provides durable retries and a developer dashboard as an alternative. To enable:
+
+1. Create an account at [inngest.com](https://www.inngest.com) and create an app.
+2. Add these env vars:
+
+```
+INNGEST_EVENT_KEY=...
+INNGEST_SIGNING_KEY=...
+```
+
+The `GET /api/inngest` handler is already wired. Vercel crons and Inngest are safe to run in parallel — all cron routes are idempotent.
 
 ---
 
 ## What you built
 
 A running Emma instance with:
-- Streaming AI chat via OpenRouter (Claude Sonnet by default)
+
+- Streaming AI chat via OpenRouter (free-tier model by default; swap in a paid model before launch)
 - Live2D avatar with expression sync
 - Persistent memory, user auth, and chat history (full setup only)
 - Web search with no extra key
 
 **Next steps:**
+
 - [Connect integrations](howto-connect-integrations.md) to let Emma take real actions (send email, check calendar, post to Slack)
 - [Set up billing](howto-add-billing.md) to gate features by plan
 - [Deploy the SMB intake widget](howto-smb-intake.md) for lead capture
