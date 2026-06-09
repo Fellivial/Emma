@@ -60,7 +60,7 @@ Optional but recommended for production. Without these, rate limiting falls back
 
 | Variable         | Purpose                                           | Default            |
 | ---------------- | ------------------------------------------------- | ------------------ |
-| `RESEND_API_KEY` | Email sequences + SMB lead notifications          | — (email disabled) |
+| `RESEND_API_KEY` | Email sequences + waitlist invite emails          | — (email disabled) |
 | `EMAIL_FROM`     | Sender address, e.g. `Emma <emma@yourdomain.com>` | —                  |
 
 ---
@@ -146,20 +146,22 @@ From: [developers.facebook.com](https://developers.facebook.com) → your app �
 
 ---
 
-## SMB Intake
-
-| Variable                 | Purpose                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_SMB_DOMAIN` | Subdomain routing root, e.g. `intake.yourdomain.com`. Routes `{slug}.intake.yourdomain.com` → `/intake/{slug}`                 |
-| `GOOGLE_SHEETS_SA_KEY`   | GCP service account JSON (one line) for appending leads to Google Sheets. Format: `{"client_email":"...","private_key":"..."}` |
-
----
-
 ## Ingest Webhooks
 
 | Variable                      | Purpose                                                                                  |
 | ----------------------------- | ---------------------------------------------------------------------------------------- |
 | `INGEST_EMAIL_WEBHOOK_SECRET` | Shared secret for authenticating inbound email webhook calls to `/api/emma/ingest/email` |
+
+---
+
+## Background Workers (Inngest — optional)
+
+| Variable              | Purpose                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `INNGEST_EVENT_KEY`   | Inngest event key — authorises event publishing from the app to Inngest               |
+| `INNGEST_SIGNING_KEY` | Inngest signing key — verifies that incoming Inngest function invocations are genuine |
+
+Optional. Leave unset to rely on Vercel cron only. When set, the `GET /api/inngest` handler registers durable background functions with step-level retry and an Inngest developer dashboard. Vercel cron and Inngest can run in parallel — all cron routes are idempotent.
 
 ---
 

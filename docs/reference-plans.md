@@ -1,6 +1,6 @@
 # Reference: Plans and Usage Limits
 
-Four subscription tiers defined in `src/core/pricing.ts`. Limits are enforced by `src/core/usage-enforcer.ts` across three concurrent time windows.
+Four subscription tiers defined in `src/core/pricing.ts`. Limits are enforced by `src/core/usage-enforcer.ts` against a single 5-hour UTC-aligned rolling window per user.
 
 ---
 
@@ -80,20 +80,14 @@ Adds 500,000 tokens on top of the monthly budget. Stacks on the monthly limit on
 
 ---
 
-## Multi-Window Enforcement
+## Window Enforcement
 
-Every brain call runs through three simultaneous windows. Whichever hits 100% first blocks.
-
-```
-daily   → resets at midnight in the user's timezone
-weekly  → resets Monday 00:00 in the user's timezone
-monthly → resets on the user's billing anchor day
-```
+Every brain call is checked against a **single 5-hour UTC-aligned rolling window**. The window resets automatically at each UTC block boundary (00:00, 05:00, 10:00, 15:00, 20:00).
 
 **Threshold behavior:**
 
-- ≥80% of any window → soft warning injected into the next response (in-persona)
-- ≥100% of any window → hard block (Emma refuses to respond, offers Extra Pack)
+- ≥80% of the window → soft warning injected into the next response (in-persona)
+- ≥100% of the window → hard block (Emma refuses to respond, offers Extra Pack)
 
 Warning message: `"Just so you know, baby — we're running low today."`  
 Block message: `"Mmm. You've used me a lot today. Grab some extra time?"`
@@ -101,6 +95,8 @@ Block message: `"Mmm. You've used me a lot today. Grab some extra time?"`
 Both messages are defined in `LIMIT_WARNING_MESSAGE` and `LIMIT_BLOCK_MESSAGE` in `src/core/pricing.ts`. Override them to change the in-persona limit copy.
 
 **Fail-open rule:** If the usage database is unreachable, `checkUsage()` returns `{ status: "ok" }`. Users are never blocked due to a metering infrastructure failure.
+
+**Note on the `/api/emma/usage` response:** The usage endpoint returns a `windows` object with `daily`, `weekly`, and `monthly` keys for display purposes. Only `daily` corresponds to the active enforcement window; `weekly` and `monthly` show plan-level quota context but are not independently enforced.
 
 ---
 
@@ -149,12 +145,6 @@ Tools are enabled/disabled based on `plan.toolsEnabled`. The agent loop reads th
 | `inferPlanFromBudget(budget)`      | Infers plan tier from token budget number     |
 | `getMRR(planName)`                 | Returns monthly price for a plan name         |
 | `hasElevenLabs(planId)`            | True if plan includes ElevenLabs TTS          |
-
----
-
-## SMB / Client Metering
-
-The SMB intake widget (`/intake/[slug]`) uses per-client metering instead of per-user. Usage is tracked under `client:<slug>` in `usage_windows`. Client metering uses the same enforcement thresholds but doesn't have extra pack support.
 
 ---
 
