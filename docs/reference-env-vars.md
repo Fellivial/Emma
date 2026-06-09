@@ -24,6 +24,38 @@ These must be set. Emma will start without them but core features will fail.
 
 ---
 
+## Speech-to-Text (Server-Side Fallback)
+
+| Variable         | Purpose                                                                                                       | How to get it                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `OPENAI_API_KEY` | Required for `/api/emma/stt` — Whisper transcription on Starter+. OpenRouter does not expose audio endpoints. | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+
+Model used: `gpt-4o-mini-transcribe` (Starter), `gpt-4o-transcribe` (Pro/Enterprise). Free plan users cannot access server-side STT; the browser Web Speech API is used instead.
+
+---
+
+## Web Push Notifications
+
+| Variable                       | Purpose                                                                                | How to get it                      |
+| ------------------------------ | -------------------------------------------------------------------------------------- | ---------------------------------- |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key — embedded in the browser bundle for push subscription registration   | `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY`            | VAPID private key — server-only, signs outgoing push messages. Never expose to client. | Same command as above              |
+
+Both keys are generated as a pair. Run `npx web-push generate-vapid-keys` once and keep them together — they cannot be mixed with keys from a different generation.
+
+---
+
+## Rate Limiting (Upstash Redis)
+
+| Variable                   | Purpose                                                                             | How to get it                                 |
+| -------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------- |
+| `UPSTASH_REDIS_REST_URL`   | Upstash Redis REST endpoint for distributed rate limiting across serverless workers | Upstash Console → Database → REST API → URL   |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token                                                            | Upstash Console → Database → REST API → Token |
+
+Optional but recommended for production. Without these, rate limiting falls back to in-memory per-worker counters (not effective across multiple serverless instances).
+
+---
+
 ## Email
 
 | Variable         | Purpose                                           | Default            |

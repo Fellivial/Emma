@@ -213,7 +213,7 @@ export const PLANS: Record<string, Plan> = {
       "custom_persona",
       "elevenlabs",
     ],
-    ttsBackend: "web_speech",
+    ttsBackend: "elevenlabs",
     byokElevenLabs: true,
     elevenLabsPlan: "ElevenLabs Starter",
     elevenLabsCost: 7,

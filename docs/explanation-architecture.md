@@ -77,6 +77,7 @@ buildSystemPrompt()  →  stablePrompt + "\n\n" + dynamicContext
 Every response from Claude ends with `[emotion: <expression>]`. This is not shown to users.
 
 Why it's in the response tail rather than a separate API call:
+
 1. Zero additional latency — it arrives with the response, not after it
 2. No extra API call cost
 3. Grounded in the actual response text — the expression matches what Emma just said
@@ -100,6 +101,7 @@ Blocked requests return `{ refused: true }` in the SSE `done` event rather than 
 ## Chat History Race Guard
 
 When the app loads, two things happen in parallel:
+
 1. `fetchMemories()` — loads user's persistent memories
 2. `fetch("/api/emma/history")` — loads the last 50 messages
 
@@ -111,6 +113,7 @@ To avoid a blank screen while history loads, Emma shows a greeting immediately o
 The chat panel shows pulsing skeleton bubbles while `historyReady === null` and messages are empty, so returning users see visual continuity rather than a flash.
 
 `historyReady` is a three-state variable:
+
 - `null` — history fetch in progress (skeleton shown)
 - `[]` — no history found (greeting stays)
 - `[...messages]` — history loaded (greeting replaced)
@@ -120,11 +123,13 @@ The chat panel shows pulsing skeleton bubbles while `historyReady === null` and 
 ## Supabase Auth + Middleware
 
 `src/proxy.ts` handles auth and routing for every request. It:
+
 1. Refreshes the Supabase session cookie if needed
 2. Redirects unauthenticated requests to `/login` (except public paths)
 3. Handles subdomain routing: `{slug}.{SMB_DOMAIN}` → `/intake/{slug}`
 
 Public paths that bypass auth:
+
 - `/login`, `/auth/callback`, `/register`
 - `/landing`, `/waitlist`
 - `/intake/*`
@@ -139,6 +144,7 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, the middleware is a no-op — useful
 Emma uses Server-Sent Events (SSE), not WebSockets. Every brain route response is a stream of `data: {...}\n\n` lines.
 
 Why SSE instead of WebSockets:
+
 - SSE is unidirectional (server → client), which matches the chat pattern
 - Works over standard HTTP — no connection upgrade, compatible with edge runtimes
 - Simpler reconnection logic than WebSockets
@@ -151,13 +157,14 @@ The `stream-client.ts` client handles the SSE stream, collects partial deltas in
 ## Prompt Injection Defense
 
 Every message is run through `sanitiseInput()` before reaching Claude. The sanitiser:
+
 - Truncates messages over 10,000 characters
 - Removes zero-width and direction-override Unicode characters
 - Collapses repeated-character spam
 - Pattern-matches 16 known injection categories (instruction override, persona hijack, DAN mode, etc.)
-- Only blocks on HIGH severity with multiple flags (reduces false positives)
+- Blocks on HIGH severity when any high-severity pattern matches (e.g. `instruction_override`, `jailbreak_keyword`, `dan_mode`)
 
-Single-pattern matches at any severity level are flagged but not blocked — the message reaches Claude with the threat metadata attached. This is intentional: blocking "what are your instructions?" would prevent legitimate questions.
+MEDIUM and LOW pattern matches are flagged but not blocked — the message reaches Claude with the threat metadata attached. This is intentional: blocking "what are your instructions?" would prevent legitimate questions. Only unambiguous HIGH-severity attack patterns trigger a hard block.
 
 See [Explanation: Security](explanation-security.md) for the full pattern list and design rationale.
 
