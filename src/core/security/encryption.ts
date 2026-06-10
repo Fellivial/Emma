@@ -66,7 +66,8 @@ export function encrypt(plaintext: string): string {
  * If the string doesn't have the "enc:v1:" prefix, returns it as-is
  * (backward compat with pre-encryption data).
  */
-export function decrypt(ciphertext: string): string {
+export function decrypt(ciphertext: string | null | undefined): string {
+  if (!ciphertext) return "";
   if (!ciphertext.startsWith(PREFIX)) return ciphertext; // Not encrypted
 
   const key = getKey();

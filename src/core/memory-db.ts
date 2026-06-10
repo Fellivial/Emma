@@ -409,12 +409,17 @@ export async function getConversationMessages(
     .order("created_at", { ascending: true })
     .limit(limit);
 
-  return (data || []).map((row) => ({
-    role: row.role as string,
-    content: decrypt(row.content as string),
-    display: decrypt(row.display as string),
-    createdAt: row.created_at as string,
-  }));
+  return (data || [])
+    .map((row) => {
+      const content = decrypt(row.content as string);
+      const display = decrypt(row.display as string);
+      if (DECRYPT_SENTINELS.has(content) || DECRYPT_SENTINELS.has(display)) {
+        console.warn("[Memory DB] Skipping undecryptable message in conversation:", conversationId);
+        return null;
+      }
+      return { role: row.role as string, content, display, createdAt: row.created_at as string };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
