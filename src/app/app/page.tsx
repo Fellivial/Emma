@@ -629,6 +629,7 @@ export default function EmmaPage() {
             persona,
             activeUser: multiUser.activeUser,
             emotionState: combinedEmotion,
+            userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           {
             // ── Stream text deltas into the placeholder message ──────────
