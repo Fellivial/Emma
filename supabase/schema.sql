@@ -1080,3 +1080,46 @@ language sql stable as $$
   order by dc.embedding <=> query_embedding asc
   limit match_count;
 $$;
+
+
+-- ─── Email Ingest ────────────────────────────────────────────────────────────
+
+create table if not exists public.ingested_emails (
+  id               uuid        default gen_random_uuid() primary key,
+  client_id        uuid        references public.clients on delete cascade,
+  from_address     text        not null,
+  to_address       text,
+  subject          text,
+  body_text        text,
+  attachment_count integer     not null default 0,
+  received_at      timestamptz not null default now(),
+  processed        boolean     not null default false,
+  created_at       timestamptz not null default now()
+);
+-- No permissive RLS policy — only service role (getSupabaseAdmin) may access
+alter table public.ingested_emails enable row level security;
+create index if not exists idx_ingested_emails_client    on public.ingested_emails (client_id);
+create index if not exists idx_ingested_emails_processed on public.ingested_emails (processed) where processed = false;
+create index if not exists idx_ingested_emails_received  on public.ingested_emails (received_at desc);
+
+
+-- ─── WhatsApp Ingest ─────────────────────────────────────────────────────────
+
+create table if not exists public.ingested_whatsapp (
+  id                uuid        default gen_random_uuid() primary key,
+  client_id         uuid        references public.clients on delete cascade,
+  from_number       text        not null,
+  message_id        text        unique not null,
+  body              text,
+  received_at       timestamptz not null,
+  direction         text        not null default 'inbound'
+                                check (direction in ('inbound', 'outbound')),
+  window_expires_at timestamptz,
+  outbound_wamid    text,
+  created_at        timestamptz not null default now()
+);
+-- No permissive RLS policy — only service role (getSupabaseAdmin) may access
+alter table public.ingested_whatsapp enable row level security;
+create index if not exists idx_ingested_whatsapp_client   on public.ingested_whatsapp (client_id);
+create index if not exists idx_ingested_whatsapp_number   on public.ingested_whatsapp (from_number);
+create index if not exists idx_ingested_whatsapp_received on public.ingested_whatsapp (received_at desc);
