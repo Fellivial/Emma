@@ -4,6 +4,12 @@ import type { MemoryEntry } from "@/types/emma";
  * Serialize memories for prompt injection.
  * This file is client-safe — no fs imports.
  */
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 0.85) return "";
+  if (confidence >= 0.65) return " (likely)";
+  return " (uncertain)";
+}
+
 export function serializeMemories(entries: MemoryEntry[]): string {
   if (entries.length === 0) return "No memories stored yet.";
 
@@ -17,7 +23,7 @@ export function serializeMemories(entries: MemoryEntry[]): string {
   for (const [cat, items] of Object.entries(grouped)) {
     lines.push(`[${cat.toUpperCase()}]`);
     for (const item of items) {
-      lines.push(`  - ${item.key}: ${item.value}`);
+      lines.push(`  - ${item.key}: ${item.value}${confidenceLabel(item.confidence)}`);
     }
   }
 

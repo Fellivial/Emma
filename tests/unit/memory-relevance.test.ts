@@ -1,5 +1,47 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { encrypt } from "@/core/security/encryption";
+import { serializeMemories } from "@/core/memory-shared";
+import type { MemoryEntry } from "@/types/emma";
+
+function makeMemory(
+  key: string,
+  value: string,
+  confidence: number,
+  category: MemoryEntry["category"] = "personal"
+): MemoryEntry {
+  return {
+    id: `mem-${key}`,
+    timestamp: Date.now(),
+    category,
+    key,
+    value,
+    confidence,
+    source: "extracted",
+  };
+}
+
+describe("serializeMemories", () => {
+  it("appends no label for high-confidence memories (≥0.85)", () => {
+    const out = serializeMemories([makeMemory("favorite_food", "tacos", 0.95)]);
+    expect(out).toContain("- favorite_food: tacos");
+    expect(out).not.toContain("(likely)");
+    expect(out).not.toContain("(uncertain)");
+  });
+
+  it("appends (likely) for medium-confidence memories (0.65–0.84)", () => {
+    const out = serializeMemories([makeMemory("gym_schedule", "mornings", 0.72)]);
+    expect(out).toContain("- gym_schedule: mornings (likely)");
+  });
+
+  it("appends (uncertain) for low-confidence memories (<0.65)", () => {
+    const out = serializeMemories([makeMemory("side_project", "podcast", 0.58)]);
+    expect(out).toContain("- side_project: podcast (uncertain)");
+  });
+
+  it("returns the no-memories sentinel for an empty array", () => {
+    expect(serializeMemories([])).toBe("No memories stored yet.");
+  });
+});
 
 // Stable encryption key for test fixtures
 const TEST_KEY = "a".repeat(64);
