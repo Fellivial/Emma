@@ -838,7 +838,7 @@ export default function EmmaPage() {
     [avatar, voice, ttsEnabled, timeline]
   );
 
-  const proactive = useProactiveSpeech(handleProactiveSpeak, true);
+  const proactive = useProactiveSpeech(handleProactiveSpeak, true, memories);
   // eslint-disable-next-line react-hooks/refs
   proactiveResetRef.current = proactive.resetActivity;
 
