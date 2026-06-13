@@ -247,6 +247,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const userTimezone = body.userTimezone ?? "UTC";
+    const timeContext = (() => {
+      try {
+        return new Intl.DateTimeFormat("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: userTimezone,
+          timeZoneName: "short",
+        }).format(new Date());
+      } catch {
+        return new Intl.DateTimeFormat("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: "UTC",
+          timeZoneName: "short",
+        }).format(new Date());
+      }
+    })();
+
     const systemPromptText = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
@@ -258,6 +285,7 @@ export async function POST(req: NextRequest) {
       previousContext: conversationSummary,
       customPersona,
       documentContext,
+      timeContext,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
