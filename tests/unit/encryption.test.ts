@@ -59,4 +59,41 @@ describe("encryption", () => {
     const encrypted = encrypt("");
     expect(decrypt(encrypted)).toBe("");
   });
+
+  it("returns key-missing sentinel when decrypting without a key", async () => {
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", "");
+    const { decrypt } = await import("@/core/security/encryption");
+    const result = decrypt("enc:v1:aabbccdd:eeff:0011");
+    expect(result).toBe("[encrypted — key missing]");
+  });
+
+  it("returns decryption-failed for corrupted ciphertext", async () => {
+    const { decrypt } = await import("@/core/security/encryption");
+    // Valid prefix and 3 parts, but garbage IV/tag — GCM auth tag will fail
+    const corrupted =
+      "enc:v1:aabbccddaabbccddaabbccddaabbccdd:deadbeef:aabbccddaabbccddaabbccddaabbccdd";
+    const result = decrypt(corrupted);
+    expect(result).toBe("[decryption failed]");
+  });
+
+  it("decryptFields decrypts specified string fields and leaves others untouched", async () => {
+    const { encrypt, decryptFields } = await import("@/core/security/encryption");
+    const obj = {
+      secret: encrypt("my secret value"),
+      name: "Alice",
+      count: 42,
+    } as Record<string, unknown>;
+    const result = decryptFields(obj, ["secret", "count"]);
+    expect(result.secret).toBe("my secret value");
+    expect(result.name).toBe("Alice");
+    expect(result.count).toBe(42); // non-string: skipped
+  });
+
+  it("decryptFields skips non-string fields silently", async () => {
+    const { decryptFields } = await import("@/core/security/encryption");
+    const obj = { flag: true, num: 99 } as Record<string, unknown>;
+    const result = decryptFields(obj, ["flag", "num"]);
+    expect(result.flag).toBe(true);
+    expect(result.num).toBe(99);
+  });
 });

@@ -29,7 +29,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`dark ${outfit.variable} ${cormorant.variable}`}>
       <head>
         {/* defer lets HTML render before the cubism runtime executes */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src="/live2d/live2dcubismcore.min.js" defer />
       </head>
       <body className="antialiased">
