@@ -18,6 +18,29 @@ interface Config {
   proactiveVision?: boolean;
 }
 
+type VibeOption = "playful" | "warm" | "balanced";
+
+const VIBE_OPTIONS: { vibe: VibeOption; label: string; emoji: string; description: string }[] = [
+  {
+    vibe: "playful",
+    label: "Playful",
+    emoji: "✨",
+    description: "Flirty, teasing, and full of personality. Emma at her most expressive.",
+  },
+  {
+    vibe: "warm",
+    label: "Warm",
+    emoji: "🤍",
+    description: "Caring and supportive. Emma is always in your corner.",
+  },
+  {
+    vibe: "balanced",
+    label: "Balanced",
+    emoji: "⚖️",
+    description: "Warm but clear. Emma reads the room and adjusts to what you need.",
+  },
+];
+
 const AUTONOMY_OPTIONS: {
   tier: AutonomyTier;
   label: string;
@@ -64,6 +87,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [currentVibe, setCurrentVibe] = useState<VibeOption | null>(null);
+  const [vibeSaving, setVibeSaving] = useState(false);
+  const [vibeSaved, setVibeSaved] = useState(false);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -89,6 +115,22 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/emma/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get", category: "preference" }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const vibeEntry = (data.entries as Array<{ key: string; value: string }> | undefined)?.find(
+          (e) => e.key === "interaction_vibe"
+        );
+        if (vibeEntry) setCurrentVibe(vibeEntry.value as VibeOption);
+      })
+      .catch(() => {});
+  }, []);
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
@@ -110,6 +152,33 @@ export default function ProfilePage() {
       setSaveError("Network error — changes not saved");
     }
     setSaving(false);
+  };
+
+  const handleVibeChange = async (vibe: VibeOption) => {
+    if (vibeSaving || vibe === currentVibe) return;
+    setVibeSaving(true);
+    try {
+      const res = await fetch("/api/emma/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add",
+          entry: {
+            category: "preference",
+            key: "interaction_vibe",
+            value: vibe,
+            confidence: 1.0,
+            source: "explicit",
+          },
+        }),
+      });
+      if (res.ok) {
+        setCurrentVibe(vibe);
+        setVibeSaved(true);
+        setTimeout(() => setVibeSaved(false), 2000);
+      }
+    } catch {}
+    setVibeSaving(false);
   };
 
   const handleLogout = async () => {
@@ -134,6 +203,57 @@ export default function ProfilePage() {
           Persona configuration, autonomy mode, and behaviour preferences.
         </p>
       </div>
+
+      {/* ── Conversation Style ───────────────────────────────────────────── */}
+      <Section title="Conversation Style">
+        <p className="text-[11px] text-emma-200/25 -mt-1 mb-4">
+          Choose how Emma talks with you. Takes effect next time you open the app.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {VIBE_OPTIONS.map((opt) => {
+            const selected = currentVibe === opt.vibe;
+            return (
+              <button
+                key={opt.vibe}
+                onClick={() => handleVibeChange(opt.vibe)}
+                disabled={vibeSaving}
+                className={`text-left rounded-2xl border p-4 transition-all cursor-pointer disabled:opacity-50 ${
+                  selected
+                    ? "border-emma-300/35 bg-emma-300/6 shadow-[0_0_24px_rgba(232,160,191,0.07)]"
+                    : "border-surface-border bg-surface hover:border-emma-300/15 hover:bg-surface-hover"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-2xl">{opt.emoji}</span>
+                  {selected && (
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emma-300/15 border border-emma-300/25 text-emma-300 font-medium tracking-wider uppercase">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <div
+                  className={`text-sm font-medium mb-1 ${selected ? "text-emma-200/90" : "text-emma-200/50"}`}
+                >
+                  {opt.label}
+                </div>
+                <p className="text-[11px] font-light text-emma-200/30 leading-relaxed">
+                  {opt.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        {vibeSaved && (
+          <p className="text-[11px] text-emma-300/70 mt-3">
+            Style updated — takes effect next session.
+          </p>
+        )}
+        {currentVibe === null && !loading && (
+          <p className="text-[11px] text-emma-200/20 mt-3">
+            No style set yet — complete onboarding to set your preference, or pick one above.
+          </p>
+        )}
+      </Section>
 
       {/* ── Autonomy ─────────────────────────────────────────────────────── */}
       <Section title="Autonomy">
