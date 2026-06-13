@@ -103,6 +103,47 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ─── Contextual Memory Enrichment ────────────────────────────────────────────
+
+// Categories worth referencing in a greeting, in priority order.
+const GREETING_CATEGORIES: MemoryEntry["category"][] = ["goal", "relationship", "habit"];
+
+/**
+ * Picks the highest-confidence memory from categories that feel natural to
+ * reference in a greeting — goal, relationship, or habit.
+ * Returns null when nothing appropriate is found.
+ */
+function pickContextualMemory(memories: MemoryEntry[]): MemoryEntry | null {
+  for (const cat of GREETING_CATEGORIES) {
+    const candidates = memories
+      .filter((m) => m.category === cat && m.confidence >= 0.75)
+      .sort((a, b) => b.confidence - a.confidence);
+    if (candidates.length > 0) return candidates[0];
+  }
+  return null;
+}
+
+/**
+ * Builds a short follow-up clause (≤8 words) that Emma can append to her
+ * greeting when she has a relevant memory to reference naturally.
+ */
+function buildMemoryFollowUp(memory: MemoryEntry): string {
+  const v = memory.value;
+  switch (memory.category) {
+    case "goal":
+      return `How's ${v.length < 30 ? v : "that goal"} coming along?`;
+    case "relationship": {
+      const nameMatch = v.match(/^(\w+)/);
+      const name = nameMatch && nameMatch[1].length < 15 ? nameMatch[1] : null;
+      return name ? `How's ${name} doing?` : `How are things going at home?`;
+    }
+    case "habit":
+      return `Still keeping up with ${v.length < 25 ? v : "that routine"}?`;
+    default:
+      return "";
+  }
+}
+
 // ─── Generate Greeting ───────────────────────────────────────────────────────
 
 export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] = []): string {
@@ -117,7 +158,8 @@ export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] =
     return MOMMY_GREETINGS.first_visit;
   }
 
-  // Absence-based greeting
+  // Absence-based greeting — very long absence uses its own emotional tone,
+  // skip memory enrichment so the reunion moment isn't undercut.
   if (ctx.hoursSince !== null) {
     if (ctx.hoursSince < 1) {
       return pickRandom(MOMMY_GREETINGS.quick_return);
@@ -134,12 +176,19 @@ export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] =
   const timeGreetings = MOMMY_GREETINGS[ctx.timeOfDay];
   let greeting = pickRandom(timeGreetings);
 
-  // Personalize with memory if available
+  // Swap "baby" for user's name ~40% of the time
   const nameMemory = memories.find((m) => m.key === "name" || m.key === "user_name");
-  if (nameMemory) {
-    // Sometimes use their name instead of "baby"
-    if (Math.random() > 0.6) {
-      greeting = greeting.replace("baby", nameMemory.value);
+  if (nameMemory && Math.random() > 0.6) {
+    greeting = greeting.replace("baby", nameMemory.value);
+  }
+
+  // 50% of the time, append a short contextual memory reference so Emma feels
+  // like she genuinely remembers the user's life — not just their name.
+  if (memories.length > 0 && Math.random() > 0.5) {
+    const mem = pickContextualMemory(memories);
+    if (mem) {
+      const followUp = buildMemoryFollowUp(mem);
+      if (followUp) greeting = `${greeting} ${followUp}`;
     }
   }
 
