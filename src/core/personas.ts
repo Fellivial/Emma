@@ -138,6 +138,8 @@ interface PromptContext {
   customPersona?: CustomPersona;
   /** Top-k document chunks retrieved via semantic search for the current query. */
   documentContext?: string;
+  /** Human-readable current datetime in the user's local timezone, e.g. "Saturday, June 14, 2026 at 9:45 AM EDT". */
+  timeContext?: string;
 }
 
 export interface SystemBlock {
@@ -270,6 +272,12 @@ ${parts.join("\n")}
 
   // ── Dynamic suffix (per-turn, never cached) ────────────────────────────────
   const dynamicParts: string[] = [];
+
+  if (ctx.timeContext) {
+    dynamicParts.push(
+      `## Current Time\n${ctx.timeContext}\n\nUse this naturally when relevant — reference the time of day, day of week, or how late/early it is. Never volunteer it unprompted, but let it inform your tone and suggestions.`
+    );
+  }
 
   if (ctx.documentContext) {
     dynamicParts.push(`## Document Context
