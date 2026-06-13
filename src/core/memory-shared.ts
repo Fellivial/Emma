@@ -40,10 +40,11 @@ Return a JSON array of memory objects with fields:
 
 Confidence scale:
   0.85–1.0  Direct, explicit statement ("I love jazz")
-  0.65–0.75 Clearly implied but not stated outright
-  0.45–0.60 Reasonable inference from context
-  0.20–0.44 Weak inference or speculation — do not extract
-  < 0.55    Do not extract
+  0.65–0.84 Clearly implied but not stated outright
+  0.55–0.64 Reasonable inference from context
+  0.20–0.54 Weak inference or speculation — do not extract
+
+Minimum to extract: 0.55. If you're unsure, assign lower and it will be filtered.
 
 Do NOT extract:
   - Transient states: "I'm tired," "I'm hungry right now," "I'm in a rush"
@@ -63,9 +64,7 @@ User: "Do you know any good Italian restaurants?"
 Extract: []  ← question about Emma, not a fact about the user
 
 User: "I have a presentation tomorrow, I'm really stressed."
-Extract:
-  { "category": "context", "key": "presentation_stress", "value": "stressed about upcoming presentation", "confidence": 0.5 }
-  ← borderline: one-time context at confidence 0.5, below the 0.55 threshold — Emma skips this
+Extract: []  ← transient state and one-time context; even if a fact could be inferred, confidence would fall below 0.55
 
 User: "I'm vegetarian and my partner Alex is vegan."
 Extract:
