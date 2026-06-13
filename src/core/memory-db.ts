@@ -112,6 +112,57 @@ export async function getMemoriesForUser(
 
 // â"€â"€â"€ Write â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
+/**
+ * Fetches active memories ranked by keyword overlap with `query`.
+ * Falls back to recency ordering when query is empty or too short.
+ * Guarantees O(memories) work in TypeScript after a single DB fetch.
+ */
+export async function getRelevantMemoriesForUser(
+  userId: string,
+  query: string,
+  limit = 15
+): Promise<MemoryEntry[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  if (!isUuid(userId)) return [];
+
+  const { data, error } = await supabase
+    .from("memories")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[Memory DB] Read error:", error.message);
+    return [];
+  }
+
+  const entries = (data || []).map(rowToMemoryEntry).filter((e): e is MemoryEntry => e !== null);
+
+  if (entries.length <= limit) return entries;
+
+  const keywords = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+
+  if (keywords.length === 0) return entries.slice(0, limit);
+
+  const scored = entries.map((entry) => {
+    const haystack = `${entry.key} ${entry.value}`.toLowerCase();
+    const matches = keywords.filter((kw) => haystack.includes(kw)).length;
+    const score = (matches / keywords.length) * entry.confidence;
+    return { entry, score };
+  });
+
+  // Stable sort: relevance DESC; equal-score entries keep original recency order.
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, limit).map((s) => s.entry);
+}
+
 export async function addMemoryForUser(
   userId: string,
   entry: Omit<MemoryEntry, "id" | "timestamp"> & { id?: string }

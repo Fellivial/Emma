@@ -183,7 +183,7 @@ const MOCK_WORKFLOWS: Workflow[] = [
   },
   {
     id: "w3",
-    name: "Lead Follow-up Email",
+    name: "Follow-up Email",
     trigger: "webhook",
     cronExpression: "",
     steps: [
@@ -191,14 +191,14 @@ const MOCK_WORKFLOWS: Workflow[] = [
         id: "w3-s1",
         type: "ai_response",
         config: {
-          prompt: "Write a warm follow-up email for {{lead_name}} from {{company}}.",
+          prompt: "Write a warm follow-up email for {{contact_name}} from {{company}}.",
         },
       },
       {
         id: "w3-s2",
         type: "send_email",
         config: {
-          to: "{{lead_email}}",
+          to: "{{contact_email}}",
           subject: "Following up",
           body: "{{ai_response.output}}",
         },

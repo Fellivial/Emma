@@ -209,7 +209,7 @@ ${ctx.previousContext}`;
   }
 
   if (ctx.memories && ctx.memories.length > 0) {
-    const cappedMemories = ctx.memories.slice(0, 10);
+    const cappedMemories = ctx.memories.slice(0, 15);
     const serialized = serializeMemories(cappedMemories);
     stable += `
 

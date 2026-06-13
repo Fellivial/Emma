@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
-import { getMemoriesForUser, getLatestConversationSummary } from "@/core/memory-db";
+import { getRelevantMemoriesForUser, getLatestConversationSummary } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     let memories: import("@/types/emma").MemoryEntry[] = [];
     if (userId) {
       try {
-        memories = await getMemoriesForUser(userId);
+        memories = await getRelevantMemoriesForUser(userId, getLastMessageText(messages));
       } catch {
         // DB not available — continue without memories
       }
