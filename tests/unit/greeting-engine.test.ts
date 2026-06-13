@@ -52,10 +52,20 @@ describe("generateGreeting", () => {
     expect(result).toContain("I'm Emma");
   });
 
-  it("returns a string for neutral persona regardless of memories", async () => {
+  it("returns a contextual first-visit greeting for neutral persona", async () => {
     const { generateGreeting } = await import("@/core/greeting-engine");
     const result = generateGreeting("neutral", [mem("goal", "launch_app", "launch the app")]);
-    expect(result).toBe("Hey, I'm Emma. What can I do for you?");
+    expect(result.length).toBeGreaterThan(0);
+    expect(result).toContain("Emma");
+  });
+
+  it("returns a returning-user greeting for neutral persona without mommy-voice content", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 3 * 3600 * 1000));
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("neutral", []);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result).not.toContain("baby");
+    expect(result).not.toContain("Mmm");
   });
 
   it("returns a non-empty string for returning user with no memories", async () => {
