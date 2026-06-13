@@ -495,6 +495,8 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             if (supabase) {
               await supabase.from("action_log").insert({
                 task_id: task.id,
+                client_id: task.clientId ?? null,
+                user_id: task.userId ?? null,
                 step_number: step,
                 action: toolName,
                 input: toolInput,
@@ -552,7 +554,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 durationMs: Date.now() - stepStart,
               };
               steps.push(stepResult);
-              await logAction(supabase, task.id, stepResult);
+              await logAction(supabase, task.id, stepResult, task.clientId, task.userId);
               if (supabase) {
                 await supabase
                   .from("tasks")
@@ -608,7 +610,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 durationMs: Date.now() - stepStart,
               };
               steps.push(skippedResult);
-              await logAction(supabase, task.id, skippedResult);
+              await logAction(supabase, task.id, skippedResult, task.clientId, task.userId);
               continue;
             }
           }
@@ -635,7 +637,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               durationMs: Date.now() - stepStart,
             };
             steps.push(stepResult);
-            await logAction(supabase, task.id, stepResult);
+            await logAction(supabase, task.id, stepResult, task.clientId, task.userId);
 
             // Update task to awaiting_approval and persist transcript so resume has full context
             if (supabase) {
@@ -716,6 +718,8 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               if (supabase) {
                 void supabase.from("action_log").insert({
                   task_id: task.id,
+                  client_id: task.clientId ?? null,
+                  user_id: task.userId ?? null,
                   step_number: step,
                   action: toolName,
                   input: { flags: scan.flags },
@@ -748,7 +752,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             durationMs: Date.now() - stepStart,
           };
           steps.push(stepResult);
-          await logAction(supabase, task.id, stepResult);
+          await logAction(supabase, task.id, stepResult, task.clientId, task.userId);
 
           // Append to provenance chain (dangerous case already returned above; always "automated" here)
           provChain = addStep(provChain, {
@@ -938,12 +942,16 @@ async function createApproval(
 async function logAction(
   supabase: SupabaseClient | null,
   taskId: string,
-  step: AgentStepResult
+  step: AgentStepResult,
+  clientId?: string,
+  userId?: string
 ): Promise<void> {
   if (!supabase) return;
 
   await supabase.from("action_log").insert({
     task_id: taskId,
+    client_id: clientId ?? null,
+    user_id: userId ?? null,
     step_number: step.step,
     action: step.toolName,
     input: step.input,

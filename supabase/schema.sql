@@ -801,6 +801,9 @@ alter table public.client_integrations add constraint client_integrations_servic
     or service like 'mcp_%'
   );
 
+-- action_log: add reason column for agent-loop annotations (moderate/injection notes)
+alter table public.action_log add column if not exists reason text;
+
 -- action_log: extend status constraint to cover agent-loop-specific values
 alter table public.action_log drop constraint if exists action_log_status_check;
 alter table public.action_log add constraint action_log_status_check

@@ -177,12 +177,15 @@ export async function POST(req: NextRequest) {
         // Best-effort: clear the stored voiceId so future calls use Rachel directly.
         if (resolvedClientId && supabaseUrl && supabaseKey) {
           const supabase = createClient(supabaseUrl, supabaseKey);
-          supabase
-            .from("client_integrations")
-            .select("metadata")
-            .eq("client_id", resolvedClientId)
-            .eq("service", "elevenlabs")
-            .single()
+          // Wrap in Promise.resolve so .catch() is available (PromiseLike → Promise)
+          void Promise.resolve(
+            supabase
+              .from("client_integrations")
+              .select("metadata")
+              .eq("client_id", resolvedClientId)
+              .eq("service", "elevenlabs")
+              .single()
+          )
             .then(({ data: ci }) => {
               if (!ci?.metadata) return;
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
