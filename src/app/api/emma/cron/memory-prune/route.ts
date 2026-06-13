@@ -16,11 +16,14 @@ function getSupabase() {
  *
  * Rules (active memories only — superseded rows handled separately):
  *   1. category = 'context' AND last_accessed < now() - 30 days → delete
- *   2. confidence < 0.5 AND last_accessed < now() - 90 days → delete
- *   3. confidence < 0.7 AND last_accessed < now() - 180 days → delete
+ *   2. confidence < 0.5 AND last_accessed < now() - 90 days → delete (skip constraint + explicit)
+ *   3. confidence < 0.7 AND last_accessed < now() - 180 days → delete (skip constraint + explicit)
  *   4. category = 'constraint' → never delete (skipped in rules 2, 3, 6)
+ *   4b. source = 'explicit' → never decay or prune (skipped in rules 2, 3, 6)
+ *       Explicit memories are intentional user config (persona vibe, name) and must survive
+ *       long periods of inactivity — a returning user must get their chosen persona back.
  *   5. status = 'superseded' AND updated_at < now() - 90 days → delete (tombstone cleanup)
- *   6. active, non-constraint, not accessed in 7+ days → decay confidence by 3%/week (floor: 0.1)
+ *   6. active, non-constraint, non-explicit, not accessed in 7+ days → decay by 3%/week (floor: 0.1)
  *      Processes up to 1 000 memories per run — covers all users progressively over multiple days.
  */
 export async function GET(req: NextRequest) {
@@ -64,12 +67,15 @@ export async function GET(req: NextRequest) {
     const pruned1 = c1 ?? 0;
     console.warn(`[memory-prune] Rule 1 (context/30d): deleted ${pruned1}`);
 
-    // Rule 2: active, confidence < 0.5, not accessed in 90+ days, skip constraints
+    // Rule 2: active, confidence < 0.5, not accessed in 90+ days, skip constraints + explicit.
+    // Explicit memories (onboarding vibe, name) are intentional config and must not be pruned
+    // due to inactivity — a returning user after months away must get their chosen persona back.
     const { count: c2, error: e2 } = await supabase
       .from("memories")
       .delete({ count: "exact" })
       .eq("status", "active")
       .neq("category", "constraint")
+      .neq("source", "explicit")
       .lt("confidence", 0.5)
       .or(`last_accessed.lt.${cutoff90},and(last_accessed.is.null,created_at.lt.${cutoff90})`);
 
@@ -80,12 +86,13 @@ export async function GET(req: NextRequest) {
     const pruned2 = c2 ?? 0;
     console.warn(`[memory-prune] Rule 2 (confidence<0.5/90d): deleted ${pruned2}`);
 
-    // Rule 3: active, confidence < 0.7, not accessed in 180+ days, skip constraints
+    // Rule 3: active, confidence < 0.7, not accessed in 180+ days, skip constraints + explicit.
     const { count: c3, error: e3 } = await supabase
       .from("memories")
       .delete({ count: "exact" })
       .eq("status", "active")
       .neq("category", "constraint")
+      .neq("source", "explicit")
       .lt("confidence", 0.7)
       .or(`last_accessed.lt.${cutoff180},and(last_accessed.is.null,created_at.lt.${cutoff180})`);
 
@@ -128,6 +135,7 @@ export async function GET(req: NextRequest) {
       .select("id, confidence")
       .eq("status", "active")
       .neq("category", "constraint")
+      .neq("source", "explicit")
       .gt("confidence", CONFIDENCE_FLOOR)
       .or(`last_accessed.lt.${cutoff7d},and(last_accessed.is.null,created_at.lt.${cutoff7d})`)
       .limit(DECAY_BATCH_LIMIT);
