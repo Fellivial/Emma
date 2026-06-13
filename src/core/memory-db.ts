@@ -140,27 +140,46 @@ export async function getRelevantMemoriesForUser(
 
   const entries = (data || []).map(rowToMemoryEntry).filter((e): e is MemoryEntry => e !== null);
 
-  if (entries.length <= limit) return entries;
+  let result: MemoryEntry[];
 
-  const keywords = query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+  if (entries.length <= limit) {
+    result = entries;
+  } else {
+    const keywords = query
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
 
-  if (keywords.length === 0) return entries.slice(0, limit);
+    if (keywords.length === 0) {
+      result = entries.slice(0, limit);
+    } else {
+      const scored = entries.map((entry) => {
+        const haystack = `${entry.key} ${entry.value}`.toLowerCase();
+        const matches = keywords.filter((kw) => haystack.includes(kw)).length;
+        const score = (matches / keywords.length) * entry.confidence;
+        return { entry, score };
+      });
 
-  const scored = entries.map((entry) => {
-    const haystack = `${entry.key} ${entry.value}`.toLowerCase();
-    const matches = keywords.filter((kw) => haystack.includes(kw)).length;
-    const score = (matches / keywords.length) * entry.confidence;
-    return { entry, score };
-  });
+      // Stable sort: relevance DESC; equal-score entries keep original recency order.
+      scored.sort((a, b) => b.score - a.score);
+      result = scored.slice(0, limit).map((s) => s.entry);
+    }
+  }
 
-  // Stable sort: relevance DESC; equal-score entries keep original recency order.
-  scored.sort((a, b) => b.score - a.score);
+  // Fire-and-forget: stamp last_accessed so the prune cron doesn't delete
+  // memories that are actively being injected into the system prompt.
+  if (result.length > 0) {
+    const ids = result.map((e) => e.id);
+    supabase
+      .from("memories")
+      .update({ last_accessed: new Date().toISOString() })
+      .in("id", ids)
+      .then(() => {})
+      .catch((err: Error) => console.error("[Memory DB] last_accessed touch failed:", err.message));
+  }
 
-  return scored.slice(0, limit).map((s) => s.entry);
+  return result;
 }
 
 export async function addMemoryForUser(

@@ -26,13 +26,18 @@ function makeRow(key: string, value: string, confidence = 0.8, daysAgo = 0) {
 
 // Build a mock Supabase chain that resolves to `rows`
 function mockSupabase(rows: ReturnType<typeof makeRow>[]) {
+  const updateChain = {
+    in: vi.fn().mockResolvedValue({ error: null }),
+  };
   const chain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    update: vi.fn().mockReturnValue(updateChain),
   };
   return {
     from: vi.fn().mockReturnValue(chain),
+    updateChain,
   };
 }
 
@@ -103,5 +108,22 @@ describe("getRelevantMemoriesForUser", () => {
     const { getRelevantMemoriesForUser } = await import("@/core/memory-db");
     const result = await getRelevantMemoriesForUser("not-a-uuid", "hello");
     expect(result).toEqual([]);
+  });
+
+  it("touches last_accessed for all returned memories", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+    const rows = [makeRow("job_title", "Engineer"), makeRow("cat_name", "Miso")];
+    const mock = mockSupabase(rows);
+    vi.mocked(createClient).mockReturnValue(mock as never);
+
+    const { getRelevantMemoriesForUser } = await import("@/core/memory-db");
+    await getRelevantMemoriesForUser(USER_ID, "anything", 15);
+    // Flush microtask queue so the fire-and-forget update resolves
+    await Promise.resolve();
+
+    expect(mock.updateChain.in).toHaveBeenCalledWith(
+      "id",
+      expect.arrayContaining(["mem-job_title", "mem-cat_name"])
+    );
   });
 });
