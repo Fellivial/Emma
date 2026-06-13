@@ -61,16 +61,9 @@ src/
 │   │   │   ├── usage/route.ts      # Usage stats
 │   │   │   ├── tasks/route.ts      # Autonomous tasks CRUD
 │   │   │   └── agent/route.ts      # Agentic loop execution
-│   │   ├── intake/[slug]/
-│   │   │   └── chat/route.ts       # SMB intake chat (public, per-client metering)
-│   │   ├── business/[slug]/
-│   │   │   └── settings/route.ts   # Owner config CRUD (auth-gated)
 │   │   ├── lemon/webhook/route.ts  # LemonSqueezy subscription webhooks
 │   │   └── integrations/           # OAuth start + callback per service
 │   ├── app/page.tsx                # Main chat shell (client component)
-│   ├── intake/[slug]/page.tsx      # SMB intake UI (public)
-│   ├── business/[slug]/            # SMB business dashboard (auth-gated)
-│   │   └── settings/page.tsx       # Owner config — email + Google Sheets ID
 │   ├── admin/                      # Internal ops dashboard (EMMA_ADMIN_EMAILS gated)
 │   ├── landing/                    # Marketing landing page
 │   ├── onboarding/                 # New user onboarding flow
@@ -93,7 +86,7 @@ src/
 │   ├── security/sanitise.ts        # Prompt injection detection + input cleaning
 │   ├── security/encryption.ts      # AES-256-GCM field encryption
 │   └── pricing.ts                  # Plan definitions and limits
-└── proxy.ts                        # Supabase SSR auth gate + subdomain routing
+└── proxy.ts                        # Supabase SSR auth gate
 ```
 
 ## Request Flow
@@ -106,25 +99,12 @@ Every `/app` chat message:
 4. `parseEmmaResponse()` — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
 5. Avatar, TTS, and timeline update on the client
 
-## SMB Intake
-
-Public widget deployed at `/intake/[slug]` for any `clients` record in the database. No auth required.
-
-- **Neutral persona** — hardcoded intake assistant prompt, never uses per-client persona
-- **Lead capture** — collects name + contact + reason via conversation; emits `[INTAKE_COMPLETE:]` tag server-side
-- **Per-client metering** — tokens and messages tracked under `client:<slug>` (not user ID)
-- **IP rate limiting** — 20 messages/minute per IP+slug (in-memory)
-- **Lead storage** — written to `leads` table via service role; RLS denies all non-service-role access
-- **Email notification** — Resend fires after lead is saved (non-fatal if it fails)
-- **AI disclosure** — "This service uses artificial intelligence. You are interacting with an AI, not a human." per Tennessee SB 2652
-
 ## Auth & Middleware
 
-`src/proxy.ts` gates all routes via Supabase SSR and handles subdomain routing. Public paths:
+`src/proxy.ts` gates all routes via Supabase SSR. Public paths:
 
 - `/login`, `/register`, `/auth/callback`
 - `/landing`, `/waitlist`
-- `/intake/*`
 - `/api/waitlist`, `/api/emma/webhook`, `/api/emma/unsubscribe`
 
 Authenticated users are also checked against a waitlist gate: if `user.app_metadata.waitlist_approved !== true` and the user's email is not in `EMMA_ADMIN_EMAILS`, they are redirected to `/waitlist`. This gate applies to all non-public, non-API routes. Admins in `EMMA_ADMIN_EMAILS` bypass this check.
@@ -141,7 +121,7 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 | `SUPABASE_SERVICE_ROLE_KEY`                 | ✅       | Server-side DB (bypasses RLS)                                                                                   |
 | `EMMA_ENCRYPTION_KEY`                       | ✅       | AES-256 field encryption (`openssl rand -hex 32`)                                                               |
 | `NEXT_PUBLIC_APP_URL`                       | ✅       | Base URL for OG images and email links                                                                          |
-| `RESEND_API_KEY`                            | —        | Email sequences + intake lead notifications                                                                     |
+| `RESEND_API_KEY`                            | —        | Email sequences (waitlist invites, referral notifications)                                                      |
 | `EMAIL_FROM`                                | —        | Sender address for Resend                                                                                       |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | —        | Gmail + Google Calendar OAuth                                                                                   |
 | `EMMA_ADMIN_EMAILS`                         | —        | Comma-separated emails allowed into `/admin` and bypassed past the waitlist gate                                |
@@ -152,8 +132,6 @@ When `NEXT_PUBLIC_SUPABASE_URL` is not set, middleware is a no-op (local dev wit
 | `NEXT_PUBLIC_LEMON_VARIANT_STARTER`         | —        | LemonSqueezy variant ID for the Starter plan ($29/mo)                                                           |
 | `NEXT_PUBLIC_LEMON_VARIANT_PRO`             | —        | LemonSqueezy variant ID for the Pro plan ($79/mo)                                                               |
 | `NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK`      | —        | Variant ID for the $9 Extra Response Pack                                                                       |
-| `NEXT_PUBLIC_SMB_DOMAIN`                    | —        | Subdomain routing — e.g. `intake.yourdomain.com`                                                                |
-| `GOOGLE_SHEETS_SA_KEY`                      | —        | GCP service account JSON for Google Sheets lead appending                                                       |
 | `HUBSPOT_API_KEY`                           | —        | HubSpot private app token for deal/contact sync                                                                 |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | —        | Notion OAuth app credentials                                                                                    |
 | `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`   | —        | Slack OAuth v2 app credentials                                                                                  |
@@ -186,7 +164,7 @@ supabase db push
 
 **schema.sql vs migrations:** `schema.sql` is the canonical baseline — it produces a complete, correct database from scratch. The `migrations/` files are additive patches applied on top of an existing deployment. New deploys: run `schema.sql` only. Existing deploys upgrading from an earlier version: run the new migration files in order.
 
-Key tables: `profiles`, `memories`, `usage_events`, `client_integrations`, `clients`, `leads`.
+Key tables: `profiles`, `memories`, `usage_events`, `client_integrations`, `clients`, `waitlist_v2`.
 
 ## Plans & Usage Limits
 
@@ -222,7 +200,6 @@ Coverage targets `src/core/**` and `src/lib/**`.
 | ---------------------------------------------------------- | ----------- | ---------------------------------------------------------------- |
 | [Getting Started](docs/tutorial-getting-started.md)        | Tutorial    | From zero to working chat in 2 minutes; full setup with Supabase |
 | [Connect Integrations](docs/howto-connect-integrations.md) | How-to      | Gmail, Google Calendar, Slack, Notion, HubSpot OAuth setup       |
-| [SMB Intake Widget](docs/howto-smb-intake.md)              | How-to      | Deploy a public lead-capture chat widget for a business client   |
 | [Add Billing](docs/howto-add-billing.md)                   | How-to      | LemonSqueezy setup, webhooks, plan feature gating                |
 | [Chat History](docs/howto-chat-history.md)                 | How-to      | Enable persistent conversation history across page reloads       |
 | [API Reference](docs/reference-api.md)                     | Reference   | Every API route — auth, request body, response shape             |

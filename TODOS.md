@@ -1,148 +1,30 @@
 # TODOS
 
-Work considered and explicitly deferred. Pick these up once the SMB demo sprint has its first paying client.
+Open work items and deferred decisions. All SMB intake items have been removed — Emma is a personal AI companion platform.
 
 ---
 
-## Agent Security — Deferred from v0.5.1 adversarial review
+## Agent Security — Fixed 2026-06-13
 
-### action_log Missing client_id — Hourly Rate Limit Permanently Bypassed
+### ~~action_log Missing client_id — Hourly Rate Limit Permanently Bypassed~~ ✅ Fixed
 
-**What:** `checkAutonomousAccess` (addon-enforcer.ts) queries `action_log` filtered by `client_id`, but `logAction` (agent-loop.ts) never inserts a `client_id` column. The count is always 0, so the hourly autonomous action cap is never enforced.
-**Impact:** Any user on a metered plan can run unlimited agent tasks per hour.
-**Files:** `src/core/agent-loop.ts` (logAction insert), `src/core/addon-enforcer.ts` (query)
-**Priority:** P1
+`logAction` in `agent-loop.ts` now inserts `client_id` and `user_id` into every `action_log` row, so `checkAutonomousAccess` hourly cap is correctly enforced. Also added `reason` column to schema (inline inserts were silently failing without it).
 
-### approve Path Lacks Plan-Tier Re-Check
+### ~~approve Has Check-Then-Act Race~~ ✅ Fixed
 
-**What:** `POST /api/emma/agent` with `action: "approve"` resumes the agent loop without calling `checkAutonomousAccess`. A user whose plan is downgraded after task creation can still resume tasks.
-**Files:** `src/app/api/emma/agent/route.ts` (approve case, ~line 90)
-**Priority:** P2
+Approve handler now uses a single atomic `UPDATE WHERE status='pending' RETURNING *` — only one concurrent request can win. The loser receives a 404.
 
-### approve Has Check-Then-Act Race
+### ~~approve Path Lacks Plan-Tier Re-Check~~ ✅ Fixed
 
-**What:** The approve handler reads `approval.status === "pending"` and later updates it to "approved" without an atomic lock. Two concurrent approve requests for the same `approvalId` can both pass the check before either writes the update, causing the tool to execute twice.
-**Impact:** Dangerous for tools that send emails, create calendar events, or call external APIs.
-**Files:** `src/app/api/emma/agent/route.ts` (approve case)
-**Priority:** P1
+Approve case now calls `checkAutonomousAccess` before resuming the agent loop, blocking downgraded users.
 
 ---
 
-## P1 — Before Consumer Launch
-
-### ~~Consumer/SMB Split Architecture~~ ✅ Done (2026-05-16)
-
-**What:** `/app` (consumer) and `/business/[slug]` (SMB) are now intentionally separate route trees sharing `src/core/`.
-
-- `/business/[slug]/` — overview dashboard (lead counts, recent leads, intake URL)
-- `/business/[slug]/leads/` — full leads table
-- `_lib/auth.ts` — shared membership gate (user auth + `client_members` check)
-- `/admin/[slug]` redirects to `/business/[slug]/leads` for backwards compat
-- `/admin/` internal ops dashboard (MRR, churn) — unchanged, separate surface
-
-### ~~Regulatory Disclosure in Onboarding~~ ✅ Done (2026-05-16)
-
-Intro step now shows a bordered disclosure card with a required checkbox. "Let's go" is disabled until acknowledged.
-
-### ~~Consent / AI Disclosure Footer on Intake Page~~ ✅ Done (2026-05-16)
-
-Consent gate added to `/intake/[slug]` — checkbox must be checked before chat starts. Tennessee disclosure banner remains always-visible above the gate.
-
-### ~~PII Retention Policy for Leads Table~~ ✅ Done (2026-05-16)
-
-`/api/emma/cron/leads-cleanup` deletes leads older than 90 days. Runs daily at 03:00 UTC via Vercel cron.
-
-### ~~Admin Lead View `/admin/[slug]`~~ ✅ Done (2026-05-16)
-
-`/admin/[slug]` — server-rendered leads table, auth-gated to client members only. Ownership verified via `client_members` before any data is shown.
-
----
-
-## P2 — After First SMB Client
-
-### ~~Google Sheets Writer~~ ✅ Done (2026-05-16)
-
-`src/lib/sheets.ts` — zero-dependency WebCrypto service account JWT auth + Google Sheets API v4 `values.append`. Wired into both `/api/intake/[slug]/chat` and `/api/intake/[slug]/form` on lead save (non-fatal). Config: `sheets_id` in `clients` table + `GOOGLE_SHEETS_SA_KEY` env var (JSON blob). Row format: `[ISO timestamp, name, contact, notes]` appended to `Sheet1!A:D`.
-
-### ~~Slug Enumeration Protection~~ ✅ Done (2026-05-16)
-
-`/intake/[slug]/page.tsx` is now a server component. Unknown slugs render the same static "This intake page is unavailable" page as inactive slugs — HTTP 200 in both cases so status codes reveal nothing. Chat UI extracted to `_components/IntakeChat.tsx`.
-
-### ~~Subdomain Routing (Vercel Wildcard)~~ ✅ Done (2026-05-16)
-
-`src/proxy.ts` — reads `Host` header at middleware entry; if it ends with `.<NEXT_PUBLIC_SMB_DOMAIN>`, extracts the slug and rewrites to `/intake/{slug}`. Configure a Vercel wildcard domain (`*.intake.yourdomain.com`) and set `NEXT_PUBLIC_SMB_DOMAIN=intake.yourdomain.com` to activate.
-
-### ~~Lead Notification — Email~~ ✅ Done (2026-05-16)
-
-Email notification via Resend wired in both `/api/intake/[slug]/chat` and `/api/intake/[slug]/form`. Sends to `owner_email` from `clients` table (falls back to `EMAIL_FROM`). WhatsApp option deferred until a client specifically requests it.
-
----
-
-## P3 — Future
-
-### ~~Multi-step Intake Forms~~ ✅ Done (2026-05-16)
-
-**What:** Configurable intake question sequences (not just open chat). For high-volume use cases where consistency matters more than personality.
-**Why:** Some SMB verticals (medical intake, legal intake) need specific questions in a specific order with validation.
-**Effort:** M
-**Depends on:** Client pattern revealing this need
-
-### ~~HubSpot Deal Sync~~ ✅ Done (2026-05-16)
-
-**What:** Auto-create a HubSpot deal when a lead is captured via intake.
-**Why:** SMBs with established HubSpot workflows want leads to flow in automatically.
-**Effort:** S (HubSpot integration already exists in codebase)
-**Depends on:** Client using HubSpot
-
----
-
-## Integration Implementation Gaps
-
-Found via audit on 2026-05-16. The connectors directory UI declares these tools but the backend doesn't implement them yet.
-
-### ~~Google Drive — Adapter + Tools Missing~~ ✅ Done (2026-05-16)
-
-`GoogleDriveAdapter` added to `src/core/integrations/google.ts` with `uploadFile`, `listFiles`, `readFile`. Tools `drive_upload_file`, `drive_list_files`, `drive_read_file` registered in `tool-registry.ts`.
-
-### ~~Notion — `search_pages` Missing~~ ✅ Done (2026-05-16)
-
-`searchPages()` added to `NotionAdapter`. Tool `notion_search_pages` registered in `tool-registry.ts`.
-
-### ~~Slack — `upload_file` and `list_channels` Missing~~ ✅ Done (2026-05-16)
-
-`uploadFile()` and `listChannels()` added to `SlackAdapter`. Tools `slack_upload_file` and `slack_list_channels` registered in `tool-registry.ts`.
+## Open Items
 
 ### ElevenLabs — `speak_text` Not a Registered Tool
 
 **What:** ElevenLabs is BYOK for TTS voice only. `speak_text` is not registered in `tool-registry.ts` as an agentic tool Emma can call autonomously.
 **Impact:** Emma can use ElevenLabs for her own voice but can't call it as a tool in response to user requests.
 **Files:** `src/core/tool-registry.ts`, possibly a new `src/core/integrations/elevenlabs.ts`
-**Note:** Low priority — the voice use-case is the primary one; agentic TTS is speculative.
-
----
-
-## Pre-Launch Audit — 2026-05-16
-
-Audit performed before launch. Two critical bugs fixed in this session; remaining items below.
-
-### ~~Auth callback doesn't convert invited waitlist users~~ ✅ Fixed (2026-05-16)
-
-`src/app/auth/callback/route.ts` now converts `waitlist_v2.status: "invited" → "converted"` on first sign-in, checked against `invite_expires_at`. Uses service-role client to bypass RLS.
-
-### ~~Admin UI for Waitlist Management~~ ✅ Done (2026-05-16)
-
-Waitlist tab added to `/admin`. Stats row (waiting/invited/active/cap), waitlist table with per-row Invite button, seat cap field. Calls `POST /api/emma/waitlist-manage` with actions `list`, `stats`, `invite`, `set_cap`.
-
-### ~~Invite Email Uses Login URL Instead of Magic Link~~ ✅ Done (2026-05-16)
-
-`waitlist-manage` invite action now calls `supabase.auth.admin.generateLink({ type: "magiclink", email })` and sends the one-click sign-in URL instead of `/login`.
-
-### ~~SMB Client Config Has No Settings UI~~ ✅ Done (2026-05-16)
-
-`/business/[slug]/settings` — client component with owner notification email + Google Sheets ID fields. `GET /api/business/[slug]/settings` reads current config; `PATCH` updates `clients.owner_email` and `clients.sheets_id`. Settings nav link added to the business layout.
-
----
-
-## Known TODOs in Code
-
-- `src/app/api/emma/referral/route.ts` — ~~Extend referrer subscription by 1 month~~ → **20% discount code via LemonSqueezy + Resend notification** ✅ Done (2026-05-16)
+**Priority:** Low — the voice use-case is primary; agentic TTS is speculative.
