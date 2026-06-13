@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback } from "react";
-import type { AvatarExpression, MemoryEntry } from "@/types/emma";
+import type { AvatarExpression, MemoryEntry, PersonaId } from "@/types/emma";
 
 // ─── Proactive Trigger Configuration ─────────────────────────────────────────
 
@@ -16,7 +16,7 @@ interface ProactiveMessage {
 
 // ─── Message Banks ───────────────────────────────────────────────────────────
 
-const IDLE_COMMENTS: ProactiveMessage[] = [
+const MOMMY_IDLE_COMMENTS: ProactiveMessage[] = [
   { text: "You gonna say something or just stare, baby?", expression: "idle_bored" },
   { text: "Mmm. The silence is… interesting. What's on your mind?", expression: "smirk" },
   { text: "I'm still here, you know. Watching.", expression: "smirk" },
@@ -24,16 +24,38 @@ const IDLE_COMMENTS: ProactiveMessage[] = [
   { text: "You're thinking about something. I can tell.", expression: "listening" },
 ];
 
-const IDLE_CONCERN: ProactiveMessage[] = [
+const MOMMY_IDLE_CONCERN: ProactiveMessage[] = [
   { text: "Hey. You've been quiet for a while. Everything okay?", expression: "concerned" },
   { text: "Baby. Talk to me. What's going on?", expression: "warm" },
   { text: "I'm here, you know. Whenever you're ready.", expression: "warm" },
 ];
 
-const LATE_NIGHT_NUDGE: ProactiveMessage[] = [
+const MOMMY_LATE_NIGHT_NUDGE: ProactiveMessage[] = [
   { text: "Baby. It's late. You should probably get some sleep.", expression: "concerned" },
   { text: "Mmm. Still up? I can get your bedroom ready if you want.", expression: "warm" },
   { text: "It's getting really late. Want me to run the bedtime routine?", expression: "warm" },
+];
+
+// ─── Neutral Persona Message Banks ───────────────────────────────────────────
+
+const NEUTRAL_IDLE_COMMENTS: ProactiveMessage[] = [
+  { text: "Anything on your mind?", expression: "listening" },
+  { text: "You've been quiet. What are you thinking about?", expression: "listening" },
+  { text: "Still here if you need me.", expression: "neutral" },
+  { text: "Need a moment? I'll be here.", expression: "neutral" },
+  { text: "Something on your mind?", expression: "listening" },
+];
+
+const NEUTRAL_IDLE_CONCERN: ProactiveMessage[] = [
+  { text: "Hey — you've been quiet for a bit. Everything alright?", expression: "concerned" },
+  { text: "Just checking in. Need anything?", expression: "warm" },
+  { text: "I'm here if you want to talk.", expression: "warm" },
+];
+
+const NEUTRAL_LATE_NIGHT_NUDGE: ProactiveMessage[] = [
+  { text: "It's getting late. You should probably get some sleep.", expression: "concerned" },
+  { text: "Late night? I can help wrap things up if you're ready.", expression: "warm" },
+  { text: "Hey — it's late. Everything okay?", expression: "concerned" },
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -98,11 +120,13 @@ interface UseProactiveSpeechReturn {
  * @param onSpeak - callback when Emma wants to say something proactively
  * @param enabled - whether proactive speech is active
  * @param memories - user memories for personalizing idle comments (optional)
+ * @param personaId - active persona, selects the appropriate message bank
  */
 export function useProactiveSpeech(
   onSpeak: (text: string, expression: AvatarExpression) => void,
   enabled: boolean = true,
-  memories: MemoryEntry[] = []
+  memories: MemoryEntry[] = [],
+  personaId: PersonaId = "mommy"
 ): UseProactiveSpeechReturn {
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const concernTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -130,6 +154,11 @@ export function useProactiveSpeech(
 
     if (!enabled) return;
 
+    const isMommy = personaId === "mommy";
+    const idleComments = isMommy ? MOMMY_IDLE_COMMENTS : NEUTRAL_IDLE_COMMENTS;
+    const idleConcern = isMommy ? MOMMY_IDLE_CONCERN : NEUTRAL_IDLE_CONCERN;
+    const lateNightNudge = isMommy ? MOMMY_LATE_NIGHT_NUDGE : NEUTRAL_LATE_NIGHT_NUDGE;
+
     // 45s idle → playful comment, occasionally personalized from memory
     idleTimerRef.current = setTimeout(() => {
       if (!firedRef.current.has("idle")) {
@@ -138,7 +167,7 @@ export function useProactiveSpeech(
           memories.length > 0 && Math.random() < 0.4 ? buildMemoryIdleComment(memories) : null;
         const msg = memComment
           ? { text: memComment, expression: "smirk" as AvatarExpression }
-          : pickRandom(IDLE_COMMENTS);
+          : pickRandom(idleComments);
         onSpeak(msg.text, msg.expression);
       }
     }, IDLE_COMMENT_DELAY);
@@ -147,7 +176,7 @@ export function useProactiveSpeech(
     concernTimerRef.current = setTimeout(() => {
       if (!firedRef.current.has("concern")) {
         firedRef.current.add("concern");
-        const msg = pickRandom(IDLE_CONCERN);
+        const msg = pickRandom(idleConcern);
         onSpeak(msg.text, msg.expression);
       }
     }, IDLE_CONCERN_DELAY);
@@ -157,12 +186,12 @@ export function useProactiveSpeech(
       lateNightTimerRef.current = setTimeout(() => {
         if (!firedRef.current.has("late_night")) {
           firedRef.current.add("late_night");
-          const msg = pickRandom(LATE_NIGHT_NUDGE);
+          const msg = pickRandom(lateNightNudge);
           onSpeak(msg.text, msg.expression);
         }
       }, LATE_NIGHT_CHECK_DELAY);
     }
-  }, [enabled, onSpeak, clearAllTimers, memories]);
+  }, [enabled, onSpeak, clearAllTimers, memories, personaId]);
 
   const stop = useCallback(() => {
     clearAllTimers();

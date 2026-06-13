@@ -144,11 +144,97 @@ function buildMemoryFollowUp(memory: MemoryEntry): string {
   }
 }
 
+// ─── Neutral Persona Greetings ───────────────────────────────────────────────
+
+const NEUTRAL_GREETINGS = {
+  first_visit:
+    "Hey. I'm Emma. I remember things, I pay attention, and I'm here whenever you need me. What are you working on?",
+
+  morning: [
+    "Good morning. What's on your plate today?",
+    "Morning. Ready to get into it?",
+    "Hey — morning. How are you doing?",
+  ],
+  afternoon: [
+    "Hey. How's your afternoon going?",
+    "Afternoon. What can I help with?",
+    "Hey there. What are you working on?",
+  ],
+  evening: [
+    "Evening. How was your day?",
+    "Hey. How did everything go today?",
+    "Good evening. What do you need?",
+  ],
+  night: [
+    "Hey. Getting some late work in?",
+    "It's getting late — everything okay?",
+    "Hey. What do you need?",
+  ],
+  late_night: [
+    "Hey. It's really late. Can't sleep?",
+    "You're up late. What's going on?",
+    "Late night. I'm here if you need me.",
+  ],
+
+  quick_return: ["Back already? What did you need?", "That was quick. What's up?"],
+  normal_return: [
+    "Hey, welcome back. What can I help with?",
+    "Good to see you. What do you need?",
+    "Welcome back.",
+  ],
+  long_absence: [
+    "Hey. It's been a bit. Good to see you — what's going on?",
+    "Welcome back. How've you been?",
+    "Hey, it's been a while. What do you need?",
+  ],
+  very_long_absence: [
+    "Hey. It's been a few days. Good to have you back — everything okay?",
+    "You've been away for a while. Welcome back.",
+  ],
+};
+
 // ─── Generate Greeting ───────────────────────────────────────────────────────
+
+function buildNeutralGreeting(memories: MemoryEntry[]): string {
+  const ctx = getSessionContext();
+
+  if (ctx.isFirstVisit) {
+    return NEUTRAL_GREETINGS.first_visit;
+  }
+
+  if (ctx.hoursSince !== null) {
+    if (ctx.hoursSince < 1) return pickRandom(NEUTRAL_GREETINGS.quick_return);
+    if (ctx.hoursSince > 72) return pickRandom(NEUTRAL_GREETINGS.very_long_absence);
+    if (ctx.hoursSince > 24) return pickRandom(NEUTRAL_GREETINGS.long_absence);
+  }
+
+  const timeGreetings = NEUTRAL_GREETINGS[ctx.timeOfDay];
+  let greeting = pickRandom(timeGreetings);
+
+  // Insert name naturally ~40% of the time
+  const nameMemory = memories.find((m) => m.key === "name" || m.key === "user_name");
+  if (nameMemory && Math.random() > 0.6) {
+    greeting = greeting.replace(
+      /^(Hey|Morning|Afternoon|Evening)(\b)/,
+      `$1, ${nameMemory.value}$2`
+    );
+  }
+
+  // 50% of the time, append a contextual memory reference
+  if (memories.length > 0 && Math.random() > 0.5) {
+    const mem = pickContextualMemory(memories);
+    if (mem) {
+      const followUp = buildMemoryFollowUp(mem);
+      if (followUp) greeting = `${greeting} ${followUp}`;
+    }
+  }
+
+  return greeting;
+}
 
 export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] = []): string {
   if (personaId !== "mommy") {
-    return "Hey, I'm Emma. What can I do for you?";
+    return buildNeutralGreeting(memories);
   }
 
   const ctx = getSessionContext();
@@ -199,9 +285,17 @@ export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] =
  * Get the appropriate initial expression for the greeting.
  */
 export function getGreetingExpression(personaId: PersonaId): string {
-  if (personaId !== "mommy") return "neutral";
-
   const ctx = getSessionContext();
+
+  if (personaId !== "mommy") {
+    if (ctx.isFirstVisit) return "warm";
+    if (ctx.hoursSince !== null && ctx.hoursSince > 72) return "concerned";
+    if (ctx.hoursSince !== null && ctx.hoursSince > 24) return "warm";
+    if (ctx.hoursSince !== null && ctx.hoursSince < 1) return "neutral";
+    if (ctx.timeOfDay === "late_night" || ctx.timeOfDay === "night") return "concerned";
+    if (ctx.timeOfDay === "morning") return "warm";
+    return "neutral";
+  }
 
   if (ctx.isFirstVisit) return "flirty";
   if (ctx.hoursSince !== null && ctx.hoursSince > 72) return "skeptical";
