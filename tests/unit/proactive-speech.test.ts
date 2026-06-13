@@ -68,4 +68,29 @@ describe("buildMemoryIdleComment", () => {
     ]);
     expect(result).toContain("Jordan");
   });
+
+  it("neutral persona goal comment contains no mommy voice", async () => {
+    const { buildMemoryIdleComment } = await import("@/core/proactive-speech");
+    const result = buildMemoryIdleComment([mem("goal", "g", "launch the app")], "neutral");
+    expect(result).not.toBeNull();
+    expect(result).not.toContain("Mmm");
+    expect(result).toContain("launch the app");
+  });
+
+  it("neutral persona relationship comment skips 'You've been quiet'", async () => {
+    const { buildMemoryIdleComment } = await import("@/core/proactive-speech");
+    const result = buildMemoryIdleComment(
+      [mem("relationship", "partner", "Alex is my partner")],
+      "neutral"
+    );
+    expect(result).not.toBeNull();
+    expect(result).not.toContain("You've been quiet");
+    expect(result).toContain("Alex");
+  });
+
+  it("mommy persona goal comment retains Mmm voice", async () => {
+    const { buildMemoryIdleComment } = await import("@/core/proactive-speech");
+    const result = buildMemoryIdleComment([mem("goal", "g", "finish the project")], "mommy");
+    expect(result).toContain("Mmm");
+  });
 });
