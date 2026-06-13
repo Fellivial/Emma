@@ -175,8 +175,11 @@ export async function getRelevantMemoriesForUser(
       .from("memories")
       .update({ last_accessed: new Date().toISOString() })
       .in("id", ids)
-      .then(() => {})
-      .catch((err: Error) => console.error("[Memory DB] last_accessed touch failed:", err.message));
+      .then(
+        () => {},
+        (err: unknown) =>
+          console.error("[Memory DB] last_accessed touch failed:", (err as Error).message)
+      );
   }
 
   return result;
