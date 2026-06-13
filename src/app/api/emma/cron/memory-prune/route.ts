@@ -11,15 +11,17 @@ function getSupabase() {
 }
 
 /**
- * Cron: Memory Staleness Pruning — hard-delete stale memories daily.
+ * Cron: Memory Staleness Pruning + Confidence Decay — runs daily.
  * Schedule: daily at 04:00 UTC (vercel.json)
  *
  * Rules (active memories only — superseded rows handled separately):
  *   1. category = 'context' AND last_accessed < now() - 30 days → delete
  *   2. confidence < 0.5 AND last_accessed < now() - 90 days → delete
  *   3. confidence < 0.7 AND last_accessed < now() - 180 days → delete
- *   4. category = 'constraint' → never delete
+ *   4. category = 'constraint' → never delete (skipped in rules 2, 3, 6)
  *   5. status = 'superseded' AND updated_at < now() - 90 days → delete (tombstone cleanup)
+ *   6. active, non-constraint, not accessed in 7+ days → decay confidence by 3%/week (floor: 0.1)
+ *      Processes up to 1 000 memories per run — covers all users progressively over multiple days.
  */
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -108,8 +110,53 @@ export async function GET(req: NextRequest) {
     const pruned5 = c5 ?? 0;
     console.warn(`[memory-prune] Rule 5 (superseded/90d): deleted ${pruned5}`);
 
-    const total = pruned1 + pruned2 + pruned3 + pruned5;
-    console.warn(`[memory-prune] Total pruned: ${total}`);
+    const totalPruned = pruned1 + pruned2 + pruned3 + pruned5;
+    console.warn(`[memory-prune] Total pruned: ${totalPruned}`);
+
+    // ── Rule 6: Confidence Decay ───────────────────────────────────────────────
+    // Apply 3% weekly decay to active non-constraint memories not accessed in 7+ days.
+    // Memories at or below the floor (0.1) are skipped — the prune rules handle removal.
+    const DECAY_FACTOR = 0.97;
+    const CONFIDENCE_FLOOR = 0.1;
+    const DECAY_BATCH_LIMIT = 1000;
+    const DECAY_CHUNK = 50;
+
+    const cutoff7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: staleMemories, error: decayFetchErr } = await supabase
+      .from("memories")
+      .select("id, confidence")
+      .eq("status", "active")
+      .neq("category", "constraint")
+      .gt("confidence", CONFIDENCE_FLOOR)
+      .or(`last_accessed.lt.${cutoff7d},and(last_accessed.is.null,created_at.lt.${cutoff7d})`)
+      .limit(DECAY_BATCH_LIMIT);
+
+    if (decayFetchErr) {
+      console.error("[memory-prune] Rule 6 fetch error:", decayFetchErr);
+    }
+
+    let decayed6 = 0;
+    if (staleMemories && staleMemories.length > 0) {
+      const updatedAt = now.toISOString();
+      for (let i = 0; i < staleMemories.length; i += DECAY_CHUNK) {
+        const chunk = staleMemories.slice(i, i + DECAY_CHUNK);
+        await Promise.all(
+          chunk.map((m) =>
+            supabase
+              .from("memories")
+              .update({
+                confidence: Math.max((m.confidence as number) * DECAY_FACTOR, CONFIDENCE_FLOOR),
+                updated_at: updatedAt,
+              })
+              .eq("id", m.id)
+              .eq("status", "active")
+          )
+        );
+      }
+      decayed6 = staleMemories.length;
+      console.warn(`[memory-prune] Rule 6 (decay): applied to ${decayed6} memories`);
+    }
 
     return NextResponse.json({
       pruned: {
@@ -118,7 +165,8 @@ export async function GET(req: NextRequest) {
         lowConfidence180: pruned3,
         superseded: pruned5,
       },
-      total,
+      decayed: decayed6,
+      total: totalPruned,
     });
   } catch (err) {
     console.error("[memory-prune] Unexpected error:", err);
