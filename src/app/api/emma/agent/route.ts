@@ -100,33 +100,41 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing approvalId or DB" }, { status: 400 });
         }
 
-        // Get approval record with task transcript for full-context resume.
-        // Prefer client_id so scheduled-task approvals (user_id="system") are visible;
-        // fall back to user_id when clientId is not yet resolved.
-        const approvalQuery = supabase
-          .from("approvals")
-          .select("*, action_log(*), tasks(*, step_transcript)")
-          .eq("id", body.approvalId);
-        const { data: approval } = await (
-          clientId ? approvalQuery.eq("client_id", clientId) : approvalQuery.eq("user_id", userId)
-        ).single();
-
-        if (!approval || approval.status !== "pending") {
-          return NextResponse.json(
-            { error: "Approval not found or already decided" },
-            { status: 404 }
-          );
+        // Plan-tier re-check: user's plan may have been downgraded since task creation.
+        const approveConfig = await loadClientConfigForUser(userId);
+        const approveAccess = await checkAutonomousAccess(
+          approveConfig.id,
+          approveConfig.planId,
+          "autonomous"
+        );
+        if (!approveAccess.allowed) {
+          return NextResponse.json({ error: approveAccess.reason }, { status: 403 });
         }
 
-        // Mark as approved
-        await supabase
+        // Atomic claim: update status='approved' WHERE status='pending' and return the row.
+        // Only one concurrent request can win this UPDATE; the loser gets null back.
+        // Prefer client_id so scheduled-task approvals (user_id="system") are visible;
+        // fall back to user_id when clientId is not yet resolved.
+        const updateQuery = supabase
           .from("approvals")
           .update({
             status: "approved",
             decided_by: userId,
             decided_at: new Date().toISOString(),
           })
-          .eq("id", body.approvalId);
+          .eq("id", body.approvalId)
+          .eq("status", "pending")
+          .select("*, action_log(*), tasks(*, step_transcript)");
+        const { data: approval } = await (
+          clientId ? updateQuery.eq("client_id", clientId) : updateQuery.eq("user_id", userId)
+        ).single();
+
+        if (!approval) {
+          return NextResponse.json(
+            { error: "Approval not found or already decided" },
+            { status: 404 }
+          );
+        }
 
         audit({
           userId,
