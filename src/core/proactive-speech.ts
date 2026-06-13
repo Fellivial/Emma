@@ -71,7 +71,11 @@ const MEMORY_IDLE_CATEGORIES: MemoryEntry["category"][] = ["goal", "relationship
  * memory in a "feels natural to mention" category. Returns null when no
  * suitable memory exists (below confidence threshold or wrong category).
  */
-export function buildMemoryIdleComment(memories: MemoryEntry[]): string | null {
+export function buildMemoryIdleComment(
+  memories: MemoryEntry[],
+  personaId: PersonaId = "mommy"
+): string | null {
+  const isMommy = personaId === "mommy";
   for (const cat of MEMORY_IDLE_CATEGORIES) {
     const candidates = memories
       .filter((m) => m.category === cat && m.confidence >= 0.75)
@@ -81,16 +85,24 @@ export function buildMemoryIdleComment(memories: MemoryEntry[]): string | null {
     const v = m.value;
     switch (cat) {
       case "goal":
-        return `Mmm. Just thinking about ${v.length < 30 ? v : "your goal"}. How's that going?`;
+        return isMommy
+          ? `Mmm. Just thinking about ${v.length < 30 ? v : "your goal"}. How's that going?`
+          : `Just thinking — how's ${v.length < 30 ? v : "that goal"} going?`;
       case "relationship": {
         const nameMatch = v.match(/^(\w+)/);
         const name = nameMatch && nameMatch[1].length < 15 ? nameMatch[1] : null;
-        return name
-          ? `You've been quiet. How's ${name} doing?`
-          : `You've been quiet. Everything good at home?`;
+        return isMommy
+          ? name
+            ? `You've been quiet. How's ${name} doing?`
+            : `You've been quiet. Everything good at home?`
+          : name
+            ? `How's ${name} doing?`
+            : `Everything good at home?`;
       }
       case "habit":
-        return `Still keeping up with ${v.length < 25 ? v : "that routine"} of yours?`;
+        return isMommy
+          ? `Still keeping up with ${v.length < 25 ? v : "that routine"} of yours?`
+          : `Still keeping up with ${v.length < 25 ? v : "that routine"}?`;
       default:
         return null;
     }
@@ -164,9 +176,11 @@ export function useProactiveSpeech(
       if (!firedRef.current.has("idle")) {
         firedRef.current.add("idle");
         const memComment =
-          memories.length > 0 && Math.random() < 0.4 ? buildMemoryIdleComment(memories) : null;
+          memories.length > 0 && Math.random() < 0.4
+            ? buildMemoryIdleComment(memories, personaId)
+            : null;
         const msg = memComment
-          ? { text: memComment, expression: "smirk" as AvatarExpression }
+          ? { text: memComment, expression: (isMommy ? "smirk" : "listening") as AvatarExpression }
           : pickRandom(idleComments);
         onSpeak(msg.text, msg.expression);
       }
