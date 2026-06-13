@@ -875,6 +875,28 @@ export default function EmmaPage() {
   // eslint-disable-next-line react-hooks/refs
   proactiveResetRef.current = proactive.resetActivity;
 
+  // ── Surface daily reflection / pattern on session open ────────────────────
+  // Fetches the top unseen pattern_detection row and delivers it as proactive
+  // speech ~4 s after the greeting lands. The patterns route enforces quiet-
+  // hours and a daily cap of 3 — no extra guard needed here.
+  useEffect(() => {
+    if (!initialized) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/emma/patterns");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          pattern: { id: string; suggestion: string; patternType: string } | null;
+        };
+        if (!data.pattern?.suggestion) return;
+        const expression: AvatarExpression =
+          data.pattern.patternType === "memory_reflection" ? "warm" : "listening";
+        handleProactiveSpeak(data.pattern.suggestion, expression);
+      } catch {}
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [initialized, handleProactiveSpeak]);
+
   // ── Typing Awareness — avatar reacts to user typing ────────────────────────
   const handleTypingStart = useCallback(() => {
     avatar.setListening();
