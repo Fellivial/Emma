@@ -57,7 +57,8 @@ import { UserPanel } from "@/components/UserPanel";
 
 export default function EmmaPage() {
   // ── Core ────────────────────────────────────────────────────────────────────
-  const [persona] = useState<PersonaId>("mommy");
+  const [persona, setPersona] = useState<PersonaId>("mommy");
+  const [vibeResolved, setVibeResolved] = useState(false);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [apiMessages, setApiMessages] = useState<ApiMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,11 +171,20 @@ export default function EmmaPage() {
         body: JSON.stringify({ action: "get" }),
       });
       const data = await res.json();
-      if (data.entries) setMemories(data.entries);
+      if (data.entries) {
+        setMemories(data.entries);
+        const vibeEntry = (data.entries as MemoryEntry[]).find(
+          (e) => e.key === "interaction_vibe" && e.category === "preference"
+        );
+        if (vibeEntry?.value === "warm" || vibeEntry?.value === "balanced") {
+          setPersona("neutral");
+        }
+      }
     } catch (err) {
       console.error("[EMMA] Memory fetch failed:", err);
     } finally {
       setMemoriesLoading(false);
+      setVibeResolved(true);
     }
   };
 
@@ -224,8 +234,9 @@ export default function EmmaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Eager greeting — show immediately, don't wait for history ───────────────
+  // ── Eager greeting — fires after vibe is resolved so persona is correct ──────
   useEffect(() => {
+    if (!vibeResolved) return;
     if (initialized) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
@@ -247,7 +258,7 @@ export default function EmmaPage() {
     setTimeout(() => {
       avatar.setExpression(greetingExpression as AvatarExpression);
     }, 500);
-  }, [initialized, persona, memories, avatar]);
+  }, [initialized, vibeResolved, persona, memories, avatar]);
 
   // ── When history loads with messages, replace the greeting ───────────────────
   useEffect(() => {
