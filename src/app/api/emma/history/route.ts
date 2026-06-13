@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        if (convo.messageCount > 0 && convo.messageCount % 30 === 0) {
+        // First summary after 6 messages (captures short sessions); refresh every 20 thereafter.
+        if (convo.messageCount === 6 || (convo.messageCount > 0 && convo.messageCount % 20 === 0)) {
           const allMsgs = await getConversationMessages(convo.id, 35);
           const text = allMsgs.map((m) => `${m.role}: ${m.content}`).join("\n");
           const prevSummary = convo.summary ? `Previous summary:\n${convo.summary}\n\n` : "";
