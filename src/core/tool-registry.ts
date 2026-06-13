@@ -395,7 +395,7 @@ registerTool({
       company: "Acme Inc",
       phone: "+14155550100",
     },
-    { email: "lead@example.org", firstname: null, lastname: null, company: null, phone: null },
+    { email: "contact@example.org", firstname: null, lastname: null, company: null, phone: null },
   ],
   riskLevel: "moderate",
   handler: async (input, context) => {
@@ -1099,7 +1099,7 @@ registerTool({
       contact_id: "12345",
     },
     {
-      dealname: "New Inbound Lead",
+      dealname: "New Deal",
       amount: null,
       pipeline: null,
       dealstage: null,

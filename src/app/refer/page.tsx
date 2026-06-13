@@ -164,7 +164,7 @@ export default function ReferPage() {
         {/* Affiliate pitch */}
         <div className="mt-8 rounded-xl border border-amber-400/10 bg-amber-400/3 p-5">
           <h3 className="text-sm font-medium text-amber-300/70 mb-1">
-            Are you a consultant or agency?
+            Want to earn as a referral partner?
           </h3>
           <p className="text-xs font-light text-emma-200/30 mb-3">
             Earn 20% commission on every client you refer for the first 3 months. Contact us to join
