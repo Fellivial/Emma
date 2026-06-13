@@ -612,7 +612,6 @@ function ElevenLabsConnect({
       .then(async (r) => {
         if (!r.ok) return;
         const d = await r.json();
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQuota(d as ELQuota);
       })
       .catch(() => {});

@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: e1.message }, { status: 500 });
     }
     const pruned1 = c1 ?? 0;
-    console.log(`[memory-prune] Rule 1 (context/30d): deleted ${pruned1}`);
+    console.warn(`[memory-prune] Rule 1 (context/30d): deleted ${pruned1}`);
 
     // Rule 2: active, confidence < 0.5, not accessed in 90+ days, skip constraints
     const { count: c2, error: e2 } = await supabase
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: e2.message }, { status: 500 });
     }
     const pruned2 = c2 ?? 0;
-    console.log(`[memory-prune] Rule 2 (confidence<0.5/90d): deleted ${pruned2}`);
+    console.warn(`[memory-prune] Rule 2 (confidence<0.5/90d): deleted ${pruned2}`);
 
     // Rule 3: active, confidence < 0.7, not accessed in 180+ days, skip constraints
     const { count: c3, error: e3 } = await supabase
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: e3.message }, { status: 500 });
     }
     const pruned3 = c3 ?? 0;
-    console.log(`[memory-prune] Rule 3 (confidence<0.7/180d): deleted ${pruned3}`);
+    console.warn(`[memory-prune] Rule 3 (confidence<0.7/180d): deleted ${pruned3}`);
 
     // Rule 5: hard-delete superseded tombstones older than 90 days
     const { count: c5, error: e5 } = await supabase
@@ -106,10 +106,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: e5.message }, { status: 500 });
     }
     const pruned5 = c5 ?? 0;
-    console.log(`[memory-prune] Rule 5 (superseded/90d): deleted ${pruned5}`);
+    console.warn(`[memory-prune] Rule 5 (superseded/90d): deleted ${pruned5}`);
 
     const total = pruned1 + pruned2 + pruned3 + pruned5;
-    console.log(`[memory-prune] Total pruned: ${total}`);
+    console.warn(`[memory-prune] Total pruned: ${total}`);
 
     return NextResponse.json({
       pruned: {

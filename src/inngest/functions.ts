@@ -125,10 +125,10 @@ export const documentProcess = inngest.createFunction(
     });
 
     // ── 2. Fetch doc metadata + download from Storage ────────────────────────
-    const { mimeType, storagePath, label } = await step.run("fetch-metadata", async () => {
+    const { mimeType, storagePath } = await step.run("fetch-metadata", async () => {
       const { data, error } = await supabase
         .from("ingested_documents")
-        .select("mime_type, storage_path, label")
+        .select("mime_type, storage_path")
         .eq("id", documentId)
         .eq("user_id", userId)
         .single();
@@ -137,7 +137,6 @@ export const documentProcess = inngest.createFunction(
       return {
         mimeType: data.mime_type as string,
         storagePath: data.storage_path as string,
-        label: data.label as string,
       };
     });
 

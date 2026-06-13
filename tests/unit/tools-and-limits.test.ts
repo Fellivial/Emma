@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { getTool, getAllTools } from "@/core/tool-registry";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import { checkAutonomousAccess } from "@/core/addon-enforcer";
-import { getPlan } from "@/core/pricing";
+import {
+  getPlan,
+  getPlanByLemonVariant,
+  inferPlanFromBudget,
+  getMRR,
+  hasElevenLabs,
+} from "@/core/pricing";
 
 describe("tool-registry", () => {
   it("has built-in tools registered", () => {
@@ -145,5 +151,54 @@ describe("plan-based autonomous access", () => {
   it("pro plan has api_access feature", () => {
     const plan = getPlan("pro");
     expect(plan.features.apiAccess).toBe(true);
+  });
+});
+
+describe("pricing-utils", () => {
+  it("getPlanByLemonVariant returns undefined for unknown variant", () => {
+    expect(getPlanByLemonVariant("nonexistent_variant_12345")).toBeUndefined();
+  });
+
+  it("getPlanByLemonVariant returns free plan for empty variant (free has no variant)", () => {
+    const plan = getPlanByLemonVariant("");
+    // free plan always has lemonVariantId: "" — should find it first
+    expect(plan).toBeDefined();
+    expect(plan!.id).toBe("free");
+  });
+
+  it("inferPlanFromBudget maps 0 tokens to free", () => {
+    expect(inferPlanFromBudget(0)).toBe("free");
+  });
+
+  it("inferPlanFromBudget maps starter-level budget to starter", () => {
+    expect(inferPlanFromBudget(1_000_000)).toBe("starter");
+  });
+
+  it("inferPlanFromBudget maps pro-level budget to pro", () => {
+    expect(inferPlanFromBudget(2_000_000)).toBe("pro");
+  });
+
+  it("inferPlanFromBudget maps 100M+ tokens to enterprise", () => {
+    expect(inferPlanFromBudget(100_000_000)).toBe("enterprise");
+  });
+
+  it("getMRR returns correct monthly price for paid plans", () => {
+    expect(getMRR("starter")).toBe(29);
+    expect(getMRR("pro")).toBe(79);
+  });
+
+  it("getMRR returns 0 for free and unknown plans", () => {
+    expect(getMRR("free")).toBe(0);
+    expect(getMRR("unknown_plan")).toBe(0);
+  });
+
+  it("hasElevenLabs returns true for pro and enterprise", () => {
+    expect(hasElevenLabs("pro")).toBe(true);
+    expect(hasElevenLabs("enterprise")).toBe(true);
+  });
+
+  it("hasElevenLabs returns false for free and starter", () => {
+    expect(hasElevenLabs("free")).toBe(false);
+    expect(hasElevenLabs("starter")).toBe(false);
   });
 });

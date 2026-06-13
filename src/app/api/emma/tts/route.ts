@@ -188,12 +188,9 @@ export async function POST(req: NextRequest) {
           )
             .then(({ data: ci }) => {
               if (!ci?.metadata) return;
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const {
-                voiceId: _v,
-                voiceName: _n,
-                ...rest
-              } = ci.metadata as Record<string, unknown>;
+              const rest = { ...(ci.metadata as Record<string, unknown>) };
+              delete rest.voiceId;
+              delete rest.voiceName;
               return supabase
                 .from("client_integrations")
                 .update({

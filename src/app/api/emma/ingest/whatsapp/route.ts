@@ -104,7 +104,6 @@ const WA_SYSTEM_PROMPT =
   "You are Emma, a concise AI assistant replying via WhatsApp. " +
   "Keep responses brief (1-3 short paragraphs). Plain text only — no markdown headers or bold.";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function replyToWhatsApp(
   fromNumber: string,
   inboundText: string,
