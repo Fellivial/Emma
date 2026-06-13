@@ -81,6 +81,22 @@ export default function OnboardingPage() {
         });
       }
 
+      // Save name to memories so greeting engine + proactive speech can personalise.
+      // Skip "Baby" — it's the placeholder shortcut, not a real name, and the
+      // mommy persona already uses "baby" naturally without a memory reference.
+      const trimmedName = name.trim();
+      if (trimmedName && trimmedName.toLowerCase() !== "baby") {
+        await supabase.from("memories").upsert({
+          id: `mem-onboard-name-${user.id}`,
+          user_id: user.id,
+          category: "personal",
+          key: "user_name",
+          value: trimmedName,
+          confidence: 1.0,
+          source: "explicit",
+        });
+      }
+
       router.push("/app");
     } catch {
       setError("Something went wrong. Please try again.");

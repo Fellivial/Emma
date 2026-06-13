@@ -124,4 +124,30 @@ describe("generateGreeting", () => {
 
     expect(result).not.toContain("something vague");
   });
+
+  it("neutral greeting inserts user_name memory into greeting text", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 3 * 3600 * 1000));
+    // Fix hour=10 (morning) so the selected greeting starts with "Hey" and the
+    // name-insertion regex always has a match regardless of when the test runs.
+    vi.spyOn(Date.prototype, "getHours").mockReturnValue(10);
+    vi.spyOn(Math, "random").mockReturnValue(0.9); // > 0.6 → name swap fires
+
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("neutral", [mem("personal", "user_name", "Jordan")]);
+
+    expect(result).toContain("Jordan");
+  });
+
+  it("mommy greeting swaps 'baby' for user_name memory value", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 3 * 3600 * 1000));
+    // Fix hour=10 (morning) → morning[2] = "Rise and shine, baby. …" which has "baby".
+    vi.spyOn(Date.prototype, "getHours").mockReturnValue(10);
+    vi.spyOn(Math, "random").mockReturnValue(0.9); // picks index 2 (floor(0.9*3)=2), fires name swap
+
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("mommy", [mem("personal", "user_name", "Jordan")]);
+
+    expect(result).toContain("Jordan");
+    expect(result).not.toContain("baby");
+  });
 });
