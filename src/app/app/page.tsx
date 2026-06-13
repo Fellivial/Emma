@@ -300,15 +300,37 @@ export default function EmmaPage() {
     }
   }, []);
 
-  // Auto-extract every 10 messages
+  // Auto-extract every 5 messages
   const lastExtractCount = useRef(0);
   useEffect(() => {
     const userMsgCount = messages.filter((m) => m.role === "user").length;
-    if (userMsgCount > 0 && userMsgCount % 10 === 0 && userMsgCount !== lastExtractCount.current) {
+    if (userMsgCount > 0 && userMsgCount % 5 === 0 && userMsgCount !== lastExtractCount.current) {
       lastExtractCount.current = userMsgCount;
       extractMemories();
     }
   }, [messages, extractMemories]);
+
+  // Extract on tab hide / page close — captures short sessions missed by the 5-message trigger.
+  // Uses sendBeacon so the request survives the page being unloaded.
+  useEffect(() => {
+    const handleHide = () => {
+      if (document.visibilityState !== "hidden") return;
+      const userMsgCount = messages.filter((m) => m.role === "user").length;
+      const newSinceLastExtract = userMsgCount - lastExtractCount.current;
+      if (newSinceLastExtract < 2 || messages.length < 4) return;
+      lastExtractCount.current = userMsgCount;
+      const conversationText = messages
+        .slice(-20)
+        .map((m) => `${m.role}: ${m.display}`)
+        .join("\n");
+      const blob = new Blob([JSON.stringify({ action: "extract", conversationText })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon?.("/api/emma/memory", blob);
+    };
+    document.addEventListener("visibilitychange", handleHide);
+    return () => document.removeEventListener("visibilitychange", handleHide);
+  }, [messages]);
 
   // ── Custom routines ────────────────────────────────────────────────────────
   const handleCreateRoutine = useCallback(
