@@ -198,4 +198,14 @@ describe("buildSystemPromptBlocks — neutral persona", () => {
     expect(text).toContain("EMMA");
     expect(text).toContain("Morning Standup"); // routines still present
   });
+
+  it("neutral persona includes memory weaving instruction", () => {
+    const blocks = buildSystemPromptBlocks({ personaId: "neutral" });
+    expect(blocks[0].text).toContain('never say "according to my records"');
+  });
+
+  it("neutral persona includes distress handling rule", () => {
+    const blocks = buildSystemPromptBlocks({ personaId: "neutral" });
+    expect(blocks[0].text).toContain("distressed");
+  });
 });
