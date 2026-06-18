@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from "react";
-import Image from "next/image";
-import { Mic, Eye, Volume2, VolumeX, ArrowUp, Plus, X, FileText } from "lucide-react";
-
-interface AttachedFile {
-  id: string;
-  file: File;
-  preview: string | null;
-}
+import { useState, useRef, useEffect, type KeyboardEvent } from "react";
+import { Mic, Eye, Volume2, VolumeX, ArrowUp } from "lucide-react";
 
 interface InputBarProps {
   onSend: (text: string) => void;
@@ -46,10 +39,7 @@ export function InputBar({
   onVoiceErrorClear,
 }: InputBarProps) {
   const [input, setInput] = useState("");
-  const [files, setFiles] = useState<AttachedFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingRef = useRef(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -110,29 +100,6 @@ export function InputBar({
     }
   };
 
-  const handleFiles = useCallback((fileList: FileList | File[]) => {
-    const newFiles = Array.from(fileList).map((file) => ({
-      id: Math.random().toString(36).slice(2, 9),
-      file,
-      preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-    }));
-    setFiles((prev) => [...prev, ...newFiles]);
-  }, []);
-
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const onDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
-  };
-
   useEffect(() => {
     return () => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -142,33 +109,11 @@ export function InputBar({
   const hasContent = input.trim().length > 0;
 
   return (
-    <div
-      className="relative px-3 pb-3 pt-2"
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+    <div className="relative px-3 pb-3 pt-2">
       {/* Floating card */}
       <div
-        className={`flex flex-col rounded-2xl border transition-all duration-200 bg-emma-900/70 backdrop-blur-xl ${
-          isDragging
-            ? "border-emma-300/40 shadow-[0_0_0_2px_rgba(232,160,191,0.12)]"
-            : "border-surface-border shadow-[0_4px_24px_rgba(0,0,0,0.45)] hover:border-emma-300/15"
-        }`}
+        className="flex flex-col rounded-2xl border transition-all duration-200 bg-emma-900/70 backdrop-blur-xl border-surface-border shadow-[0_4px_24px_rgba(0,0,0,0.45)] hover:border-emma-300/15"
       >
-        {/* File previews */}
-        {files.length > 0 && (
-          <div className="flex gap-2 px-3 pt-3 overflow-x-auto pb-1">
-            {files.map((f) => (
-              <FilePreview
-                key={f.id}
-                file={f}
-                onRemove={(id) => setFiles((prev) => prev.filter((x) => x.id !== id))}
-              />
-            ))}
-          </div>
-        )}
-
         {/* Textarea */}
         <div className="px-4 pt-3 pb-1">
           <textarea
@@ -204,15 +149,6 @@ export function InputBar({
         <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
           {/* Left tools */}
           <div className="flex items-center gap-1 flex-1">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              type="button"
-              aria-label="Attach file"
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-emma-900 border border-surface-border text-emma-200/50 hover:text-emma-300/80 hover:border-emma-300/20 transition-all cursor-pointer"
-            >
-              <Plus size={16} />
-            </button>
-
             {voiceSupported && (
               <button
                 onClick={onVoice}
@@ -278,46 +214,6 @@ export function InputBar({
         </div>
       </div>
 
-      {/* Drag overlay */}
-      {isDragging && (
-        <div className="absolute inset-3 bg-emma-950/85 border-2 border-dashed border-emma-300/35 rounded-2xl z-50 flex flex-col items-center justify-center backdrop-blur-sm pointer-events-none">
-          <FileText size={28} className="text-emma-300/50 mb-1.5" />
-          <p className="text-xs font-light text-emma-300/50">Drop files to attach</p>
-        </div>
-      )}
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files) handleFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
-    </div>
-  );
-}
-
-function FilePreview({ file, onRemove }: { file: AttachedFile; onRemove: (id: string) => void }) {
-  return (
-    <div className="relative group flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden border border-surface-border bg-emma-950/60">
-      {file.preview ? (
-        <Image src={file.preview} alt={file.file.name} fill className="object-cover" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <FileText size={14} className="text-emma-200/30" />
-        </div>
-      )}
-      <button
-        onClick={() => onRemove(file.id)}
-        className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Remove file"
-      >
-        <X size={8} className="text-white" />
-      </button>
     </div>
   );
 }

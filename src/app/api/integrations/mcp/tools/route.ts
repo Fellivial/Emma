@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { decrypt } from "@/core/security/encryption";
-import { listMcpTools } from "@/core/integrations/mcp-client";
+import { isMcpToolsEnabled, listMcpTools } from "@/core/integrations/mcp-client";
 
 async function resolveClientId(userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
@@ -28,6 +28,10 @@ async function resolveClientId(userId: string): Promise<string | null> {
 export async function GET(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isMcpToolsEnabled()) {
+    console.warn("[MCP API] Blocked tool discovery: ENABLE_MCP_TOOLS is not true");
+    return NextResponse.json({ error: "MCP tools are disabled" }, { status: 503 });
+  }
 
   const service = new URL(req.url).searchParams.get("service");
   if (!service) return NextResponse.json({ error: "Missing ?service=" }, { status: 400 });

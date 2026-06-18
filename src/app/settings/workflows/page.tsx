@@ -129,6 +129,8 @@ const CRON_PRESETS = [
   { value: "custom", label: "Custom expression…" },
 ];
 
+const WORKFLOW_BUILDER_AVAILABLE = false;
+
 const MOCK_WORKFLOWS: Workflow[] = [
   {
     id: "w1",
@@ -300,6 +302,22 @@ export default function WorkflowsPage() {
     setCronPreset(preset);
     if (preset !== "custom" && draft) setDraft({ ...draft, cronExpression: preset });
   };
+
+  if (!WORKFLOW_BUILDER_AVAILABLE) {
+    return (
+      <div className="max-w-4xl mx-auto px-8 py-8">
+        <h1 className="text-xl font-light text-emma-100">Workflows</h1>
+        <div className="mt-8 rounded-2xl border border-surface-border bg-emma-950/40 p-8">
+          <Zap className="h-6 w-6 text-emma-300/50" />
+          <h2 className="mt-4 text-sm text-emma-100">Workflow automation is unavailable</h2>
+          <p className="mt-2 max-w-xl text-xs leading-relaxed text-emma-200/50">
+            The current builder does not persist or execute workflows, so it has been disabled
+            until the server-side workflow engine is ready.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-8 py-8">

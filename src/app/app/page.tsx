@@ -55,6 +55,9 @@ import { UserPanel } from "@/components/UserPanel";
 
 // ─── EMMA L4 Shell — Physical Integration ────────────────────────────────────
 
+// TODO: Enable only after routines have real persistence and server-side execution.
+const ENABLE_ROUTINES = false;
+
 export default function EmmaPage() {
   // ── Core ────────────────────────────────────────────────────────────────────
   const [persona, setPersona] = useState<PersonaId>("mommy");
@@ -98,6 +101,10 @@ export default function EmmaPage() {
   // ── Execute workflow routine ───────────────────────────────────────────────
   const executeRoutineById = useCallback(
     (routineId: string, source: "user" | "scheduler" | "proactive") => {
+      if (!ENABLE_ROUTINES) {
+        console.warn(`[Routines] Blocked ${source} execution for "${routineId}": unavailable`);
+        return;
+      }
       const routine = getRoutine(routineId);
       if (!routine) return;
 
@@ -137,6 +144,8 @@ export default function EmmaPage() {
   const scheduler = useScheduler(
     useCallback(
       (routineId: string, _scheduleId: string) => {
+        if (!ENABLE_ROUTINES) return;
+
         const routine = getRoutine(routineId);
         if (!routine) return;
 
@@ -158,7 +167,7 @@ export default function EmmaPage() {
       },
       [executeRoutineById, notifications, timeline]
     ),
-    buildDefaultSchedules(BUILT_IN_ROUTINES)
+    buildDefaultSchedules(BUILT_IN_ROUTINES, ENABLE_ROUTINES)
   );
 
   // ── Load memories on mount ─────────────────────────────────────────────────
@@ -555,7 +564,9 @@ export default function EmmaPage() {
       // Emma's response will also emit [EMMA_ROUTINE] if relevant; executeRoutineById is idempotent
       // over the 3s display window so a double-call is harmless.
       const preMatchedRoutineId = matchRoutineTrigger(text);
-      if (preMatchedRoutineId) executeRoutineById(preMatchedRoutineId, "user");
+      if (ENABLE_ROUTINES && preMatchedRoutineId) {
+        executeRoutineById(preMatchedRoutineId, "user");
+      }
 
       let visionContext: string | undefined;
       if (vision.active && vision.lastAnalysis) {
@@ -732,7 +743,9 @@ export default function EmmaPage() {
               }
 
               // Apply routine
-              if (event.routineId) executeRoutineById(event.routineId, "user");
+              if (ENABLE_ROUTINES && event.routineId) {
+                executeRoutineById(event.routineId, "user");
+              }
 
               // Commands parsed but no longer dispatched to physical devices
 
@@ -1035,7 +1048,9 @@ export default function EmmaPage() {
         visionActive={vision.active}
         elConnected={false}
         memoryCount={memories.length}
-        scheduleCount={scheduler.schedules.filter((s) => s.enabled).length}
+        scheduleCount={
+          ENABLE_ROUTINES ? scheduler.schedules.filter((s) => s.enabled).length : 0
+        }
         activeUser={multiUser.activeUser}
         currentEmotion={emotion.currentEmotion}
       />
@@ -1148,21 +1163,33 @@ export default function EmmaPage() {
 
           {/* Routines */}
           <SideSection label="Routines">
-            <RoutinePanel
-              onActivate={(id) => executeRoutineById(id, "user")}
-              activeRoutineId={activeRoutineId}
-              onCreate={handleCreateRoutine}
-              onDelete={handleDeleteRoutine}
-            />
+            {ENABLE_ROUTINES ? (
+              <RoutinePanel
+                onActivate={(id) => executeRoutineById(id, "user")}
+                activeRoutineId={activeRoutineId}
+                onCreate={handleCreateRoutine}
+                onDelete={handleDeleteRoutine}
+              />
+            ) : (
+              <p className="px-3 py-4 text-xs text-emma-200/40">
+                Routine automation is temporarily unavailable.
+              </p>
+            )}
           </SideSection>
 
           {/* Schedule */}
-          <SideSection label="Schedule" count={scheduler.schedules.filter((s) => s.enabled).length}>
-            <SchedulePanel
-              schedules={scheduler.schedules}
-              onToggle={scheduler.toggleSchedule}
-              onRemove={scheduler.removeSchedule}
-            />
+          <SideSection label="Schedule" count={0}>
+            {ENABLE_ROUTINES ? (
+              <SchedulePanel
+                schedules={scheduler.schedules}
+                onToggle={scheduler.toggleSchedule}
+                onRemove={scheduler.removeSchedule}
+              />
+            ) : (
+              <p className="px-3 py-4 text-xs text-emma-200/40">
+                Scheduled routines are temporarily unavailable.
+              </p>
+            )}
           </SideSection>
 
           {/* Timeline */}
