@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
       if (!name || !email || !industry) {
         return NextResponse.json(
-          { error: "Name, email, and industry are required" },
+          { error: "Name, email, and primary use case are required" },
           { status: 400 }
         );
       }
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           .insert({
             name: name.trim(),
             email: email.toLowerCase().trim(),
-            industry,
+            industry, // Legacy column stores the product use case until a safe schema migration.
             message: message?.trim() || null,
             referral_source: referralSource?.trim() || null,
             status: "converted",
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
           .insert({
             name: name.trim(),
             email: email.toLowerCase().trim(),
-            industry,
+            industry, // Legacy column stores the product use case until a safe schema migration.
             message: message?.trim() || null,
             referral_source: referralSource?.trim() || null,
             status: "waiting",

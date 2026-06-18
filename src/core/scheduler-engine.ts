@@ -27,7 +27,12 @@ function getCurrentHHMM(): string {
 
 // ─── Default Schedules (from built-in routine time triggers) ─────────────────
 
-export function buildDefaultSchedules(routines: Routine[]): ScheduleEntry[] {
+export function buildDefaultSchedules(
+  routines: Routine[],
+  enabled = true
+): ScheduleEntry[] {
+  if (!enabled) return [];
+
   const schedules: ScheduleEntry[] = [];
 
   for (const routine of routines) {

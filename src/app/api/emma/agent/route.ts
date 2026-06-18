@@ -8,16 +8,7 @@ import { audit } from "@/core/security/audit";
 import { getClientIp } from "@/lib/get-client-ip";
 import { checkAutonomousAccess } from "@/core/addon-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
-
-interface AgentRequest {
-  action: "create" | "approve" | "reject" | "status" | "history";
-  goal?: string;
-  context?: string;
-  triggerSource?: string;
-  approvalId?: string;
-  taskId?: string;
-  limit?: number;
-}
+import { parseAgentRequest } from "@/core/request-validation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,7 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json()) as AgentRequest;
+    const rawBody = await req.json().catch(() => null);
+    const parsedBody = parseAgentRequest(rawBody);
+    if (!parsedBody.ok) {
+      return NextResponse.json({ error: parsedBody.error }, { status: 400 });
+    }
+    const body = parsedBody.value;
     const supabase = getSupabaseAdmin();
 
     // Resolve clientId for task queries — scheduled tasks have user_id="system" but a
@@ -148,9 +144,14 @@ export async function POST(req: NextRequest) {
         // Execute the tool
         const toolDef = getTool(approval.action);
         if (toolDef) {
+          const task = approval.tasks;
+          if (!task) {
+            return NextResponse.json({ error: "Approval task not found" }, { status: 500 });
+          }
           const result = await toolDef.handler(approval.input, {
             userId,
             taskId: approval.task_id,
+            clientId: task.client_id,
           });
 
           // Update action log
@@ -164,7 +165,6 @@ export async function POST(req: NextRequest) {
             .eq("id", approval.action_log_id);
 
           // Resume the agent loop from where it paused
-          const task = approval.tasks;
           if (task && task.status === "awaiting_approval") {
             // Build resume messages: load persisted transcript and inject the tool result.
             // Use the proper OpenAI tool-result format (role:"tool" + tool_call_id) so the

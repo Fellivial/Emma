@@ -6,6 +6,16 @@
 
 const MCP_TIMEOUT_MS = 10_000;
 
+export function isMcpToolsEnabled(): boolean {
+  return process.env.ENABLE_MCP_TOOLS === "true";
+}
+
+function assertMcpToolsEnabled(operation: string): void {
+  if (isMcpToolsEnabled()) return;
+  console.warn(`[MCP] Blocked ${operation}: ENABLE_MCP_TOOLS is not true`);
+  throw new Error("MCP tools are disabled");
+}
+
 interface McpRawTool {
   name: string;
   description?: string;
@@ -24,6 +34,7 @@ export async function listMcpTools(
   url: string,
   authToken?: string
 ): Promise<Array<{ name: string; description: string; parameters: Record<string, unknown> }>> {
+  assertMcpToolsEnabled("tool discovery");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 
@@ -60,6 +71,7 @@ export async function callMcpTool(
   args: Record<string, unknown>,
   authToken?: string
 ): Promise<string> {
+  assertMcpToolsEnabled(`tool execution for "${toolName}"`);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 

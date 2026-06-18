@@ -69,7 +69,6 @@ OpenRouter/OpenAI uses `content: string`.
 - [x] `src/core/tool-registry.ts`
 - [x] `src/core/task-summarizer.ts`
 - [x] `src/core/pattern-detector.ts`
-- [x] `src/app/api/intake/[slug]/chat/route.ts`
 
 ### 5. Stream parser — `src/lib/stream-client.ts`
 - [x] No changes needed — `stream-client.ts` consumes Emma's internal SSE format (`delta`/`done`/`error`),

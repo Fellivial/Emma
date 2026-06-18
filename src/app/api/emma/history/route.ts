@@ -11,6 +11,7 @@ import {
 } from "@/core/memory-db";
 import { UTILITY_MODELS } from "@/core/models";
 import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { parseHistoryMessages } from "@/core/request-validation";
 
 const SUMMARIZE_PROMPT = `Summarize this conversation history into a compact paragraph (max 200 words).
 Preserve: user preferences, key decisions, personal details, emotional tone.
@@ -48,7 +49,8 @@ export async function GET() {
     }
   }
 
-  // Fallback to legacy chat_messages for users without encrypted history yet
+  // Legacy read-only fallback for users whose encrypted history has not been populated yet.
+  // New messages must only be written through saveMessage below.
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, display, expression, created_at")
@@ -69,30 +71,12 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const msgs: Array<{
-    id: string;
-    role: string;
-    content: string;
-    display: string;
-    expression?: string;
-    timestamp?: number;
-  }> = Array.isArray(body) ? body : [body];
-
-  // ── Dual-write: legacy chat_messages (for UI compat during transition) ───
-  const legacyRows = msgs.map((m) => ({
-    id: m.id,
-    user_id: user.id,
-    role: m.role,
-    content: m.content,
-    display: m.display,
-    expression: m.expression ?? null,
-    created_at: m.timestamp ? new Date(m.timestamp).toISOString() : undefined,
-  }));
-  const { error: legacyErr } = await supabase
-    .from("chat_messages")
-    .upsert(legacyRows, { onConflict: "id" });
-  if (legacyErr) console.error("[/api/emma/history POST legacy]", legacyErr.message);
+  const body = await req.json().catch(() => null);
+  const parsedMessages = parseHistoryMessages(body);
+  if (!parsedMessages.ok) {
+    return NextResponse.json({ error: parsedMessages.error }, { status: 400 });
+  }
+  const msgs = parsedMessages.value;
 
   // ── Primary: encrypted messages/conversations path ────────────────────────
   const conversationId = await getOrCreateConversation(user.id);

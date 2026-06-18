@@ -12,3 +12,4 @@ data/
 .claude/
 ruvector.db
 .temp/
+.claude-flow/
