@@ -11,6 +11,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mcpMocks = vi.hoisted(() => ({
+  listMcpTools: vi.fn(),
+  callMcpTool: vi.fn(),
+  isMcpToolsEnabled: vi.fn(() => process.env.ENABLE_MCP_TOOLS === "true"),
+}));
+
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock("@sentry/nextjs", () => ({
@@ -51,6 +57,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/core/integrations/mcp", () => ({
   getMcpServersForClient: () => Promise.resolve([]),
 }));
+
+vi.mock("@/core/integrations/mcp-client", () => mcpMocks);
 
 vi.mock("@/core/rate-limiter", () => ({
   checkRateLimit: () => Promise.resolve({ allowed: true }),
@@ -128,6 +136,9 @@ const BASE_TASK: AgentTask = {
 
 beforeEach(() => {
   process.env.OPENROUTER_API_KEY = "test-key";
+  delete process.env.ENABLE_MCP_TOOLS;
+  mcpMocks.listMcpTools.mockReset();
+  mcpMocks.callMcpTool.mockReset();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -222,5 +233,30 @@ describe("runAgentLoop — approval gate", () => {
 
     expect(result.status).toBe("failed");
     expect(result.steps[0]?.output).toMatch(/API error: 401/i);
+  });
+
+  it("blocks unknown MCP tools as dangerous when MCP execution is disabled", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeOpenRouterResponse([{ name: "mcp__unknown__delete_all", input: {} }])
+        )
+        .mockResolvedValueOnce(
+          makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
+        )
+    );
+
+    const result = await runAgentLoop(BASE_TASK);
+    const blocked = result.steps.find((step) => step.toolName === "mcp__unknown__delete_all");
+
+    expect(blocked?.status).toBe("failed");
+    expect(blocked?.riskLevel).toBe("dangerous");
+    expect(blocked?.output).toMatch(/disabled/i);
+    expect(mcpMocks.callMcpTool).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Blocked MCP tool"));
+    warn.mockRestore();
   });
 });

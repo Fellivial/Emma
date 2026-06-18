@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { encrypt } from "@/core/security/encryption";
+import { parseMcpServerInput } from "@/core/request-validation";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,21 +50,11 @@ export async function POST(req: NextRequest) {
   if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
   const body = await req.json().catch(() => null);
-  if (!body || typeof body.name !== "string" || typeof body.url !== "string") {
-    return NextResponse.json({ error: "name and url are required" }, { status: 400 });
+  const parsedBody = parseMcpServerInput(body);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.error }, { status: 400 });
   }
-
-  const { name, url, authToken, allowedTools, blockedTools } = body as {
-    name: string;
-    url: string;
-    authToken?: string;
-    allowedTools?: string[];
-    blockedTools?: string[];
-  };
-
-  if (!URL.canParse(url)) {
-    return NextResponse.json({ error: "url must be a valid URL" }, { status: 400 });
-  }
+  const { name, url, authToken, allowedTools, blockedTools } = parsedBody.value;
 
   const encryptedToken = authToken ? encrypt(authToken) : null;
 

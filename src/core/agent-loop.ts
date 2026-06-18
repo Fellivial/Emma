@@ -21,7 +21,11 @@ import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import { decrypt } from "@/core/security/encryption";
 import { sanitiseInput } from "@/core/security/sanitise";
-import { listMcpTools, callMcpTool } from "@/core/integrations/mcp-client";
+import {
+  listMcpTools,
+  callMcpTool,
+  isMcpToolsEnabled,
+} from "@/core/integrations/mcp-client";
 import {
   startChain,
   addStep,
@@ -213,7 +217,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     parameters: Record<string, unknown>;
   };
   const mcpToolMap = new Map<string, McpEntry>();
-  if (task.clientId && supabase) {
+  if (isMcpToolsEnabled() && task.clientId && supabase) {
     const { data: mcpServers } = await supabase
       .from("client_integrations")
       .select("service, mcp_url, access_token, metadata")
@@ -413,6 +417,22 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
 
           // Dispatch MCP tools: call the remote server directly
           if (toolName.startsWith("mcp__")) {
+            if (!isMcpToolsEnabled()) {
+              const blockedMessage = `MCP tool "${toolName}" blocked because MCP tools are disabled`;
+              console.warn(`[Agent] Blocked MCP tool "${toolName}": ENABLE_MCP_TOOLS is not true`);
+              messages.push({ role: "tool", tool_call_id: toolId, content: blockedMessage });
+              steps.push({
+                step,
+                toolName,
+                input: toolInput,
+                output: blockedMessage,
+                riskLevel: "dangerous",
+                status: "failed",
+                tokenCost: inputTokens + outputTokens,
+                durationMs: Date.now() - stepStart,
+              });
+              continue;
+            }
             const mcpEntry = mcpToolMap.get(toolName);
             if (!mcpEntry) {
               messages.push({
@@ -425,7 +445,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 toolName,
                 input: toolInput,
                 output: `MCP tool "${toolName}" not found`,
-                riskLevel: "safe",
+                riskLevel: "dangerous",
                 status: "failed",
                 tokenCost: inputTokens + outputTokens,
                 durationMs: Date.now() - stepStart,
@@ -449,7 +469,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               toolName,
               input: toolInput,
               output: mcpOut,
-              riskLevel: "safe",
+              riskLevel: "dangerous",
               status: mcpOut.startsWith("MCP error:") ? "failed" : "completed",
               tokenCost: inputTokens + outputTokens,
               durationMs: Date.now() - stepStart,

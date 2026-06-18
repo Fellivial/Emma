@@ -51,7 +51,6 @@ create table if not exists public.clients (
   token_budget_daily integer not null default 10714,
   message_limit_daily integer not null default 10,
   plan_id text not null default 'free',
-  vertical_id text default null,
   autonomy_tier integer not null default 2,
   proactive_vision boolean not null default false,
   custom_routines jsonb default '[]'::jsonb,
@@ -60,7 +59,6 @@ create table if not exists public.clients (
 );
 
 alter table public.clients add column if not exists plan_id text not null default 'free';
-alter table public.clients add column if not exists vertical_id text default null;
 alter table public.clients add column if not exists autonomy_tier integer not null default 2;
 alter table public.clients add column if not exists proactive_vision boolean not null default false;
 alter table public.clients add column if not exists custom_routines jsonb default '[]'::jsonb;

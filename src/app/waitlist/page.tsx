@@ -17,13 +17,12 @@ type SubmitResult = {
   spotsRemaining?: number;
 } | null;
 
-const INDUSTRIES = [
-  { value: "clinic", label: "Clinic / Healthcare" },
-  { value: "ecommerce", label: "E-commerce" },
-  { value: "real_estate", label: "Real Estate" },
-  { value: "education", label: "Education" },
-  { value: "legal", label: "Legal" },
-  { value: "gaming", label: "Gaming / XR" },
+const USE_CASES = [
+  { value: "personal_productivity", label: "Personal productivity" },
+  { value: "planning", label: "Planning and organization" },
+  { value: "research", label: "Research and learning" },
+  { value: "creative_work", label: "Creative work" },
+  { value: "companionship", label: "Companion and daily support" },
   { value: "other", label: "Other" },
 ];
 
@@ -36,7 +35,7 @@ function WaitlistForm() {
   });
   const [name, setName] = useState(searchParams.get("name") ?? "");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
-  const [industry, setIndustry] = useState("");
+  const [useCase, setUseCase] = useState("");
   const [message, setMessage] = useState("");
   const [referralSource, setReferralSource] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +57,7 @@ function WaitlistForm() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim() || !industry || submitting) return;
+    if (!name.trim() || !email.trim() || !useCase || submitting) return;
     setSubmitting(true);
     setError(null);
 
@@ -70,7 +69,7 @@ function WaitlistForm() {
           action: "join",
           name: name.trim(),
           email: email.trim(),
-          industry,
+          industry: useCase, // Legacy database field; retained for compatibility until migrated.
           message: message.trim() || undefined,
           referralSource: referralSource.trim() || undefined,
         }),
@@ -214,7 +213,7 @@ function WaitlistForm() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
+                      placeholder="you@example.com"
                       className="wl-input"
                     />
                   </div>
@@ -222,17 +221,17 @@ function WaitlistForm() {
 
                 <div>
                   <label className="text-[10px] text-emma-200/25 uppercase tracking-widest block mb-1">
-                    Industry *
+                    Primary use case *
                   </label>
                   <select
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
+                    value={useCase}
+                    onChange={(e) => setUseCase(e.target.value)}
                     className="wl-input appearance-none"
                   >
-                    <option value="">Select your industry…</option>
-                    {INDUSTRIES.map((ind) => (
-                      <option key={ind.value} value={ind.value}>
-                        {ind.label}
+                    <option value="">Select how you would use Emma…</option>
+                    {USE_CASES.map((useCaseOption) => (
+                      <option key={useCaseOption.value} value={useCaseOption.value}>
+                        {useCaseOption.label}
                       </option>
                     ))}
                   </select>
@@ -267,7 +266,7 @@ function WaitlistForm() {
 
                 <button
                   onClick={handleSubmit}
-                  disabled={!name.trim() || !email.trim() || !industry || submitting}
+                  disabled={!name.trim() || !email.trim() || !useCase || submitting}
                   className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 cursor-pointer disabled:opacity-30 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                 >
                   {submitting ? "Submitting…" : spotsFilled ? "Join the Waitlist" : "Claim My Spot"}
