@@ -3,6 +3,7 @@ import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
 import { decrypt } from "@/core/security/encryption";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,26 +12,89 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+const USER_OWNED_DELETE_ORDER: ReadonlyArray<{ table: string; column?: string }> = [
+  { table: "legacy_chat_migration_ledger" },
+  { table: "user_mcp_servers" },
+  { table: "user_files" },
+  { table: "message_feedback" },
+  { table: "messages" },
+  { table: "chat_messages" },
+  { table: "conversations" },
+  { table: "document_chunks" },
+  { table: "ingested_documents" },
+  { table: "email_sequences" },
+  { table: "trial_events" },
+  { table: "trials" },
+  // Referral rows created by this user are directly owned. Rows where this
+  // user is only the referred party are shared reward records and are retained.
+  { table: "referrals", column: "referrer_id" },
+  { table: "affiliates" },
+  { table: "approvals" },
+  { table: "action_log" },
+  { table: "agent_task_summaries" },
+  { table: "provenance_chains" },
+  { table: "pattern_detections" },
+  { table: "tasks" },
+  { table: "push_subscriptions" },
+  { table: "proactive_daily" },
+  { table: "oauth_states" },
+  { table: "usage_windows" },
+  { table: "extra_packs" },
+  { table: "personas" },
+  { table: "memories" },
+  { table: "usage" },
+  { table: "client_members" },
+  { table: "audit_log" },
+  { table: "profiles", column: "id" },
+];
+
+export async function deleteUserOwnedData(
+  supabase: Pick<SupabaseClient, "from">,
+  userId: string
+): Promise<string[]> {
+  const summary: string[] = [];
+  for (const { table, column = "user_id" } of USER_OWNED_DELETE_ORDER) {
+    if (table === "affiliates") {
+      const { data: affiliates, error: affiliateReadError } = await supabase
+        .from("affiliates")
+        .select("id")
+        .eq("user_id", userId);
+      if (affiliateReadError) throw new Error(`affiliates: ${affiliateReadError.message}`);
+
+      const affiliateIds = (affiliates || []).map((row) => row.id as string);
+      if (affiliateIds.length > 0) {
+        const { count, error } = await supabase
+          .from("affiliate_referrals")
+          .delete({ count: "exact" })
+          .in("affiliate_id", affiliateIds);
+        if (error) throw new Error(`affiliate_referrals: ${error.message}`);
+        summary.push(`affiliate_referrals: ${count ?? 0}`);
+      } else {
+        summary.push("affiliate_referrals: 0");
+      }
+    }
+
+    const { count, error } = await supabase
+      .from(table)
+      .delete({ count: "exact" })
+      .eq(column, userId);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    summary.push(`${table}: ${count ?? 0}`);
+  }
+  return summary;
+}
+
 /**
  * GDPR Right-to-Erasure endpoint.
  *
  * POST /api/emma/gdpr
  *   { action: "export" }  → Returns all user data as JSON
- *   { action: "delete" }  → Wipes all user data across every table
+ *   { action: "delete" }  → Deletes directly user-owned Emma data
  *
- * Deletion order matters (foreign key constraints):
- *   1. messages (references conversations)
- *   2. chat_messages (active flat message store)
- *   3. conversations
- *   4. memories
- *   5. usage
- *   6. action_log (by user_id text match)
- *   7. approvals (via client)
- *   8. client_members
- *   9. profiles
- *   10. Supabase auth user (optional — they may want to keep the account)
- *
- * The audit log entry for the deletion itself is kept (legal requirement).
+ * Child records are deleted before trials, affiliates, tasks, conversations,
+ * and profiles. Direct user-owned audit entries are deleted. Tenant-owned/shared
+ * integrations and referral rows owned by another user are intentionally
+ * excluded pending explicit ownership and retention policies.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -108,7 +172,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Audit BEFORE deletion (this entry will survive)
+      // Audit the request before deletion; the user-owned audit row is then
+      // removed with the rest of the user's direct data below.
       await audit({
         userId: user.id,
         action: "delete",
@@ -117,78 +182,7 @@ export async function POST(req: NextRequest) {
         metadata: { email: user.email, timestamp: new Date().toISOString() },
       });
 
-      const deletionLog: string[] = [];
-
-      // 1. Messages
-      const { count: msgCount } = await supabase
-        .from("messages")
-        .delete({ count: "exact" })
-        .eq("user_id", user.id);
-      deletionLog.push(`messages: ${msgCount || 0}`);
-
-      // 2. Chat messages
-      try {
-        const { count: chatMsgCount } = await supabase
-          .from("chat_messages")
-          .delete({ count: "exact" })
-          .eq("user_id", user.id);
-        deletionLog.push(`chat_messages: ${chatMsgCount || 0}`);
-      } catch {
-        deletionLog.push("chat_messages: skipped");
-      }
-
-      // 4. Conversations
-      const { count: convCount } = await supabase
-        .from("conversations")
-        .delete({ count: "exact" })
-        .eq("user_id", user.id);
-      deletionLog.push(`conversations: ${convCount || 0}`);
-
-      // 5. Memories
-      const { count: memCount } = await supabase
-        .from("memories")
-        .delete({ count: "exact" })
-        .eq("user_id", user.id);
-      deletionLog.push(`memories: ${memCount || 0}`);
-
-      // 6. Usage
-      const { count: usageCount } = await supabase
-        .from("usage")
-        .delete({ count: "exact" })
-        .eq("user_id", user.id);
-      deletionLog.push(`usage: ${usageCount || 0}`);
-
-      // 7. Client memberships (removes from any client)
-      const { count: memberCount } = await supabase
-        .from("client_members")
-        .delete({ count: "exact" })
-        .eq("user_id", user.id);
-      deletionLog.push(`client_memberships: ${memberCount || 0}`);
-
-      // 8. Audit log (keep only the deletion entry itself, written above)
-      try {
-        const deletionAuditThreshold = new Date(Date.now() - 5000).toISOString();
-        await supabase
-          .from("audit_log")
-          .delete()
-          .eq("user_id", user.id)
-          .lt("created_at", deletionAuditThreshold);
-        deletionLog.push("audit_log: cleared");
-      } catch {
-        deletionLog.push("audit_log: skipped");
-      }
-
-      // 9. Tasks
-      try {
-        await supabase.from("tasks").delete().eq("user_id", user.id);
-        deletionLog.push("tasks: cleared");
-      } catch {
-        deletionLog.push("tasks: skipped");
-      }
-
-      // 10. Profile
-      const { error: profileErr } = await supabase.from("profiles").delete().eq("id", user.id);
-      deletionLog.push(profileErr ? "profile: failed" : "profile: deleted");
+      const deletionLog = await deleteUserOwnedData(supabase, user.id);
 
       // Note: We do NOT delete the auth.users entry here.
       // The user can still log in but will have an empty account.

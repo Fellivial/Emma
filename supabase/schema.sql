@@ -123,6 +123,66 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+-- Service-role-only provenance for the manual legacy plaintext chat backfill.
+-- This table intentionally contains no message content and has no user policies.
+create table if not exists public.legacy_chat_migration_ledger (
+  legacy_message_id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  utc_date date not null,
+  target_message_id text not null unique,
+  target_conversation_id uuid not null,
+  message_created_by_backfill boolean not null,
+  conversation_created_by_backfill boolean not null,
+  migrated_at timestamptz not null default now()
+);
+
+alter table public.legacy_chat_migration_ledger enable row level security;
+revoke all on public.legacy_chat_migration_ledger from anon, authenticated;
+create index if not exists idx_legacy_chat_migration_ledger_user_date
+  on public.legacy_chat_migration_ledger(user_id, utc_date);
+create index if not exists idx_legacy_chat_migration_ledger_conversation
+  on public.legacy_chat_migration_ledger(target_conversation_id);
+
+create or replace function public.backfill_legacy_chat_message(
+  p_message jsonb,
+  p_ledger jsonb
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.messages (
+    id, conversation_id, user_id, role, content, display, expression, created_at
+  ) values (
+    p_message->>'id',
+    (p_message->>'conversation_id')::uuid,
+    (p_message->>'user_id')::uuid,
+    p_message->>'role',
+    p_message->>'content',
+    p_message->>'display',
+    p_message->>'expression',
+    (p_message->>'created_at')::timestamptz
+  );
+  insert into public.legacy_chat_migration_ledger (
+    legacy_message_id, user_id, utc_date, target_message_id,
+    target_conversation_id, message_created_by_backfill,
+    conversation_created_by_backfill
+  ) values (
+    (p_ledger->>'legacy_message_id')::uuid,
+    (p_ledger->>'user_id')::uuid,
+    (p_ledger->>'utc_date')::date,
+    p_ledger->>'target_message_id',
+    (p_ledger->>'target_conversation_id')::uuid,
+    (p_ledger->>'message_created_by_backfill')::boolean,
+    (p_ledger->>'conversation_created_by_backfill')::boolean
+  );
+end;
+$$;
+revoke all on function public.backfill_legacy_chat_message(jsonb, jsonb)
+  from public, anon, authenticated;
+grant execute on function public.backfill_legacy_chat_message(jsonb, jsonb) to service_role;
+
 
 -- ─── 5. Usage Tracking ──────────────────────────────────────────────────────
 

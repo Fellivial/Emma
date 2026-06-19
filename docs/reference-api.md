@@ -476,13 +476,22 @@ Returns the top unseen proactive suggestion for the authenticated user. Called o
 
 ## GDPR
 
-### `DELETE /api/emma/gdpr`
+### `POST /api/emma/gdpr`
 
-Permanently erases all data for the authenticated user: memories, chat history (`chat_messages` + encrypted `messages`/`conversations`), usage windows, tasks, integrations, persona, and the Supabase auth account.
+With `{ "action": "delete", "confirmEmail": "..." }`, deletes directly
+user-owned Emma data, including encrypted and legacy chat history, memories,
+uploaded-file records, tasks, approvals/action logs, usage, provenance, persona,
+trial/email-sequence data, and user-owned referral/affiliate records.
+
+Tenant-owned or shared `client_integrations` are not automatically deleted.
+Referral records owned by another referrer or affiliate are also retained until
+an explicit shared-data retention policy applies. The Supabase authentication
+account is preserved; full login deletion requires a separate administrative
+action.
 
 **Auth:** Required
 
-**Response:** `{ "ok": true }`
+**Response:** `{ "success": true, "deletedAt": "...", "summary": ["table: count"] }`
 
 ---
 

@@ -41,6 +41,20 @@ describe("encryption", () => {
     expect(result).toBe("hello");
   });
 
+  it("fails closed for production writes when the key is missing", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", "");
+    const { encrypt } = await import("@/core/security/encryption");
+    expect(() => encrypt("sensitive value")).toThrow("EMMA_ENCRYPTION_KEY");
+  });
+
+  it("fails closed for production writes when the key is not valid hex", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", "z".repeat(64));
+    const { encrypt } = await import("@/core/security/encryption");
+    expect(() => encrypt("sensitive value")).toThrow("64 hexadecimal");
+  });
+
   it("returns plaintext for non-encrypted strings (backward compat)", async () => {
     const { decrypt } = await import("@/core/security/encryption");
     const plain = "not encrypted at all";

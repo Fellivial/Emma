@@ -101,11 +101,13 @@ decrypt(stored)    → plaintext (throws on tamper)
 - `client_integrations.access_token` — OAuth access tokens
 - `client_integrations.refresh_token` — OAuth refresh tokens
 - `messages.content` and `messages.display` — all new conversation-history writes
+- `conversations.title` and `conversations.summary` — all future metadata writes
 - `memories.value` — memory content written through the current memory path
 
 These fields pass through AES-256-GCM encryption when `EMMA_ENCRYPTION_KEY` is
-configured. The current helper deliberately falls back to plaintext and logs a
-warning when that key is missing, so a valid key is mandatory in production.
+configured. Production writes fail closed unless the key is exactly 64
+hexadecimal characters. Development and test environments retain an explicit
+plaintext fallback for local compatibility and emit a warning.
 
 MCP is currently disabled. `client_integrations` is the sole authoritative MCP
 runtime model, but MCP execution is unavailable until a verified approval flow
@@ -116,9 +118,30 @@ audit; its historical `auth_token` rows are not active runtime storage.
 
 - User profiles, preferences, usage stats — not sensitive
 - Message metadata such as role, expression, timestamps, and token estimates
-- Existing legacy `chat_messages.content` rows. New messages are not written to
-  this plaintext table, but existing rows may still be read as a compatibility
-  fallback until they are migrated or removed through a separate data audit.
+- Existing legacy `chat_messages.content` and `display` rows. New messages are
+  not written to this plaintext table. Runtime fallback reads are disabled by
+  default and require `ENABLE_LEGACY_CHAT_FALLBACK=true` as an emergency escape
+  hatch while the manual, dry-run-first backfill is audited and applied.
+- Conversation titles and summaries written before the privacy migration may
+  remain plaintext. Reads support both legacy plaintext and new ciphertext.
+
+### Legacy chat migration and erasure
+
+The manual `scripts/backfill-legacy-chat.ts` tool groups legacy messages into one
+conversation per user per UTC day and records content-free provenance in the
+service-role-only `legacy_chat_migration_ledger`. It defaults to dry-run; writes
+require `--apply`, and rollback requires `--rollback --apply`. Logs contain
+aggregate counts only. Every mode requires `EMMA_ENCRYPTION_KEY` so dry-run can
+accurately compare existing ciphertext without exposing it.
+
+GDPR deletion clears both encrypted and legacy history, the migration ledger,
+memories, and direct user-owned agent records. `client_integrations` is
+intentionally excluded: it is tenant-owned and may be shared with other users.
+Deleting or transferring those credentials requires a separate tenant ownership
+policy and production-data audit. Referral and affiliate-referral rows owned by
+another referrer or affiliate are also retained because they are shared reward
+and financial records; the route deletes only referrals created by the user and
+affiliate referrals attached to an affiliate account owned by the user.
 
 ### Where decryption happens
 
