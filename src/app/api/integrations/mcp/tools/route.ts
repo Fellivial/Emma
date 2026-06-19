@@ -5,7 +5,7 @@
  *
  * PATCH /api/integrations/mcp/tools
  *   { service: "mcp_xxx", allowedTools: string[] | null }
- *   Persists the tool filter. null = all tools allowed (no filter).
+ *   Persists the explicit tool allowlist. null and [] both deny all tools.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,6 +13,10 @@ import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { decrypt } from "@/core/security/encryption";
 import { isMcpToolsEnabled, listMcpTools } from "@/core/integrations/mcp-client";
+
+function isMcpService(service: string | null | undefined): service is string {
+  return typeof service === "string" && /^mcp_[a-z0-9_]{1,95}$/.test(service);
+}
 
 async function resolveClientId(userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
@@ -26,15 +30,17 @@ async function resolveClientId(userId: string): Promise<string | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const user = await getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isMcpToolsEnabled()) {
     console.warn("[MCP API] Blocked tool discovery: ENABLE_MCP_TOOLS is not true");
     return NextResponse.json({ error: "MCP tools are disabled" }, { status: 503 });
   }
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const service = new URL(req.url).searchParams.get("service");
-  if (!service) return NextResponse.json({ error: "Missing ?service=" }, { status: 400 });
+  if (!isMcpService(service)) {
+    return NextResponse.json({ error: "Invalid MCP service" }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
   if (!supabase) return NextResponse.json({ error: "No DB" }, { status: 503 });
@@ -79,6 +85,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (!isMcpToolsEnabled()) {
+    console.warn("[MCP API] Blocked tool policy update: ENABLE_MCP_TOOLS is not true");
+    return NextResponse.json({ error: "MCP tools are disabled" }, { status: 503 });
+  }
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -95,8 +105,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.service) return NextResponse.json({ error: "Missing service" }, { status: 400 });
-  if (body.allowedTools !== null && !Array.isArray(body.allowedTools)) {
+  if (!isMcpService(body.service)) {
+    return NextResponse.json({ error: "Invalid MCP service" }, { status: 400 });
+  }
+  if (
+    body.allowedTools !== null &&
+    (!Array.isArray(body.allowedTools) ||
+      body.allowedTools.length > 32 ||
+      body.allowedTools.some(
+        (name) => typeof name !== "string" || name.length === 0 || name.length > 128
+      ))
+  ) {
     return NextResponse.json({ error: "allowedTools must be an array or null" }, { status: 400 });
   }
 

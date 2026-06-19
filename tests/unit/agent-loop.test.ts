@@ -54,10 +54,6 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-vi.mock("@/core/integrations/mcp", () => ({
-  getMcpServersForClient: () => Promise.resolve([]),
-}));
-
 vi.mock("@/core/integrations/mcp-client", () => mcpMocks);
 
 vi.mock("@/core/rate-limiter", () => ({

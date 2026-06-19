@@ -406,7 +406,7 @@ create table if not exists public.rate_limit_counters (
 create table if not exists public.client_integrations (
   id uuid default gen_random_uuid() primary key,
   client_id uuid references public.clients on delete cascade not null,
-  service text not null constraint client_integrations_service_check check (service in ('gmail','google_calendar','google_drive','slack','notion','hubspot','elevenlabs') or service like 'mcp_%'),
+  service text not null constraint client_integrations_service_check check (service in ('gmail','google_calendar','google_drive','slack','notion','hubspot','elevenlabs') or service like 'mcp\_%' escape E'\\'),
   status text not null default 'disconnected' check (status in ('connected','disconnected','auth_expired','error')),
   access_token text,
   refresh_token text,
@@ -647,7 +647,17 @@ create policy "Users see own trial events" on public.trial_events for select usi
 
 -- Client Integrations
 drop policy if exists "Members manage integrations" on public.client_integrations;
-create policy "Members manage integrations" on public.client_integrations for all using (client_id in (select client_id from public.client_members where user_id = auth.uid()));
+drop policy if exists "Members manage non-MCP integrations" on public.client_integrations;
+create policy "Members manage non-MCP integrations" on public.client_integrations
+  for all to authenticated
+  using (
+    service not like 'mcp\_%' escape E'\\'
+    and client_id in (select client_id from public.client_members where user_id = auth.uid())
+  )
+  with check (
+    service not like 'mcp\_%' escape E'\\'
+    and client_id in (select client_id from public.client_members where user_id = auth.uid())
+  );
 drop policy if exists "Users manage own oauth states" on public.oauth_states;
 create policy "Users manage own oauth states" on public.oauth_states for all using (user_id = auth.uid());
 
@@ -796,7 +806,7 @@ alter table public.client_integrations drop constraint if exists client_integrat
 alter table public.client_integrations add constraint client_integrations_service_check
   check (
     service in ('gmail', 'google_calendar', 'google_drive', 'slack', 'notion', 'hubspot', 'elevenlabs')
-    or service like 'mcp_%'
+    or service like 'mcp\_%' escape E'\\'
   );
 
 -- action_log: add reason column for agent-loop annotations (moderate/injection notes)

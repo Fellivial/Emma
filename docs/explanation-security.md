@@ -100,14 +100,25 @@ decrypt(stored)    → plaintext (throws on tamper)
 
 - `client_integrations.access_token` — OAuth access tokens
 - `client_integrations.refresh_token` — OAuth refresh tokens
-- `user_mcp_servers.auth_token` — MCP server bearer tokens
-- Memory entries (on Enterprise plan; see `PLANS.enterprise.features.encryption`)
+- `messages.content` and `messages.display` — all new conversation-history writes
+- `memories.value` — memory content written through the current memory path
+
+These fields pass through AES-256-GCM encryption when `EMMA_ENCRYPTION_KEY` is
+configured. The current helper deliberately falls back to plaintext and logs a
+warning when that key is missing, so a valid key is mandatory in production.
+
+MCP is currently disabled. `client_integrations` is the sole authoritative MCP
+runtime model, but MCP execution is unavailable until a verified approval flow
+exists. The legacy `user_mcp_servers` table is inert pending a production data
+audit; its historical `auth_token` rows are not active runtime storage.
 
 ### What is NOT encrypted
 
-- Memory text on Free/Starter/Pro plans — stored plaintext in Supabase
 - User profiles, preferences, usage stats — not sensitive
-- `chat_messages.content` — conversation history stored plaintext
+- Message metadata such as role, expression, timestamps, and token estimates
+- Existing legacy `chat_messages.content` rows. New messages are not written to
+  this plaintext table, but existing rows may still be read as a compatibility
+  fallback until they are migrated or removed through a separate data audit.
 
 ### Where decryption happens
 
@@ -123,9 +134,12 @@ There is currently no automated key rotation. To rotate:
 
 No key rotation tooling is provided out of the box — this is a known gap.
 
-### Enterprise encryption
+### Memory and history compatibility
 
-On Enterprise plans, `features.encryption = true` enables field-level encryption for memory entries. Free/Starter/Pro memories are stored as plaintext in Supabase. If sensitive memory content is a concern below Enterprise, use the memory deletion API to remove sensitive facts after each session.
+Current memory values and new conversation message bodies use the common
+field-encryption helper regardless of plan. Pre-encryption values remain
+readable for backward compatibility, and legacy plaintext chat history may
+still exist until a separate migration is performed.
 
 ---
 

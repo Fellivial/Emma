@@ -82,10 +82,6 @@ vi.mock("@/core/task-summarizer", () => ({
   summarizeTask: () => Promise.resolve("Done."),
 }));
 
-vi.mock("@/core/integrations/mcp", () => ({
-  getMcpServersForClient: () => Promise.resolve([]),
-}));
-
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { POST } from "@/app/api/emma/route";

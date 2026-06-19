@@ -2,6 +2,17 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // MCP is not a user-facing surface while the server-side feature is off.
+  // Keep this before the local-dev auth bypass so the route is gated everywhere.
+  if (
+    request.nextUrl.pathname.startsWith("/settings/mcp") &&
+    process.env.ENABLE_MCP_TOOLS !== "true"
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/settings/more";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

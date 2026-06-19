@@ -486,33 +486,16 @@ Permanently erases all data for the authenticated user: memories, chat history (
 
 ---
 
-## MCP Servers
+## MCP Servers (Unavailable)
 
-### `GET /api/emma/mcp`
+The legacy `/api/emma/mcp/*` routes have been removed and must not be used.
+Their `user_mcp_servers` storage model is inert pending a production data audit.
 
-Lists the user's connected MCP servers.
-
-**Auth:** Required
-
-### `POST /api/emma/mcp`
-
-Adds a new MCP server.
-
-**Auth:** Required
-
-**Request body:**
-
-```json
-{
-  "name": "My GitHub MCP",
-  "url": "https://github-mcp.example.com/mcp",
-  "auth_token": "bearer-token" // Optional; stored encrypted
-}
-```
-
-### `DELETE /api/emma/mcp/[id]`
-
-Removes an MCP server.
+`client_integrations` is the sole authoritative MCP runtime model. The remaining
+internal `/api/integrations/mcp/*` endpoints are feature-gated and return an
+unavailable response while MCP is disabled. MCP tool execution remains
+hard-blocked even if discovery is explicitly enabled; execution cannot be made
+available until a verified per-action approval workflow is implemented.
 
 ---
 

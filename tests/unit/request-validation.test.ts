@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import {
   parseAgentRequest,
   parseHistoryMessages,
-  parseMcpServerInput,
 } from "@/core/request-validation";
 
 describe("request validation", () => {
@@ -39,24 +38,6 @@ describe("request validation", () => {
     expect(parseHistoryMessages([]).ok).toBe(false);
   });
 
-  it("requires HTTPS MCP URLs and validates tool allow/block lists", () => {
-    expect(parseMcpServerInput({ name: "Local", url: "http://example.com" }).ok).toBe(false);
-    expect(
-      parseMcpServerInput({
-        name: "Remote",
-        url: "https://mcp.example.com",
-        allowedTools: ["read_calendar"],
-        blockedTools: ["delete_calendar"],
-      }).ok
-    ).toBe(true);
-    expect(
-      parseMcpServerInput({
-        name: "Remote",
-        url: "https://mcp.example.com",
-        allowedTools: "all",
-      }).ok
-    ).toBe(false);
-  });
 });
 
 describe("P0 route regressions", () => {

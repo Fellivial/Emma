@@ -23,7 +23,7 @@ import { decrypt } from "@/core/security/encryption";
 import { sanitiseInput } from "@/core/security/sanitise";
 import {
   listMcpTools,
-  callMcpTool,
+  isMcpToolExplicitlyAllowed,
   isMcpToolsEnabled,
 } from "@/core/integrations/mcp-client";
 import {
@@ -223,7 +223,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       .select("service, mcp_url, access_token, metadata")
       .eq("client_id", task.clientId)
       .eq("status", "connected")
-      .like("service", "mcp_%");
+      .like("service", "mcp\\_%");
     if (mcpServers) {
       await Promise.all(
         (
@@ -234,14 +234,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
             metadata?: { allowedTools?: string[] | null } | null;
           }>
         ).map(async (server) => {
-          if (!server.mcp_url) return;
+          if (!server.service.startsWith("mcp_") || !server.mcp_url) return;
           try {
             const authToken = server.access_token ? decrypt(server.access_token) : undefined;
             const serverTools = await listMcpTools(server.mcp_url, authToken);
-            const allowedTools = server.metadata?.allowedTools ?? null;
+            const allowedTools = server.metadata?.allowedTools;
             for (const t of serverTools) {
-              // Respect per-server tool allowlist (null = all tools enabled)
-              if (allowedTools !== null && !allowedTools.includes(t.name)) continue;
+              // MCP is default-deny. Only exact names in a non-empty allowlist
+              // may be registered, and every registered MCP tool remains dangerous.
+              if (!isMcpToolExplicitlyAllowed(t.name, allowedTools)) continue;
               const key = `mcp__${server.service}__${t.name}`;
               mcpToolMap.set(key, {
                 url: server.mcp_url,
@@ -452,17 +453,11 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               });
               continue;
             }
-            let mcpOut = "";
-            try {
-              mcpOut = await callMcpTool(
-                mcpEntry.url,
-                mcpEntry.originalName,
-                toolInput,
-                mcpEntry.authToken
-              );
-            } catch (err) {
-              mcpOut = `MCP error: ${String(err)}`;
-            }
+            // TODO(MCP approval): pass a verified, persisted approval capability
+            // before enabling execution. An allowlist only permits discovery; it
+            // is not authorization to perform the remote action.
+            const mcpOut = `MCP error: tool "${toolName}" requires explicit approval`;
+            console.warn(`[Agent] Blocked MCP tool "${toolName}": approval flow is unavailable`);
             messages.push({ role: "tool", tool_call_id: toolId, content: mcpOut });
             steps.push({
               step,

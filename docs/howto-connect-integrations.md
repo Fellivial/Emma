@@ -173,17 +173,16 @@ If the configured voice requires a higher ElevenLabs subscription tier than the 
 
 ---
 
-## Custom MCP Servers
+## MCP Servers
 
-Emma supports any remote MCP server via the `user_mcp_servers` Supabase table. Add servers at `/settings/mcp`.
+Custom MCP servers are currently unavailable. MCP is disabled by default, its
+settings surface is gated, and remote tool execution is hard-blocked until a
+verified per-action approval workflow exists.
 
-Requirements:
-
-- Must be HTTP (SSE or Streamable HTTP transport)
-- Must have a public HTTPS URL
-- For authenticated servers, provide a Bearer token — it's encrypted at rest
-
-Enterprise customers with internal tools behind a firewall can use [MCP Tunnels](https://claude.com/form/claude-managed-agents) (Cloudflare-based, outbound-only).
+`client_integrations` is the sole authoritative MCP runtime model. The legacy
+`user_mcp_servers` table is inert and retained only pending a production data
+audit; it is not a supported setup path. Do not use `/settings/mcp` or the
+removed `/api/emma/mcp/*` routes to configure MCP.
 
 ---
 

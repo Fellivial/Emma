@@ -70,11 +70,11 @@ export default function McpPage() {
       .from("client_integrations")
       .select("id, service, mcp_url, status, created_at")
       .eq("client_id", client.id)
-      .like("service", "mcp_%")
+      .like("service", "mcp\\_%")
       .eq("status", "connected")
       .order("created_at", { ascending: false });
 
-    setServers(data ?? []);
+    setServers((data ?? []).filter((server: McpServer) => server.service.startsWith("mcp_")));
     setLoading(false);
   }, [supabase]);
 
@@ -195,13 +195,8 @@ export default function McpPage() {
   };
 
   const toggleTool = (service: string, toolName: string) => {
-    const all = toolsCache[service] ?? [];
     setAllowedToolsMap((prev) => {
-      const current = prev[service] ?? null;
-      if (current === null) {
-        // All allowed → disable this one (create explicit allowlist excluding it)
-        return { ...prev, [service]: all.map((t) => t.name).filter((n) => n !== toolName) };
-      }
+      const current = prev[service] ?? [];
       return {
         ...prev,
         [service]: current.includes(toolName)
@@ -268,7 +263,7 @@ export default function McpPage() {
               const isExpanded = expandedService === s.service;
               const tools = toolsCache[s.service] ?? [];
               const allowed = allowedToolsMap[s.service] ?? null;
-              const isToolEnabled = (name: string) => allowed === null || allowed.includes(name);
+              const isToolEnabled = (name: string) => allowed?.includes(name) ?? false;
               return (
                 <div key={s.id} className="rounded-xl border border-surface-border bg-surface p-4">
                   <div className="flex items-start justify-between">
@@ -347,14 +342,6 @@ export default function McpPage() {
                             ))}
                           </div>
                           <div className="flex items-center gap-3">
-                            <button
-                              onClick={() =>
-                                setAllowedToolsMap((prev) => ({ ...prev, [s.service]: null }))
-                              }
-                              className="text-[10px] text-emma-200/30 hover:text-emma-200/55 transition-colors"
-                            >
-                              Allow all
-                            </button>
                             <button
                               onClick={() => handleSaveTools(s.service)}
                               disabled={savingTools === s.service}

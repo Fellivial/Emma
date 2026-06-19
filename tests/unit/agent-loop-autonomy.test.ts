@@ -48,10 +48,6 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-vi.mock("@/core/integrations/mcp", () => ({
-  getMcpServersForClient: () => Promise.resolve([]),
-}));
-
 vi.mock("@/core/rate-limiter", () => ({
   checkRateLimit: () => Promise.resolve({ allowed: true }),
   consumeRateLimit: () => Promise.resolve(),

@@ -140,28 +140,6 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: "mcp",
-    label: "MCP Servers",
-    href: "/settings/mcp",
-    icon: (active: boolean) => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-        <path
-          d="M2 8h3M11 8h3M8 2v3M8 11v3"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <circle
-          cx="8"
-          cy="8"
-          r="2"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
-  {
     id: "provenance",
     label: "Audit Trail",
     href: "/settings/provenance",
@@ -233,7 +211,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/notifications": "Notifications",
   "/settings/tasks": "Tasks",
   "/settings/workflows": "Workflows",
-  "/settings/mcp": "MCP Servers",
   "/settings/provenance": "Audit Trail",
   "/settings/more": "More",
 };

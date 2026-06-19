@@ -7,11 +7,6 @@ const MORE_ITEMS = [
     desc: "Manage automated routines and triggers",
   },
   {
-    href: "/settings/mcp",
-    label: "MCP Servers",
-    desc: "Configure model context protocol servers",
-  },
-  {
     href: "/settings/provenance",
     label: "Audit Trail",
     desc: "Review memory and action history",

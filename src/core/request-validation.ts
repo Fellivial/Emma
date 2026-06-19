@@ -19,14 +19,6 @@ export interface HistoryMessageInput {
   timestamp?: number;
 }
 
-export interface McpServerInput {
-  name: string;
-  url: string;
-  authToken?: string;
-  allowedTools?: string[];
-  blockedTools?: string[];
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -106,37 +98,4 @@ export function parseHistoryMessages(value: unknown): ValidationResult<HistoryMe
     messages.push(parsed.value);
   }
   return { ok: true, value: messages };
-}
-
-function parseToolList(value: unknown): value is string[] | undefined {
-  return (
-    value === undefined ||
-    (Array.isArray(value) &&
-      value.length <= 100 &&
-      value.every((item) => typeof item === "string" && item.trim().length > 0 && item.length <= 200))
-  );
-}
-
-export function parseMcpServerInput(value: unknown): ValidationResult<McpServerInput> {
-  if (!isRecord(value)) return { ok: false, error: "request body must be an object" };
-  if (typeof value.name !== "string" || !value.name.trim() || value.name.length > 100) {
-    return { ok: false, error: "name is required and must be at most 100 characters" };
-  }
-  if (typeof value.url !== "string") return { ok: false, error: "url is required" };
-  let url: URL;
-  try {
-    url = new URL(value.url);
-  } catch {
-    return { ok: false, error: "url must be a valid HTTPS URL" };
-  }
-  if (url.protocol !== "https:") {
-    return { ok: false, error: "url must use HTTPS" };
-  }
-  if (!optionalString(value.authToken, 4_096)) {
-    return { ok: false, error: "authToken is invalid" };
-  }
-  if (!parseToolList(value.allowedTools) || !parseToolList(value.blockedTools)) {
-    return { ok: false, error: "allowedTools and blockedTools must be arrays of tool names" };
-  }
-  return { ok: true, value: value as unknown as McpServerInput };
 }
