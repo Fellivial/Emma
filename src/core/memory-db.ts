@@ -438,8 +438,8 @@ export async function getLatestConversationSummary(userId: string): Promise<{
   if (!data) return null;
   return {
     id: data.id as string,
-    summary: (data.summary as string | null) ?? null,
-    title: (data.title as string | null) ?? null,
+    summary: data.summary == null ? null : decrypt(data.summary as string),
+    title: data.title == null ? null : decrypt(data.title as string),
     messageCount: (data.message_count as number) ?? 0,
   };
 }
@@ -452,7 +452,7 @@ export async function updateConversationSummary(
   if (!supabase) return;
   await supabase
     .from("conversations")
-    .update({ summary, updated_at: new Date().toISOString() })
+    .update({ summary: encrypt(summary), updated_at: new Date().toISOString() })
     .eq("id", conversationId);
 }
 
@@ -464,7 +464,7 @@ export async function updateConversationTitle(
   if (!supabase) return;
   await supabase
     .from("conversations")
-    .update({ title, updated_at: new Date().toISOString() })
+    .update({ title: encrypt(title), updated_at: new Date().toISOString() })
     .eq("id", conversationId);
 }
 

@@ -34,7 +34,7 @@ vi.mock("next/server", async (importOriginal) => {
 import { BUILT_IN_ROUTINES } from "@/core/routines-engine";
 import { buildDefaultSchedules } from "@/core/scheduler-engine";
 import { callMcpTool, listMcpTools } from "@/core/integrations/mcp-client";
-import { POST as postHistory } from "@/app/api/emma/history/route";
+import { GET as getHistory, POST as postHistory } from "@/app/api/emma/history/route";
 
 describe("P0 merge blockers", () => {
   beforeEach(() => {
@@ -42,7 +42,9 @@ describe("P0 merge blockers", () => {
     historyMocks.createServerSupabase.mockReset();
     historyMocks.getOrCreateConversation.mockReset();
     historyMocks.saveMessage.mockReset();
+    historyMocks.getLatestConversationSummary.mockReset();
     historyMocks.after.mockReset();
+    delete process.env.ENABLE_LEGACY_CHAT_FALLBACK;
   });
 
   afterEach(() => {
@@ -115,5 +117,43 @@ describe("P0 merge blockers", () => {
       expect.objectContaining({ id: "message-1", content: "private content" })
     );
     expect(from).not.toHaveBeenCalled();
+  });
+
+  it("does not query legacy plaintext history unless the fallback flag is true", async () => {
+    const from = vi.fn();
+    historyMocks.createServerSupabase.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
+      from,
+    });
+    historyMocks.getLatestConversationSummary.mockResolvedValue(null);
+
+    const response = await getHistory();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ messages: [] });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("allows the legacy read-only fallback only when explicitly enabled", async () => {
+    vi.stubEnv("ENABLE_LEGACY_CHAT_FALLBACK", "true");
+    const terminal = Promise.resolve({ data: [{ id: "legacy-1" }], error: null });
+    const chain = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(() => terminal),
+    };
+    chain.select.mockReturnValue(chain);
+    chain.eq.mockReturnValue(chain);
+    chain.order.mockReturnValue(chain);
+    const from = vi.fn(() => chain);
+    historyMocks.createServerSupabase.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
+      from,
+    });
+    historyMocks.getLatestConversationSummary.mockResolvedValue(null);
+
+    const response = await getHistory();
+    expect(await response.json()).toEqual({ messages: [{ id: "legacy-1" }] });
+    expect(from).toHaveBeenCalledWith("chat_messages");
   });
 });

@@ -20,6 +20,10 @@ Output only the summary — no preamble.`;
 
 const TITLE_PROMPT = `Give this conversation a title in 5 words or fewer. Output only the title.`;
 
+export function isLegacyChatFallbackEnabled(): boolean {
+  return process.env.ENABLE_LEGACY_CHAT_FALLBACK === "true";
+}
+
 export async function GET() {
   const supabase = await createServerSupabase();
   if (!supabase) return NextResponse.json({ messages: [] });
@@ -49,8 +53,13 @@ export async function GET() {
     }
   }
 
-  // Legacy read-only fallback for users whose encrypted history has not been populated yet.
-  // New messages must only be written through saveMessage below.
+  // Emergency-only legacy read path. It is default-off so plaintext history is
+  // not reachable after encrypted storage is deployed and verified.
+  if (!isLegacyChatFallbackEnabled()) {
+    return NextResponse.json({ messages: [] });
+  }
+
+  // Legacy read-only fallback. New messages must only use saveMessage below.
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, display, expression, created_at")

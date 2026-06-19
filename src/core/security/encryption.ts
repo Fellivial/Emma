@@ -23,8 +23,15 @@ const PREFIX = "enc:v1:";
 
 function getKey(): Buffer | null {
   const hex = process.env.EMMA_ENCRYPTION_KEY;
-  if (!hex || hex.length !== 64) return null;
+  if (!hex || !/^[0-9a-fA-F]{64}$/.test(hex)) return null;
   return Buffer.from(hex, "hex");
+}
+
+export class EncryptionConfigurationError extends Error {
+  constructor() {
+    super("EMMA_ENCRYPTION_KEY must be configured as exactly 64 hexadecimal characters");
+    this.name = "EncryptionConfigurationError";
+  }
 }
 
 /**
@@ -35,6 +42,9 @@ function getKey(): Buffer | null {
 export function encrypt(plaintext: string): string {
   const key = getKey();
   if (!key) {
+    if (process.env.NODE_ENV === "production") {
+      throw new EncryptionConfigurationError();
+    }
     // Warn once per process start — not per call (avoid log spam)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!(globalThis as any).__emmaEncryptionWarned) {
@@ -103,6 +113,10 @@ export function decrypt(ciphertext: string | null | undefined): string {
  */
 export function isEncryptionEnabled(): boolean {
   return getKey() !== null;
+}
+
+export function assertEncryptionConfigured(): void {
+  if (!getKey()) throw new EncryptionConfigurationError();
 }
 
 /**

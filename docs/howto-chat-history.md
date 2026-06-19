@@ -1,81 +1,78 @@
-# How to Enable Chat History Persistence
+# Chat History Persistence
 
-Make Emma's conversation survive page refreshes. Messages are saved to Supabase and reloaded on every `/app` visit, so the user's session continues exactly where they left off.
+Emma stores current conversation history in Supabase using encrypted message
+fields. The legacy plaintext `chat_messages` table is not an active write path.
 
 ## Prerequisites
 
-- Emma running with Supabase auth configured
-- The `chat_messages` migration applied to your database
+- Supabase authentication and the current schema/migrations configured
+- A valid `EMMA_ENCRYPTION_KEY` generated with `openssl rand -hex 32`
+- `ENABLE_LEGACY_CHAT_FALLBACK=false` in production
 
----
+Production sensitive writes fail closed when `EMMA_ENCRYPTION_KEY` is missing or
+is not exactly 64 hexadecimal characters.
 
-## Step 1: Apply the migration
+## Current storage model
 
-The `chat_messages` table is defined in `supabase/migrations/20260523000002_chat_messages.sql`. Apply it:
+- `conversations` groups messages. Future `title` and `summary` writes are
+  encrypted; older plaintext values remain readable for compatibility.
+- `messages` stores current history. `content` and `display` are encrypted with
+  AES-256-GCM before insertion.
+- `chat_messages` is a legacy plaintext table. New history writes never use it.
+
+`POST /api/emma/history` writes through the encrypted `messages` and
+`conversations` path. `GET /api/emma/history` reads encrypted history first.
+Legacy fallback reads occur only when `ENABLE_LEGACY_CHAT_FALLBACK=true`; the
+example and recommended production value is `false`.
+
+## Verify persistence
+
+1. Confirm the encryption key and Supabase environment variables are set.
+2. Start Emma and send a user/assistant exchange.
+3. Verify new `messages.content` and `messages.display` values begin with
+   `enc:v1:` and no new `chat_messages` row appears.
+4. Reload `/app` and confirm the encrypted conversation is restored.
+
+## Legacy plaintext backfill
+
+The backfill is manual and never runs from app startup, an API route, cron, or
+the production build. It groups legacy rows into one encrypted conversation per
+user per UTC day and records content-free provenance in a service-role-only
+ledger.
 
 ```bash
-# Via Supabase CLI (recommended)
-supabase db push
+# Dry-run only; this is the default
+npx tsx scripts/backfill-legacy-chat.ts
 
-# Or manually: paste the file contents into the Supabase SQL Editor and run
+# Apply only after reviewing the dry-run counts and production backup
+npx tsx scripts/backfill-legacy-chat.ts --apply
+
+# Explicit rollback of ledger-proven backfill records
+npx tsx scripts/backfill-legacy-chat.ts --rollback --apply
 ```
 
-The migration creates:
-- `chat_messages` table with `id`, `user_id`, `role`, `content`, `display`, `expression`, `created_at`
-- An index on `(user_id, created_at desc)` for fast per-user queries
-- Row-level security: users can only read and write their own messages
+Every mode requires `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`EMMA_ENCRYPTION_KEY`. Output contains aggregate counts only.
 
----
-
-## Step 2: Verify it works
-
-1. Start Emma and send a few messages
-2. Reload the page
-3. Your conversation reappears immediately — no greeting, no blank slate
-
-That's all. The feature is automatic once the migration is applied and `NEXT_PUBLIC_SUPABASE_URL` is set.
-
----
-
-## How it works
-
-**On load:** `src/app/app/page.tsx` fetches `GET /api/emma/history` alongside memory loading. The history route returns the last 50 messages for the authenticated user, ordered chronologically.
-
-**Race guard:** The greeting `useEffect` waits for `historyReady !== null` before running. This prevents a race where the greeting fires before history loads, which would display a welcome message on top of an existing conversation.
-
-- `historyReady === null` → history check in progress, greeting blocked
-- `historyReady.length > 0` → history found, restore it, skip greeting
-- `historyReady.length === 0` → no history, show greeting
-
-**On each exchange:** After Emma responds, a fire-and-forget `POST /api/emma/history` saves the user message and assistant response as a pair. The save uses upsert (idempotent — safe to call multiple times for the same message IDs).
-
-**Excluded from history:**
-- Refused responses (`event.refused = true`) — Emma declined to answer
-- Context window exceeded responses (`event.contextWindowExceeded = true`) — these represent a truncated state that shouldn't be persisted
-
----
-
-## Customizing
-
-**Change the history limit** — the default is 50 messages. Edit the `.limit(50)` call in `src/app/api/emma/history/route.ts:23`.
-
-**Clear history for a user** — delete from `chat_messages` where `user_id = '<uuid>'`.
-
-**Disable persistence** — set `NEXT_PUBLIC_SUPABASE_URL` to empty or remove it; the history API returns `{ messages: [] }` and the client falls back to greeting-on-load behavior.
-
----
+Do not truncate or directly delete from `chat_messages` as part of routine
+operation. Retain it until the backfill report, rollback window, production-data
+audit, and retention decision are complete. User erasure should go through the
+GDPR endpoint so encrypted history, legacy history, and related records are
+handled together.
 
 ## Troubleshooting
 
-**History not loading after migration** — check that the migration ran successfully. `select count(*) from public.chat_messages` should return without error.
-
-**Greeting appears on top of history** — this was a race condition fixed by the `historyReady` pattern. If you see it, ensure `src/app/app/page.tsx` has the `historyReady === null` guard in the greeting `useEffect`.
-
-**Messages not saving** — check the browser console for failed `POST /api/emma/history` requests. The most common cause: RLS policy mismatch (the user is not authenticated when the save fires).
-
----
+- **History is empty:** confirm encrypted `messages` exist. The legacy fallback
+  is intentionally disabled unless explicitly enabled for emergency recovery.
+- **Sensitive write fails in production:** verify `EMMA_ENCRYPTION_KEY` contains
+  exactly 64 hexadecimal characters and matches the key used for existing data.
+- **Backfill reports conflicts:** do not overwrite the target rows. Investigate
+  the conflicting message IDs and conversation ownership before applying again.
+- **Greeting appears over restored history:** verify the `historyReady === null`
+  guard remains in the app history-loading flow.
 
 ## Related
 
-- [Reference: API routes](reference-api.md) — `GET /api/emma/history` and `POST /api/emma/history` spec
-- [Explanation: Architecture](explanation-architecture.md) — chat pipeline and state management
+- [API reference](reference-api.md)
+- [Security explanation](explanation-security.md)
+- [Privacy migration design](plans/2026-06-19-privacy-migration-design.md)
