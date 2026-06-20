@@ -45,6 +45,9 @@ vercel link  # Link to your project
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
 #   SUPABASE_SERVICE_ROLE_KEY
 #   EMMA_ENCRYPTION_KEY          (openssl rand -hex 32)
+#   CRON_SECRET
+#   EMMA_UNSUBSCRIBE_SECRET
+#   NEXT_PUBLIC_APP_URL
 #
 # Production only:
 #   LEMONSQUEEZY_API_KEY
@@ -56,6 +59,8 @@ vercel link  # Link to your project
 #
 # IMPORTANT: Use DIFFERENT Supabase credentials for Preview vs Production.
 # This gives you a separate staging database.
+# Production and Preview builds fail closed when required auth configuration is
+# missing, malformed, blank, or an obvious placeholder.
 ```
 
 ### 3. GitHub Secrets (for CI)
@@ -194,6 +199,7 @@ vercel logs emma.yourdomain.com --follow
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | Yes              | Client-side auth                                                                  |
 | `SUPABASE_SERVICE_ROLE_KEY`                 | Yes              | Server-side DB operations                                                         |
 | `EMMA_ENCRYPTION_KEY`                       | Yes (prod)       | AES-256 field encryption                                                          |
+| `NEXT_PUBLIC_APP_URL`                       | Yes (prod)       | Public application URL for redirects and links                                    |
 | `EMMA_UNSUBSCRIBE_SECRET`                   | Yes (prod)       | HMAC key for unsubscribe tokens — rotate independently from `EMMA_ENCRYPTION_KEY` |
 | `RESEND_API_KEY`                            | For email        | Email sequences and invite emails                                                  |
 | `EMAIL_FROM`                                | For email        | Sender address for Resend                                                         |
@@ -213,6 +219,30 @@ vercel logs emma.yourdomain.com --follow
 | `WHATSAPP_APP_SECRET`                       | For WhatsApp     | Meta app secret for HMAC signature validation on incoming webhooks                |
 | `INGEST_EMAIL_WEBHOOK_SECRET`               | For ingest       | Authenticates inbound email webhook calls to `/api/emma/ingest/email`             |
 | `EMMA_ADMIN_EMAILS`                         | For admin        | Comma-separated emails allowed into `/admin`                                      |
-| `CRON_SECRET`                               | For cron         | Authenticates Vercel cron calls                                                   |
+| `CRON_SECRET`                               | Yes (prod)       | Authenticates Vercel cron calls                                                   |
 | `ELEVENLABS_API_KEY`                        | Optional         | Premium TTS (BYOK — users set their own key)                                      |
 | `EMMA_FF_*`                                 | Optional         | Feature flag overrides (see `src/core/feature-flags.ts`)                          |
+
+## Production Configuration Safety
+
+Production and Preview/staging deployments must provide every environment variable
+marked required above. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_APP_URL` must be
+valid HTTP(S) URLs. Generate `EMMA_ENCRYPTION_KEY` with:
+
+```bash
+openssl rand -hex 32
+```
+
+The encryption key must be exactly 64 hexadecimal characters. Missing, blank,
+malformed, or obvious placeholder values are rejected. Invalid Supabase auth
+configuration fails closed: protected UI routes and `/api/emma` return a safe
+service-unavailable response, while explicitly public routes remain accessible.
+Configuration errors never include secret values.
+
+Local development and tests may omit Supabase variables and will warn that auth is
+disabled. This bypass does not apply when `NODE_ENV=production`. Billing variables
+remain conditional because there is no canonical billing-enabled flag; billing
+routes validate their own configuration.
+
+MCP remains disabled unless `ENABLE_MCP_TOOLS=true`. Do not enable MCP in production
+until its server-side behavior has been explicitly implemented and reviewed as safe.

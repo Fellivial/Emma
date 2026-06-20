@@ -1,5 +1,23 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { SUPABASE_AUTH_ENV, validateEnvironment } from "@/core/env-validation";
 import { NextResponse, type NextRequest } from "next/server";
+
+const publicPaths = [
+  "/login",
+  "/register",
+  "/auth/callback",
+  "/landing",
+  "/api/waitlist",
+  "/api/emma/webhook",
+  "/waitlist",
+  "/api/emma/unsubscribe",
+] as const;
+
+let developmentAuthWarningLogged = false;
+
+function isExplicitlyPublicPath(pathname: string): boolean {
+  return publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 export async function proxy(request: NextRequest) {
   // MCP is not a user-facing surface while the server-side feature is off.
@@ -14,14 +32,31 @@ export async function proxy(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
+  const isPublic = isExplicitlyPublicPath(request.nextUrl.pathname);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const authConfig = validateEnvironment(process.env, SUPABASE_AUTH_ENV);
 
-  // Skip auth if Supabase not configured (dev mode)
-  if (!url || !key) return response;
+  if (!authConfig.valid) {
+    if (process.env.NODE_ENV === "production") {
+      if (isPublic) return response;
+      return new NextResponse("Server authentication is not configured correctly.", {
+        status: 503,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
 
-  const supabase = createServerClient(url, key, {
+    if (!developmentAuthWarningLogged) {
+      console.warn(
+        "[Auth] Supabase is not configured correctly; authentication is disabled outside production."
+      );
+      developmentAuthWarningLogged = true;
+    }
+    return response;
+  }
+
+  const supabase = createServerClient(url!, key!, {
     cookies: {
       get(name: string) {
         return request.cookies.get(name)?.value;
@@ -45,18 +80,6 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Public routes — no auth required
-  const publicPaths = [
-    "/login",
-    "/register",
-    "/auth/callback",
-    "/landing",
-    "/api/waitlist",
-    "/api/emma/webhook",
-    "/waitlist",
-    "/api/emma/unsubscribe",
-  ];
-  const isPublic = publicPaths.some((p) => request.nextUrl.pathname.startsWith(p));
-
   // API routes — auth checked inside each route
   const isApi = request.nextUrl.pathname.startsWith("/api/");
 

@@ -15,8 +15,12 @@ import {
   type EnforcementResult,
 } from "@/core/usage-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
-import { getUser } from "@/lib/supabase/server";
+import { resolveUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  validateProductionEnvironment,
+  validateSupabaseAuthEnvironment,
+} from "@/core/env-validation";
 import { decrypt } from "@/core/security/encryption";
 import { getPlan } from "@/core/pricing";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
@@ -70,17 +74,37 @@ function detectMaxTokens(msgs: ApiMessage[], hasDocuments = false): number {
  */
 export async function POST(req: NextRequest) {
   try {
+    if (!validateSupabaseAuthEnvironment().valid) {
+      return Response.json(
+        { error: "Server authentication is not configured correctly." },
+        { status: 503, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    if (!validateProductionEnvironment().valid) {
+      return Response.json(
+        { error: "Server configuration is not valid." },
+        { status: 503, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     // ── Auth ─────────────────────────────────────────────────────────────────
-    // Require authentication in production; dev mode (no Supabase) falls through
+    // Require authentication when Supabase is configured; local no-Supabase mode falls through.
     let sessionUserId: string | undefined;
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      const sessionUser = await getUser();
-      if (!sessionUser) {
+    const auth = await resolveUser();
+    if (auth.status === "configuration_error") {
+      return Response.json(
+        { error: "Server authentication is not configured correctly." },
+        { status: 503, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    if (auth.status !== "development_bypass") {
+      if (auth.status === "unauthenticated") {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
+      const sessionUser = auth.user;
       // ── Waitlist gate ────────────────────────────────────────────────────
       const adminEmails = (process.env.EMMA_ADMIN_EMAILS || "")
         .split(",")
@@ -111,8 +135,9 @@ export async function POST(req: NextRequest) {
     // deviceGraph removed — Emma no longer controls physical devices
     const deviceGraph = {};
 
-    // Use session-verified ID for data operations; fall back to body for dev mode
-    const userId = sessionUserId ?? activeUser?.id;
+    // Request-body identity is a local-development convenience, never production authentication.
+    const userId =
+      sessionUserId ?? (process.env.NODE_ENV === "production" ? undefined : activeUser?.id);
 
     // ── Rate limit by userId (sliding window, fail-open) ────────────────────
     if (userId && brainRatelimit) {
