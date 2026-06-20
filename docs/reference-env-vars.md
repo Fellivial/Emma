@@ -8,7 +8,8 @@ Copy the template: `cp .env.local.example .env.local`
 
 ## Required
 
-These must be set. Emma will start without them but core features will fail.
+These must be set in production. Production requests fail closed when required
+configuration is missing, malformed, blank, or an obvious placeholder.
 
 | Variable                        | Purpose                                                                                                              | How to get it                                           |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -19,8 +20,23 @@ These must be set. Emma will start without them but core features will fail.
 | `EMMA_ENCRYPTION_KEY`           | AES-256-GCM key for encrypting tokens and memories at rest                                                           | `openssl rand -hex 32`                                  |
 | `EMMA_UNSUBSCRIBE_SECRET`       | HMAC key for unsubscribe link tokens — decoupled from `EMMA_ENCRYPTION_KEY` so key rotation doesn't break sent links | `openssl rand -hex 32`                                  |
 | `NEXT_PUBLIC_APP_URL`           | Base URL for OG images, email links, and OAuth redirects                                                             | Your deployment URL, e.g. `https://emma.yourdomain.com` |
+| `CRON_SECRET`                   | Authenticates Vercel cron calls                                                                                       | Generate a strong random secret                         |
 
-**Minimal local dev:** Only `OPENROUTER_API_KEY` is needed for chat to work. Supabase vars enable auth and persistence. `EMMA_ENCRYPTION_KEY` is required once Supabase is configured.
+**Minimal local dev:** Only `OPENROUTER_API_KEY` is needed for chat to work.
+Supabase variables enable auth and persistence. Local development and tests may
+omit Supabase configuration and will emit a warning. This bypass is never enabled
+when `NODE_ENV=production`.
+
+`EMMA_ENCRYPTION_KEY` must be exactly 64 hexadecimal characters; generate it
+with `openssl rand -hex 32`.
+Supabase and application URLs must be valid HTTP(S) URLs. Values such as
+`changeme`, `your-secret`, `placeholder`, `dummy`, `test`, and similar obvious
+placeholders are rejected. Secret values are never included in configuration
+errors.
+
+If production Supabase authentication configuration is invalid, protected pages
+and APIs fail closed. Explicitly public routes remain available, while `/api/emma`
+returns HTTP 503 before parsing or executing the request.
 
 ---
 
@@ -191,7 +207,9 @@ Optional. Leave unset to rely on Vercel cron only. When set, the `GET /api/innge
 
 **Local dev without Supabase:** Leave all Supabase and encryption variables unset. Emma's middleware becomes a no-op and auth is skipped. Chat works, auth doesn't.
 
-**Vercel deployments:** Set environment variables in Project → Settings → Environment Variables. `NEXT_PUBLIC_` vars must be set before building.
+**Vercel deployments:** Set environment variables in Project → Settings → Environment Variables for Production and Preview/staging. `NEXT_PUBLIC_` vars must be set before building. Preview deployments run production builds and therefore require valid staging configuration.
+
+**MCP:** MCP remains disabled unless `ENABLE_MCP_TOOLS=true`. Do not enable it in production unless the server-side capability has been explicitly implemented and reviewed as safe.
 
 ---
 

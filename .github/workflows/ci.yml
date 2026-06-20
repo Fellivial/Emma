@@ -55,9 +55,11 @@ jobs:
       - name: Build Next.js
         run: npx next build
         env:
-          # Dummy env vars for build (real values in Vercel)
-          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+          # Syntactically valid, non-secret build-only values. Runtime deployments
+          # must provide the complete validated production environment.
+          NEXT_PUBLIC_SUPABASE_URL: "https://ci-build.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-anon-key-for-static-build"
+          NEXT_PUBLIC_APP_URL: "https://ci-build.acme.invalid"
 
   deploy-staging:
     name: Deploy Staging
