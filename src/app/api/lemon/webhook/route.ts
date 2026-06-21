@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
@@ -263,6 +264,7 @@ export async function POST(req: NextRequest) {
         break;
     }
   } catch (err) {
+    Sentry.captureException(err, { extra: { eventName, userId } });
     console.error("[Lemon Webhook] Processing error:", err);
   }
 

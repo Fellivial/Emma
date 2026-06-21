@@ -8,10 +8,7 @@ import { getRelevantMemoriesForUser, getLatestConversationSummary } from "@/core
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
-import {
-  markWarningSent,
-  type EnforcementResult,
-} from "@/core/usage-enforcer";
+import { markWarningSent, type EnforcementResult } from "@/core/usage-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { resolveUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -345,12 +342,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Usage enforcement ─────────────────────────────────────────────────
-    const enforcementResult: EnforcementResult =
-      chatCostDecision.warning ?? {
-        status: "ok",
-        planId: chatCostDecision.identity.planId,
-        allWindows: [],
-      };
+    const enforcementResult: EnforcementResult = chatCostDecision.warning ?? {
+      status: "ok",
+      planId: chatCostDecision.identity.planId,
+      allWindows: [],
+    };
 
     // Build API messages (truncate to last 20 to control token cost)
     const truncatedMessages = truncateHistory(messages);
@@ -437,6 +433,10 @@ export async function POST(req: NextRequest) {
       const status = anthropicRes.status;
       const upstreamBody = await anthropicRes.text().catch(() => "");
       console.error(`[EMMA] OpenRouter API error ${status}:`, upstreamBody.slice(0, 500));
+      Sentry.captureMessage(`OpenRouter error ${status}`, {
+        level: status >= 500 ? "error" : "warning",
+        extra: { status, body: upstreamBody.slice(0, 200) },
+      });
       const errMsg = getPersonaErrorMessage(status);
       const code =
         status === 400

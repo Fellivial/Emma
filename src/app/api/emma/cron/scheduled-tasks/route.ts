@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CronExpressionParser } from "cron-parser";
@@ -105,6 +106,7 @@ export async function GET(req: NextRequest) {
 
         executed++;
       } catch (err) {
+        Sentry.captureException(err, { extra: { taskId: scheduled.id } });
         console.error(`[Cron:Scheduled] Failed task ${scheduled.id}:`, err);
         failed++;
       }
@@ -112,6 +114,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ processed: executed + skipped + failed, executed, skipped, failed });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[Cron:Scheduled] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

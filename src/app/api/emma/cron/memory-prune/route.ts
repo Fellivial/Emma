@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
       .or(`last_accessed.lt.${cutoff30},and(last_accessed.is.null,created_at.lt.${cutoff30})`);
 
     if (e1) {
+      Sentry.captureException(new Error(e1.message), { extra: { rule: 1 } });
       console.error("[memory-prune] Rule 1 error:", e1);
       return NextResponse.json({ error: e1.message }, { status: 500 });
     }
@@ -80,6 +82,7 @@ export async function GET(req: NextRequest) {
       .or(`last_accessed.lt.${cutoff90},and(last_accessed.is.null,created_at.lt.${cutoff90})`);
 
     if (e2) {
+      Sentry.captureException(new Error(e2.message), { extra: { rule: 2 } });
       console.error("[memory-prune] Rule 2 error:", e2);
       return NextResponse.json({ error: e2.message }, { status: 500 });
     }
@@ -97,6 +100,7 @@ export async function GET(req: NextRequest) {
       .or(`last_accessed.lt.${cutoff180},and(last_accessed.is.null,created_at.lt.${cutoff180})`);
 
     if (e3) {
+      Sentry.captureException(new Error(e3.message), { extra: { rule: 3 } });
       console.error("[memory-prune] Rule 3 error:", e3);
       return NextResponse.json({ error: e3.message }, { status: 500 });
     }
@@ -111,6 +115,7 @@ export async function GET(req: NextRequest) {
       .lt("updated_at", cutoff90);
 
     if (e5) {
+      Sentry.captureException(new Error(e5.message), { extra: { rule: 5 } });
       console.error("[memory-prune] Rule 5 error:", e5);
       return NextResponse.json({ error: e5.message }, { status: 500 });
     }
@@ -177,6 +182,7 @@ export async function GET(req: NextRequest) {
       total: totalPruned,
     });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[memory-prune] Unexpected error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

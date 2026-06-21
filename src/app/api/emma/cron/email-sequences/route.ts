@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
@@ -172,6 +173,7 @@ export async function GET(req: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         // ── 7. Mark failed ────────────────────────────────────────────
+        Sentry.captureException(err, { extra: { emailId: row.id, templateId: row.template_id } });
         console.error(`[Cron:Email] Failed ${row.id}:`, err);
         await supabase
           .from("email_sequences")
@@ -186,6 +188,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ processed: sent + skipped + failed, sent, skipped, failed });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[Cron:Email] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -94,12 +95,14 @@ export async function GET(req: NextRequest) {
 
         processed++;
       } catch (err) {
+        Sentry.captureException(err, { extra: { approvalId: approval.id } });
         console.error(`[Cron:Expiry] Failed to expire approval ${approval.id}:`, err);
       }
     }
 
     return NextResponse.json({ expired: processed });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[Cron:Expiry] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
