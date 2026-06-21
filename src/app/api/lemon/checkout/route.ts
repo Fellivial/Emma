@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { lemonSqueezySetup, createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
+      Sentry.captureMessage(`LemonSqueezy checkout error: ${String(error)}`, { level: "error" });
       console.error("[Lemon] Checkout error:", error);
       return NextResponse.json({ error: String(error) }, { status: 500 });
     }
@@ -67,6 +69,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: checkoutUrl });
   } catch (err) {
+    Sentry.captureException(err);
     console.error("[Lemon] Error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

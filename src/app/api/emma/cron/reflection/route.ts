@@ -8,6 +8,7 @@
  * Protected by CRON_SECRET header.
  */
 
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { UTILITY_MODELS } from "@/core/models";
@@ -129,6 +130,7 @@ export async function GET(req: NextRequest) {
 
       reflections++;
     } catch (err) {
+      Sentry.captureException(err, { extra: { userId } });
       console.error(`[Reflection cron] user ${userId}:`, err);
     }
   }

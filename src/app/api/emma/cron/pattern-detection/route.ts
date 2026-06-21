@@ -5,6 +5,7 @@
  * Protected by CRON_SECRET header (set in Vercel env vars).
  */
 
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -63,8 +64,8 @@ export async function GET(req: NextRequest) {
     try {
       const patterns = await detectPatterns(userId, true); // skip per-pattern API calls
       allPatterns.push(...patterns);
-    } catch {
-      // Continue processing other users on failure
+    } catch (err) {
+      Sentry.captureException(err, { extra: { userId } });
     }
   }
 
@@ -83,8 +84,8 @@ export async function GET(req: NextRequest) {
     id: `p${i}`,
     patternType: p.patternType,
     description: p.description,
-      exampleGoals: p.exampleGoals,
-      userId: p.userId,
+    exampleGoals: p.exampleGoals,
+    userId: p.userId,
   }));
 
   const suggestions = await generateSuggestionsViaBatch("", batchInputs);
