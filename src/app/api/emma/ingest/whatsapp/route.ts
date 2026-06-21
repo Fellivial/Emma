@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { WhatsAppAdapter } from "@/core/integrations/whatsapp";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 const adapter = new WhatsAppAdapter();
 
@@ -137,6 +138,8 @@ async function replyToWhatsApp(
 
   let replyText = "";
   try {
+    const cost = await enforceCostGate({ operation: "whatsapp_ingest", clientId });
+    if (!cost.allowed) return;
     const llmRes = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: openRouterHeaders(),
@@ -147,8 +150,11 @@ async function replyToWhatsApp(
       }),
     });
     if (llmRes.ok) {
-      replyText = extractText(await llmRes.json()).trim();
+      const data = await llmRes.json();
+      await recordCostResult(cost, { ...extractUsage(data), success: true });
+      replyText = extractText(data).trim();
     } else {
+      await recordCostResult(cost, { success: false });
       console.error("[WhatsApp reply] LLM error:", llmRes.status);
     }
   } catch (err) {

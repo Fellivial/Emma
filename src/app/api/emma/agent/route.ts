@@ -9,6 +9,7 @@ import { getClientIp } from "@/lib/get-client-ip";
 import { checkAutonomousAccess } from "@/core/addon-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { parseAgentRequest } from "@/core/request-validation";
+import { enforceCostGate, costGateResponse } from "@/core/cost-gate";
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,6 +57,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: access.reason }, { status: 403 });
         }
 
+        const cost = await enforceCostGate({
+          operation: "agent",
+          userId,
+          clientId,
+          planId: config.planId,
+        });
+        if (!cost.allowed) return costGateResponse(cost);
+
         // Create task record
         let taskId = `task-${Date.now()}`;
         if (supabase) {
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest) {
           goal: body.goal,
           context: body.context || "",
           userId,
+          clientId: clientId ?? undefined,
           maxSteps: 5,
           triggerType: "manual",
           triggerSource: body.triggerSource || "user_request",

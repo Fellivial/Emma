@@ -9,8 +9,6 @@ import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors"
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
 import {
-  checkUsage,
-  recordUsage,
   markWarningSent,
   type EnforcementResult,
 } from "@/core/usage-enforcer";
@@ -24,9 +22,9 @@ import {
 import { decrypt } from "@/core/security/encryption";
 import { getPlan } from "@/core/pricing";
 import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
-import { brainRatelimit } from "@/lib/ratelimit";
 import type { CustomPersona, ToneAdjective, TopicTag } from "@/types/persona";
 import { embedText } from "@/lib/embeddings";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -139,21 +137,12 @@ export async function POST(req: NextRequest) {
     const userId =
       sessionUserId ?? (process.env.NODE_ENV === "production" ? undefined : activeUser?.id);
 
-    // ── Rate limit by userId (sliding window, fail-open) ────────────────────
-    if (userId && brainRatelimit) {
-      const { success, limit, reset } = await brainRatelimit.limit(userId);
-      if (!success) {
-        return new Response(JSON.stringify({ error: "Too many requests" }), {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)),
-            "X-RateLimit-Limit": String(limit),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(Math.ceil(reset / 1000)),
-          },
-        });
-      }
+    const chatCostDecision = await enforceCostGate({ operation: "chat", userId });
+    if (!chatCostDecision.allowed) {
+      return Response.json(
+        { error: chatCostDecision.message, code: chatCostDecision.reason },
+        { status: chatCostDecision.status, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     let memories: import("@/types/emma").MemoryEntry[] = [];
@@ -249,7 +238,10 @@ export async function POST(req: NextRequest) {
         if (getPlan(planId).features.customPersona) {
           const queryText = getLastMessageText(messages);
           if (queryText.trim()) {
-            const queryEmbedding = await embedText(queryText);
+            const queryEmbedding = await embedText(queryText, {
+              userId,
+              planId: clientConfigForPrompt?.planId,
+            });
             const supabase = getSupabaseAdmin();
             if (supabase) {
               type ChunkRow = { doc_label: string; chunk_text: string; similarity: number };
@@ -353,40 +345,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Usage enforcement ─────────────────────────────────────────────────
-    let enforcementResult: EnforcementResult | null = null;
-    if (userId) {
-      try {
-        const clientConfig = clientConfigForPrompt ?? (await loadClientConfigForUser(userId));
-        const planId = clientConfig.planId || "free";
-        const userTimezone = body.userTimezone ?? "UTC";
-        const billingAnchorDay = body.billingAnchorDay ?? 1;
-
-        enforcementResult = await checkUsage(userId, planId, userTimezone, billingAnchorDay);
-
-        if (enforcementResult.status === "blocked") {
-          const blockMsg =
-            enforcementResult.message || "Mmm. You've used me a lot today. Grab some extra time?";
-          const blockBody = `data: ${JSON.stringify({
-            type: "done",
-            text: blockMsg,
-            raw: blockMsg,
-            commands: [],
-            routineId: null,
-            expression: "warm",
-            enforcement: {
-              status: "blocked",
-              upgradeUrl: enforcementResult.upgradeUrl,
-              window: enforcementResult.blockedWindow?.windowType,
-            },
-          })}\n\n`;
-          return new Response(blockBody, {
-            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
-          });
-        }
-      } catch {
-        // Fail open — never block due to metering bug
-      }
-    }
+    const enforcementResult: EnforcementResult =
+      chatCostDecision.warning ?? {
+        status: "ok",
+        planId: chatCostDecision.identity.planId,
+        allWindows: [],
+      };
 
     // Build API messages (truncate to last 20 to control token cost)
     const truncatedMessages = truncateHistory(messages);
@@ -469,6 +433,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (!anthropicRes.ok) {
+      await recordCostResult(chatCostDecision, { success: false });
       const status = anthropicRes.status;
       const upstreamBody = await anthropicRes.text().catch(() => "");
       console.error(`[EMMA] OpenRouter API error ${status}:`, upstreamBody.slice(0, 500));
@@ -494,10 +459,24 @@ export async function POST(req: NextRequest) {
     // ── Stream SSE to client ─────────────────────────────────────────────────
 
     const encoder = new TextEncoder();
+    let providerReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let observedInputTokens = 0;
+    let observedOutputTokens = 0;
+    let accountingPromise: ReturnType<typeof recordCostResult> | null = null;
+    const accountOnce = (success: boolean) => {
+      accountingPromise ??= recordCostResult(chatCostDecision, {
+        inputTokens: observedInputTokens,
+        outputTokens: observedOutputTokens,
+        success,
+      });
+      return accountingPromise;
+    };
     const readable = new ReadableStream({
       async start(controller) {
         const reader = anthropicRes.body?.getReader();
+        providerReader = reader;
         if (!reader) {
+          await accountOnce(false);
           controller.close();
           return;
         }
@@ -530,6 +509,8 @@ export async function POST(req: NextRequest) {
                 if (chunk.usage) {
                   inputTokens = chunk.usage.prompt_tokens || 0;
                   outputTokens = chunk.usage.completion_tokens || 0;
+                  observedInputTokens = inputTokens;
+                  observedOutputTokens = outputTokens;
                 }
                 const fr = chunk.choices?.[0]?.finish_reason;
                 if (fr) finishReason = fr;
@@ -580,29 +561,21 @@ export async function POST(req: NextRequest) {
           });
           controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
 
-          // Persist usage tracking (non-blocking)
-          if (userId) {
-            // Multi-window tracking
-            const planId = enforcementResult?.planId || "free";
-            recordUsage(
-              userId,
-              inputTokens,
-              outputTokens,
-              planId,
-              body.userTimezone ?? "UTC",
-              body.billingAnchorDay ?? 1
-            ).catch(() => {});
+          await accountOnce(true);
 
+          if (userId) {
             // Mark warning sent if surfaced this request
             if (enforcementResult?.status === "warning" && enforcementResult.warningWindow) {
               markWarningSent(
                 userId,
                 enforcementResult.warningWindow.windowType,
-                enforcementResult.warningWindow.windowStart
+                enforcementResult.warningWindow.windowStart,
+                chatCostDecision.identity.clientId ?? undefined
               ).catch(() => {});
             }
           }
         } catch (err) {
+          await accountOnce(false);
           Sentry.captureException(err);
           const errEvent = JSON.stringify({
             type: "error",
@@ -612,6 +585,10 @@ export async function POST(req: NextRequest) {
         } finally {
           controller.close();
         }
+      },
+      async cancel() {
+        await accountOnce(false);
+        await providerReader?.cancel().catch(() => {});
       },
     });
 

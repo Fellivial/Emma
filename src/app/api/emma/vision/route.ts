@@ -2,7 +2,8 @@ import { VISION_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { VisionApiRequest, VisionApiResponse, VisionAnalysis } from "@/types/emma";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const VISION_SYSTEM_PROMPT = `You are EMMA's vision subsystem. You analyze screenshots of the user's screen.
 
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
 
     const mimeType = mediaType || "image/jpeg";
 
+    const cost = await enforceCostGate({ operation: "vision", userId: user.id });
+    if (!cost.allowed) return costGateResponse(cost);
+
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: openRouterHeaders(),
@@ -89,6 +93,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!res.ok) {
+      await recordCostResult(cost, { success: false });
       const errText = await res.text();
       console.error("[EMMA Vision API] OpenRouter error:", res.status, errText);
       return NextResponse.json(
@@ -98,6 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     const rawText = extractText(data);
 
     let parsed: {

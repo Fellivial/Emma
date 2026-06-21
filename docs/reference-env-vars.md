@@ -68,7 +68,9 @@ Both keys are generated as a pair. Run `npx web-push generate-vapid-keys` once a
 | `UPSTASH_REDIS_REST_URL`   | Upstash Redis REST endpoint for distributed rate limiting across serverless workers | Upstash Console → Database → REST API → URL   |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token                                                            | Upstash Console → Database → REST API → Token |
 
-Optional but recommended for production. Without these, rate limiting falls back to in-memory per-worker counters (not effective across multiple serverless instances).
+Required in production. Paid/provider-cost operations fail closed when either value is missing or Upstash is unreachable. Development and tests use bounded in-memory counters so local workflows remain usable; production never relies on those counters.
+
+See [Cost safety and metered operations](reference-cost-safety.md) for the complete enforcement policy.
 
 ---
 

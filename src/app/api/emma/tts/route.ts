@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { decrypt } from "@/core/security/encryption";
 import { getUser } from "@/lib/supabase/server";
 import type { AvatarExpression } from "@/types/emma";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
@@ -124,6 +125,13 @@ export async function POST(req: NextRequest) {
       return new NextResponse(null, { status: 204 });
     }
 
+    const cost = await enforceCostGate({
+      operation: "tts",
+      userId: sessionUser.id,
+      clientId: resolvedClientId,
+    });
+    if (!cost.allowed) return costGateResponse(cost);
+
     // ── Call ElevenLabs ─────────────────────────────────────────────────
     // Priority: request voiceId → persona voice_id → integration default → Rachel
     const voice = voiceId || personaVoiceId || storedVoiceId || DEFAULT_VOICE_ID;
@@ -213,6 +221,7 @@ export async function POST(req: NextRequest) {
         });
         if (fallbackRes.ok) {
           const fallbackBuffer = await fallbackRes.arrayBuffer();
+          await recordCostResult(cost, { units: text.length, success: true });
           return new NextResponse(fallbackBuffer, {
             status: 200,
             headers: {
@@ -221,6 +230,7 @@ export async function POST(req: NextRequest) {
             },
           });
         }
+        await recordCostResult(cost, { units: text.length, success: false });
         return new NextResponse(null, { status: 204 });
       }
 
@@ -236,10 +246,12 @@ export async function POST(req: NextRequest) {
           .eq("client_id", resolvedClientId)
           .eq("service", "elevenlabs");
       }
+      await recordCostResult(cost, { units: text.length, success: false });
       return new NextResponse(null, { status: 204 });
     }
 
     if (!res.ok) {
+      await recordCostResult(cost, { units: text.length, success: false });
       const errText = await res.text();
       console.error("[EMMA TTS] ElevenLabs error:", res.status, errText);
       return NextResponse.json({ error: `ElevenLabs API ${res.status}` }, { status: 502 });
@@ -259,6 +271,7 @@ export async function POST(req: NextRequest) {
     }
 
     const audioBuffer = await res.arrayBuffer();
+    await recordCostResult(cost, { units: text.length, success: true });
 
     const responseHeaders: Record<string, string> = {
       "Content-Type": "audio/mpeg",

@@ -1,7 +1,8 @@
 import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a conversation summarizer for a smart home AI agent called Emma. Your job is to compress conversation history into a compact summary that preserves all important context.
 
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ summary: "" });
     }
 
+    const cost = await enforceCostGate({ operation: "summarize", userId: user.id });
+    if (!cost.allowed) return costGateResponse(cost);
+
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: openRouterHeaders(),
@@ -47,12 +51,14 @@ export async function POST(req: NextRequest) {
     });
 
     if (!res.ok) {
+      await recordCostResult(cost, { success: false });
       const errText = await res.text();
       console.error("[EMMA Summarize] API error:", res.status, errText);
       return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
     }
 
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     const summary = extractText(data);
 
     return NextResponse.json({ summary: summary.trim() });

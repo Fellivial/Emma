@@ -8,7 +8,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { encrypt, decrypt } from "@/core/security/encryption";
 import { getPlan } from "@/core/pricing";
 import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { costGateResponse, enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import {
   TONE_ADJECTIVE_ALLOWLIST,
   TOPIC_TAG_ALLOWLIST,
@@ -42,7 +43,9 @@ function hasInjection(text: string): boolean {
   return PERSONA_INJECTION_PATTERNS.some((p) => p.test(text));
 }
 
-async function classifyDescription(text: string): Promise<boolean> {
+async function classifyDescription(text: string, userId: string): Promise<boolean | Response> {
+  const cost = await enforceCostGate({ operation: "persona_screen", userId });
+  if (!cost.allowed) return costGateResponse(cost);
   try {
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -53,8 +56,13 @@ async function classifyDescription(text: string): Promise<boolean> {
         messages: [{ role: "user", content: `${CLASSIFIER_PROMPT}"${text}"` }],
       }),
     });
-    if (!res.ok) return false;
-    const answer = extractText(await res.json())
+    if (!res.ok) {
+      await recordCostResult(cost, { success: false });
+      return false;
+    }
+    const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
+    const answer = extractText(data)
       .trim()
       .toUpperCase();
     return answer.startsWith("YES");
@@ -192,7 +200,8 @@ export async function PUT(req: NextRequest) {
           { status: 422 }
         );
       }
-      const flagged = await classifyDescription(raw);
+      const flagged = await classifyDescription(raw, user.id);
+      if (flagged instanceof Response) return flagged;
       if (flagged) {
         return NextResponse.json(
           { error: "Persona description was flagged as potentially unsafe" },

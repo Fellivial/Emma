@@ -83,7 +83,8 @@ export async function GET(req: NextRequest) {
     id: `p${i}`,
     patternType: p.patternType,
     description: p.description,
-    exampleGoals: p.exampleGoals,
+      exampleGoals: p.exampleGoals,
+      userId: p.userId,
   }));
 
   const suggestions = await generateSuggestionsViaBatch("", batchInputs);

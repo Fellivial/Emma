@@ -23,6 +23,7 @@ import { parseDocument } from "@/core/integrations/docparser";
 import { extractTextFromImage, extractTextFromScannedPdf } from "@/core/integrations/ocr";
 import { recursiveCharacterSplit } from "@/core/text-splitter";
 import { embedBatch } from "@/lib/embeddings";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -112,6 +113,11 @@ export const documentProcess = inngest.createFunction(
   async ({ event, step }: { event: any; step: any }) => {
     const { documentId, userId } = event.data as { documentId: string; userId: string };
 
+    const cost = await enforceCostGate({ operation: "document_ingest", userId });
+    if (!cost.allowed) {
+      return { ok: false, reason: cost.reason };
+    }
+
     const supabase = getSupabaseAdmin();
     if (!supabase) throw new Error("Supabase not configured");
 
@@ -154,7 +160,7 @@ export const documentProcess = inngest.createFunction(
         const parsed = await parseDocument(buffer, mimeType);
         const text = parsed.text;
         if (text.length < 100) {
-          const ocr = await extractTextFromScannedPdf(buffer);
+          const ocr = await extractTextFromScannedPdf(buffer, { userId });
           return ocr.text;
         }
         return text;
@@ -166,7 +172,7 @@ export const documentProcess = inngest.createFunction(
       if (mimeType === "text/plain") {
         return buffer.toString("utf-8");
       }
-      const { text } = await extractTextFromImage(buffer, mimeType);
+      const { text } = await extractTextFromImage(buffer, mimeType, { userId });
       return text;
     });
 
@@ -185,7 +191,7 @@ export const documentProcess = inngest.createFunction(
 
     let embeddings: number[][] = [];
     try {
-      embeddings = await step.run("embed", () => embedBatch(chunks));
+      embeddings = await step.run("embed", () => embedBatch(chunks, { userId }));
     } catch (e) {
       console.error("[document-process] embedding error:", (e as Error).message);
     }
@@ -221,6 +227,7 @@ export const documentProcess = inngest.createFunction(
       await supabase.storage.from("document-ingestion").remove([storagePath]);
     });
 
+    await recordCostResult(cost, { units: Math.max(1, chunks.length), success: true });
     return {
       ok: true,
       documentId,

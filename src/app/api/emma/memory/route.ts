@@ -9,7 +9,8 @@ import {
 } from "@/core/memory-db";
 import { MEMORY_EXTRACTION_PROMPT } from "@/core/memory-shared";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
         if (!body.conversationText) {
           return NextResponse.json({ extracted: [] } satisfies MemoryApiResponse);
         }
+
+        const cost = await enforceCostGate({ operation: "memory_extract", userId });
+        if (!cost.allowed) return costGateResponse(cost);
 
         const memorySchema = {
           type: "object",
@@ -114,10 +118,12 @@ export async function POST(req: NextRequest) {
         });
 
         if (!res.ok) {
+          await recordCostResult(cost, { success: false });
           return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
         }
 
         const data = await res.json();
+        await recordCostResult(cost, { ...extractUsage(data), success: true });
         const rawText = extractText(data) || '{"memories":[]}';
 
         // Structured output guarantees valid JSON — no cleanup needed.

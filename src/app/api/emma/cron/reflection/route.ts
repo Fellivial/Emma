@@ -11,8 +11,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
 import { decrypt } from "@/core/security/encryption";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 const REFLECTION_SYSTEM =
   "You are Emma. Review these memories and identify any unresolved commitments or forgotten follow-ups. " +
@@ -90,6 +91,9 @@ export async function GET(req: NextRequest) {
 
       if (!memoryText) continue;
 
+      const cost = await enforceCostGate({ operation: "memory_reflection", userId });
+      if (!cost.allowed) continue;
+
       const llmRes = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: openRouterHeaders(),
@@ -103,9 +107,14 @@ export async function GET(req: NextRequest) {
         }),
       });
 
-      if (!llmRes.ok) continue;
+      if (!llmRes.ok) {
+        await recordCostResult(cost, { success: false });
+        continue;
+      }
 
-      const suggestion = extractText(await llmRes.json()).trim();
+      const data = await llmRes.json();
+      await recordCostResult(cost, { ...extractUsage(data), success: true });
+      const suggestion = extractText(data).trim();
       if (!suggestion || suggestion === "NONE" || suggestion.length < 5) continue;
 
       await supabase.from("pattern_detections").insert({

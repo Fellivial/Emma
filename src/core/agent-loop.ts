@@ -44,6 +44,7 @@ import { summarizeTask } from "@/core/task-summarizer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { pushToUser } from "@/lib/push-notify";
 import type { AutonomyTier } from "@/types/emma";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -263,9 +264,11 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   // Resolve the client's autonomy tier so moderate-tool gating works correctly.
   // Default to 3 (execute) so behavior is unchanged when no client config is found.
   let autonomyTier: AutonomyTier = 3;
+  let clientPlanId = "free";
   {
     const clientCfg = await loadClientConfigForUser(task.userId);
     autonomyTier = clientCfg.autonomyTier ?? 3;
+    clientPlanId = clientCfg.planId;
   }
 
   const tools = [
@@ -319,6 +322,25 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
     const stepStart = Date.now();
 
     try {
+      const cost = await enforceCostGate({
+        operation: "agent",
+        userId: task.userId,
+        clientId: task.clientId,
+        planId: task.clientId ? undefined : clientPlanId,
+      });
+      if (!cost.allowed) {
+        steps.push({
+          step,
+          toolName: "cost_gate",
+          input: {},
+          output: cost.message,
+          riskLevel: "safe",
+          status: "failed",
+          tokenCost: 0,
+          durationMs: Date.now() - stepStart,
+        });
+        break;
+      }
       // ── Call OpenRouter with tools ───────────────────────────────────
       const res = await fetchWithRetry(
         OPENROUTER_URL,
@@ -336,6 +358,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       );
 
       if (!res.ok) {
+        await recordCostResult(cost, { success: false });
         const errBody = await res.text().catch(() => "");
         console.error(`[EMMA Agent] API error ${res.status}:`, errBody.slice(0, 200));
         steps.push({
@@ -368,6 +391,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       const data = (await res.json()) as OpenRouterData;
       const inputTokens = data.usage?.prompt_tokens || 0;
       const outputTokens = data.usage?.completion_tokens || 0;
+      await recordCostResult(cost, { inputTokens, outputTokens, success: true });
       totalTokens += inputTokens + outputTokens;
 
       const choice = data.choices?.[0];
@@ -607,7 +631,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               };
             }
             // tier 3: run pre-execution evaluator, then fall through to execution below
-            const evaluation = await evaluateTool(task.goal, toolName, resolvedInput, steps);
+            const evaluation = await evaluateTool(
+              task.goal,
+              toolName,
+              resolvedInput,
+              steps,
+              task.userId,
+              task.clientId,
+              task.clientId ? undefined : clientPlanId
+            );
             if (!evaluation.proceed) {
               messages.push({
                 role: "tool",
@@ -862,7 +894,15 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   consumeRateLimit(rateLimitKey, 1, totalTokens).catch(() => {});
 
   // Fire-and-forget: generate Haiku summary and persist to agent_task_summaries
-  summarizeTask(task.id, task.goal, ctx, finalStatus).catch(() => {});
+  summarizeTask(
+    task.id,
+    task.goal,
+    ctx,
+    finalStatus,
+    task.userId,
+    task.clientId,
+    task.clientId ? undefined : clientPlanId
+  ).catch(() => {});
 
   // Fire-and-forget: finalize and persist provenance chain
   // "max_steps_reached" maps to "failed" for provenance (provenance_chains status doesn't include it)
@@ -988,7 +1028,10 @@ async function evaluateTool(
   goal: string,
   toolName: string,
   toolInput: Record<string, unknown>,
-  completedSteps: AgentStepResult[]
+  completedSteps: AgentStepResult[],
+  userId: string,
+  clientId?: string,
+  planId?: string
 ): Promise<{ proceed: boolean; reason: string }> {
   const stepSummary =
     completedSteps.length === 0
@@ -1009,6 +1052,17 @@ Reply with EXACTLY one of:
 PROCEED
 SKIP: <one-line reason why this action should be skipped>`;
 
+  const cost = await enforceCostGate({
+    operation: "agent",
+    userId,
+    clientId,
+    planId,
+  });
+  if (!cost.allowed) return { proceed: false, reason: cost.message };
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let providerSucceeded = false;
   try {
     const res = await fetchWithRetry(
       OPENROUTER_URL,
@@ -1034,7 +1088,13 @@ SKIP: <one-line reason why this action should be skipped>`;
 
     if (!res.ok) return { proceed: true, reason: "evaluator unavailable" };
 
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    inputTokens = data.usage?.prompt_tokens ?? 0;
+    outputTokens = data.usage?.completion_tokens ?? 0;
+    providerSucceeded = true;
     const text = (data.choices?.[0]?.message?.content ?? "").trim();
 
     if (text.toUpperCase().startsWith("SKIP")) {
@@ -1044,5 +1104,11 @@ SKIP: <one-line reason why this action should be skipped>`;
     return { proceed: true, reason: "evaluator approved" };
   } catch {
     return { proceed: true, reason: "evaluator timed out — proceeding" };
+  } finally {
+    await recordCostResult(cost, {
+      inputTokens,
+      outputTokens,
+      success: providerSucceeded,
+    }).catch(() => {});
   }
 }

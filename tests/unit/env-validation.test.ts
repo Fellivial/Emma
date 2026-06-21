@@ -16,12 +16,14 @@ const validProductionEnv = {
   CRON_SECRET: "cron-production-value",
   EMMA_UNSUBSCRIBE_SECRET: "unsubscribe-production-value",
   NEXT_PUBLIC_APP_URL: "https://emma.acme.org",
+  UPSTASH_REDIS_REST_URL: "https://cost-limit.upstash.io",
+  UPSTASH_REDIS_REST_TOKEN: "upstash-production-token",
 };
 
 describe("environment validation", () => {
   it("accepts a complete production environment", () => {
     expect(validateProductionEnvironment(validProductionEnv)).toEqual({ valid: true, issues: [] });
-    expect(PRODUCTION_REQUIRED_ENV).toHaveLength(8);
+    expect(PRODUCTION_REQUIRED_ENV).toHaveLength(10);
   });
 
   it.each([
@@ -94,5 +96,20 @@ describe("environment validation", () => {
       valid: true,
       issues: [],
     });
+  });
+
+  it("requires distributed rate limiting in production", () => {
+    const result = validateProductionEnvironment({
+      ...validProductionEnv,
+      UPSTASH_REDIS_REST_URL: undefined,
+      UPSTASH_REDIS_REST_TOKEN: undefined,
+    });
+
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        { variable: "UPSTASH_REDIS_REST_URL", reason: "missing" },
+        { variable: "UPSTASH_REDIS_REST_TOKEN", reason: "missing" },
+      ])
+    );
   });
 });

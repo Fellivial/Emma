@@ -10,6 +10,7 @@ import { parseDocument } from "@/core/integrations/docparser";
 import { extractTextFromImage, extractTextFromScannedPdf } from "@/core/integrations/ocr";
 import { recursiveCharacterSplit } from "@/core/text-splitter";
 import { embedBatch } from "@/lib/embeddings";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 import { getPlan } from "@/core/pricing";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB — Vercel body limit is 4.5 MB
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+
+    const cost = await enforceCostGate({ operation: "document_ingest", userId: user.id, planId });
+    if (!cost.allowed) return costGateResponse(cost);
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
@@ -125,7 +129,7 @@ export async function POST(req: NextRequest) {
       const parsed = await parseDocument(buffer, mimeType);
       extractedText = parsed.text;
       if (extractedText.length < 100) {
-        const ocr = await extractTextFromScannedPdf(buffer);
+        const ocr = await extractTextFromScannedPdf(buffer, { userId: user.id, planId });
         extractedText = ocr.text;
       }
     } else if (
@@ -136,7 +140,7 @@ export async function POST(req: NextRequest) {
     } else if (mimeType === "text/plain") {
       extractedText = buffer.toString("utf-8");
     } else {
-      const { text } = await extractTextFromImage(buffer, mimeType);
+      const { text } = await extractTextFromImage(buffer, mimeType, { userId: user.id, planId });
       extractedText = text;
     }
 
@@ -152,7 +156,7 @@ export async function POST(req: NextRequest) {
     // Embed all chunks in one batch — fail-open (store without embeddings if API errors)
     let embeddings: number[][] = [];
     try {
-      embeddings = await embedBatch(chunks);
+      embeddings = await embedBatch(chunks, { userId: user.id, planId });
     } catch (e) {
       console.error("[ingest] embedding error:", (e as Error).message);
     }
@@ -195,6 +199,7 @@ export async function POST(req: NextRequest) {
       if (chunkErr) console.error("[ingest] chunk insert error:", chunkErr.message);
     }
 
+    await recordCostResult(cost, { units: Math.max(1, chunks.length), success: true });
     return NextResponse.json({
       success: true,
       documentId: doc.id,

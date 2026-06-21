@@ -11,7 +11,8 @@
  *   Otherwise → ok
  *
  * Extra Response packs stack on top of the per-window token limit.
- * Enforcement MUST fail open — if DB errors, allow the request.
+ * Production enforcement fails closed when metering is unavailable.
+ * Development and tests remain fail-open without database infrastructure.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -49,6 +50,20 @@ export interface EnforcementResult {
   allWindows: WindowUsage[];
   message?: string;
   upgradeUrl?: string;
+  infrastructureFailure?: boolean;
+}
+
+function meteringUnavailable(planId: string): EnforcementResult {
+  if (process.env.NODE_ENV !== "production") {
+    return { status: "ok", planId, allWindows: [] };
+  }
+  return {
+    status: "blocked",
+    planId,
+    allWindows: [],
+    infrastructureFailure: true,
+    message: "Usage metering is temporarily unavailable.",
+  };
 }
 
 // ─── Window Boundary Helper ──────────────────────────────────────────────────
@@ -63,12 +78,14 @@ function get5HourStart(): Date {
 // ─── Extra Pack Helper ───────────────────────────────────────────────────────
 
 async function getExtraTokens(userId: string, supabase: SupabaseClient): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("extra_packs")
     .select("tokens_remaining")
     .eq("user_id", userId)
     .gt("valid_until", new Date().toISOString())
     .gt("tokens_remaining", 0);
+
+  if (error) throw error;
 
   return (data || []).reduce(
     (sum: number, p: Record<string, unknown>) => sum + ((p.tokens_remaining as number) || 0),
@@ -93,7 +110,7 @@ export async function checkUsage(
   }
 
   const supabase = getSupabase();
-  if (!supabase) return { status: "ok", planId, allWindows: [] };
+  if (!supabase) return meteringUnavailable(planId);
 
   const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
 
@@ -101,12 +118,14 @@ export async function checkUsage(
     const windowStart = get5HourStart();
 
     // Load the single 5-hour window
-    const { data: rows } = await supabase
+    const { data: rows, error: rowsError } = await supabase
       .from("usage_windows")
       .select("window_type, window_start, tokens_used, messages_used, warning_sent")
       .eq("user_id", effectiveId)
       .eq("window_type", "daily")
       .eq("window_start", windowStart.toISOString());
+
+    if (rowsError) throw rowsError;
 
     // Extra pack tokens stack on the per-window token limit
     const extraTokens = clientId ? 0 : await getExtraTokens(effectiveId, supabase);
@@ -177,11 +196,15 @@ export async function checkUsage(
     return { status: "ok", planId, allWindows };
   } catch {
     // Fail open — never block due to metering infra bug
-    return { status: "ok", planId, allWindows: [] };
+    return meteringUnavailable(planId);
   }
 }
 
 // ─── Record Usage ────────────────────────────────────────────────────────────
+
+export type UsagePersistenceResult =
+  | { success: true }
+  | { success: false; reason: "unavailable" | "rpc_error" };
 
 export async function recordUsage(
   userId: string | null,
@@ -190,38 +213,54 @@ export async function recordUsage(
   planId: string,
   _userTimezone: string = "UTC",
   _billingAnchorDay: number = 1,
-  clientId?: string
-): Promise<void> {
+  clientId?: string,
+  messages: number = 1
+): Promise<UsagePersistenceResult> {
   const supabase = getSupabase();
-  if (!supabase) return;
+  if (!supabase) return { success: false, reason: "unavailable" };
 
   const effectiveId = clientId ? `client:${clientId}` : (userId ?? "");
   const total = BigInt(inputTokens + outputTokens);
   const windowStart = get5HourStart();
 
   try {
-    await supabase.rpc("increment_usage_window", {
+    const { error } = await supabase.rpc("increment_usage_window", {
       p_user_id: effectiveId,
       p_window_type: "daily",
       p_window_start: windowStart.toISOString(),
       p_tokens: Number(total),
-      p_messages: 1,
+      p_messages: Math.max(0, messages),
     });
-  } catch (err) {
-    console.error("[UsageEnforcer] Failed to increment window:", err);
+    if (error) {
+      console.error("[UsageEnforcer] usage persistence failed", {
+        stage: "increment_usage_window",
+        code: error.code ?? "unknown",
+      });
+      return { success: false, reason: "rpc_error" };
+    }
+  } catch {
+    console.error("[UsageEnforcer] usage persistence failed", {
+      stage: "increment_usage_window",
+      code: "exception",
+    });
+    return { success: false, reason: "rpc_error" };
   }
+
+  if (total === BigInt(0) && messages === 0) return { success: true };
 
   // Deduct from extra packs if window token limit exhausted
   try {
     const plan = getPlan(planId);
     if (!clientId && plan && plan.tokenBudgetMonthly < 999_999_999) {
-      const { data: windowRow } = await supabase
+      const { data: windowRow, error: windowError } = await supabase
         .from("usage_windows")
         .select("tokens_used")
         .eq("user_id", effectiveId)
         .eq("window_type", "daily")
         .eq("window_start", windowStart.toISOString())
         .single();
+
+      if (windowError) return { success: false, reason: "rpc_error" };
 
       if (windowRow && windowRow.tokens_used > plan.tokenBudgetDaily) {
         const { error: deductError } = await supabase.rpc("deduct_extra_pack_tokens", {
@@ -230,11 +269,19 @@ export async function recordUsage(
         });
 
         if (deductError) {
-          console.error("[UsageEnforcer] Failed to deduct extra pack tokens:", deductError);
+          console.error("[UsageEnforcer] usage persistence failed", {
+            stage: "deduct_extra_pack_tokens",
+            code: deductError.code ?? "unknown",
+          });
+          return { success: false, reason: "rpc_error" };
         }
       }
     }
-  } catch {}
+  } catch {
+    return { success: false, reason: "rpc_error" };
+  }
+
+  return { success: true };
 }
 
 // ─── Mark Warning Sent ───────────────────────────────────────────────────────

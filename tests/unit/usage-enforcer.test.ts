@@ -5,10 +5,16 @@ const mockState = vi.hoisted(() => ({
   windowRows: [] as any[],
   extraPacks: [] as any[],
   queryThrows: false,
+  rpcError: null as { code?: string; message?: string } | null,
+  rpcThrows: false,
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
+    rpc: vi.fn(async () => {
+      if (mockState.rpcThrows) throw new Error("simulated RPC failure");
+      return { data: null, error: mockState.rpcError };
+    }),
     from: (table: string) => {
       if (table === "usage_windows") {
         return {
@@ -43,7 +49,7 @@ vi.mock("@supabase/supabase-js", () => ({
   })),
 }));
 
-import { checkUsage } from "@/core/usage-enforcer";
+import { checkUsage, recordUsage } from "@/core/usage-enforcer";
 
 // Free plan: tokenBudgetDaily = floor(floor(300_000/4)/7) = 10_714
 const FREE_WINDOW_TOKENS = 10_714;
@@ -64,8 +70,11 @@ beforeEach(() => {
   mockState.windowRows = [];
   mockState.extraPacks = [];
   mockState.queryThrows = false;
+  mockState.rpcError = null;
+  mockState.rpcThrows = false;
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fake.supabase.co");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fake-key");
+  vi.stubEnv("NODE_ENV", "test");
 });
 
 describe("checkUsage — enterprise bypass", () => {
@@ -88,6 +97,52 @@ describe("checkUsage — fail-open contract", () => {
     mockState.queryThrows = true;
     const result = await checkUsage(TEST_USER, "free");
     expect(result.status).toBe("ok");
+  });
+
+  it("fails closed when production metering credentials are absent", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+
+    const result = await checkUsage(TEST_USER, "free");
+
+    expect(result).toMatchObject({ status: "blocked", infrastructureFailure: true });
+  });
+
+  it("fails closed when a production metering query fails", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    mockState.queryThrows = true;
+
+    const result = await checkUsage(TEST_USER, "free");
+
+    expect(result).toMatchObject({ status: "blocked", infrastructureFailure: true });
+  });
+});
+
+describe("recordUsage — explicit persistence result", () => {
+  it("reports unavailable metering instead of silently succeeding", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+
+    const result = await recordUsage(TEST_USER, 10, 5, "enterprise");
+
+    expect(result).toEqual({ success: false, reason: "unavailable" });
+  });
+
+  it("detects a resolved Supabase RPC error", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    mockState.rpcError = { code: "XX000", message: "write rejected" };
+
+    const result = await recordUsage(TEST_USER, 10, 5, "enterprise");
+
+    expect(result).toEqual({ success: false, reason: "rpc_error" });
+  });
+
+  it("returns success only after the usage RPC succeeds", async () => {
+    const result = await recordUsage(TEST_USER, 10, 5, "enterprise", "UTC", 1, undefined, 1);
+
+    expect(result).toEqual({ success: true });
   });
 });
 
