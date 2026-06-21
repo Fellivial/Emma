@@ -1,7 +1,8 @@
 import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const EMOTION_VISION_PROMPT = `Analyze the facial expression in the webcam frame for an emotion detection system.
 
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Frame too large" }, { status: 413 });
     }
 
+    const cost = await enforceCostGate({ operation: "emotion", userId: user.id });
+    if (!cost.allowed) return costGateResponse(cost);
+
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: openRouterHeaders(),
@@ -82,10 +86,12 @@ export async function POST(req: NextRequest) {
     });
 
     if (!res.ok) {
+      await recordCostResult(cost, { success: false });
       return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
     }
 
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     const rawText = extractText(data);
 
     try {

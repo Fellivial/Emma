@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -141,13 +142,20 @@ registerTool({
     additionalProperties: false,
   },
   riskLevel: "safe",
-  handler: async (input) => {
+  handler: async (input, context) => {
     const styleGuide =
       input.style === "bullet_points"
         ? "Respond with a bullet-point list."
         : input.style === "detailed"
           ? "Respond with a detailed paragraph summary."
           : "Respond with a brief 2-3 sentence summary.";
+
+    const cost = await enforceCostGate({
+      operation: "summarize",
+      userId: context.userId,
+      clientId: context.clientId,
+    });
+    if (!cost.allowed) return { success: false, output: cost.message };
 
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -164,9 +172,13 @@ registerTool({
       }),
     });
 
-    if (!res.ok) return { success: false, output: `Summary API error: ${res.status}` };
+    if (!res.ok) {
+      await recordCostResult(cost, { success: false });
+      return { success: false, output: `Summary API error: ${res.status}` };
+    }
 
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     return { success: true, output: extractText(data), data: { topic: input.topic } };
   },
 });
@@ -1447,7 +1459,10 @@ registerTool({
         const contentType = res.headers.get("content-type") || "image/jpeg";
         const mimeType = contentType.split(";")[0].trim();
         const { extractTextFromImage } = await import("@/core/integrations/ocr");
-        const { text, confidence } = await extractTextFromImage(buffer, mimeType);
+        const { text, confidence } = await extractTextFromImage(buffer, mimeType, {
+          userId: context.userId,
+          clientId: context.clientId,
+        });
         return {
           success: true,
           output: text || "No text detected.",
@@ -1717,6 +1732,12 @@ registerTool({
             } catch {}
 
             if (apiKey) {
+              const cost = await enforceCostGate({
+                operation: "tts",
+                userId: context.userId,
+                clientId: context.clientId,
+              });
+              if (!cost.allowed) return { success: false, output: cost.message };
               const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
               const voice = (input.voice_id as string) || row.voice_id || DEFAULT_VOICE_ID;
 
@@ -1741,6 +1762,7 @@ registerTool({
 
               if (res.ok) {
                 const buf = await res.arrayBuffer();
+                await recordCostResult(cost, { units: text.length, success: true });
                 const audioBase64 = Buffer.from(buf).toString("base64");
                 return {
                   success: true,
@@ -1748,6 +1770,7 @@ registerTool({
                   data: { text, audioBase64, mimeType: "audio/mpeg" },
                 };
               }
+              await recordCostResult(cost, { units: text.length, success: false });
             }
           }
         }

@@ -10,7 +10,8 @@ import {
   updateConversationTitle,
 } from "@/core/memory-db";
 import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import { parseHistoryMessages } from "@/core/request-validation";
 
 const SUMMARIZE_PROMPT = `Summarize this conversation history into a compact paragraph (max 200 words).
@@ -107,6 +108,11 @@ export async function POST(req: NextRequest) {
         if (!convo) return;
 
         if (convo.messageCount === 2 && !convo.title) {
+          const titleCost = await enforceCostGate({
+            operation: "history_summarize",
+            userId: user.id,
+          });
+          if (!titleCost.allowed) return;
           const recentMsgs = await getConversationMessages(convo.id, 4);
           const excerpt = recentMsgs.map((m) => `${m.role}: ${m.content}`).join("\n");
           const res = await fetch(OPENROUTER_URL, {
@@ -122,7 +128,9 @@ export async function POST(req: NextRequest) {
             }),
           });
           if (res.ok) {
-            const title = extractText(await res.json())
+            const data = await res.json();
+            await recordCostResult(titleCost, { ...extractUsage(data), success: true });
+            const title = extractText(data)
               .trim()
               .replace(/^["']|["']$/g, "");
             if (title) await updateConversationTitle(convo.id, title);
@@ -131,6 +139,11 @@ export async function POST(req: NextRequest) {
 
         // First summary after 6 messages (captures short sessions); refresh every 20 thereafter.
         if (convo.messageCount === 6 || (convo.messageCount > 0 && convo.messageCount % 20 === 0)) {
+          const summaryCost = await enforceCostGate({
+            operation: "history_summarize",
+            userId: user.id,
+          });
+          if (!summaryCost.allowed) return;
           const allMsgs = await getConversationMessages(convo.id, 35);
           const text = allMsgs.map((m) => `${m.role}: ${m.content}`).join("\n");
           const prevSummary = convo.summary ? `Previous summary:\n${convo.summary}\n\n` : "";
@@ -147,7 +160,9 @@ export async function POST(req: NextRequest) {
             }),
           });
           if (res.ok) {
-            const summary = extractText(await res.json()).trim();
+            const data = await res.json();
+            await recordCostResult(summaryCost, { ...extractUsage(data), success: true });
+            const summary = extractText(data).trim();
             if (summary) await updateConversationSummary(convo.id, summary);
           }
         }

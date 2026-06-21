@@ -21,6 +21,8 @@ export const PRODUCTION_REQUIRED_ENV = [
   "CRON_SECRET",
   "EMMA_UNSUBSCRIBE_SECRET",
   "NEXT_PUBLIC_APP_URL",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
 ] as const;
 
 export const SUPABASE_AUTH_ENV = [
@@ -28,7 +30,11 @@ export const SUPABASE_AUTH_ENV = [
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
 ] as const;
 
-const URL_ENV = new Set(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_APP_URL"]);
+const URL_ENV = new Set([
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_APP_URL",
+  "UPSTASH_REDIS_REST_URL",
+]);
 const PLACEHOLDERS = [
   "changeme",
   "change-me",

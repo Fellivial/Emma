@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 export const maxDuration = 30;
 
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
   // Plan gate: server-side STT is Starter+ only
   const supabase = getSupabaseAdmin();
   let planId = "free";
+  let clientId: string | null = null;
   if (supabase) {
     const { data: membership } = await supabase
       .from("client_members")
@@ -27,7 +29,9 @@ export async function POST(req: NextRequest) {
       .eq("user_id", user.id)
       .limit(1)
       .single();
-    planId = (membership as { clients?: { plan_id?: string } } | null)?.clients?.plan_id ?? "free";
+    const resolved = membership as { client_id?: string; clients?: { plan_id?: string } } | null;
+    clientId = resolved?.client_id ?? null;
+    planId = resolved?.clients?.plan_id ?? "free";
   }
 
   if (planId === "free") {
@@ -70,6 +74,9 @@ export async function POST(req: NextRequest) {
   outForm.append("file", audio, `audio.${ext}`);
   outForm.append("model", model);
 
+  const cost = await enforceCostGate({ operation: "stt", userId: user.id, clientId, planId });
+  if (!cost.allowed) return costGateResponse(cost);
+
   let res: Response;
   try {
     res = await fetch(OPENAI_STT_URL, {
@@ -83,11 +90,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (!res.ok) {
+    await recordCostResult(cost, { units: 1, success: false });
     const errText = await res.text().catch(() => "");
     console.error(`[STT] OpenAI error ${res.status}:`, errText.slice(0, 200));
     return NextResponse.json({ error: "Transcription failed" }, { status: 502 });
   }
 
   const data = (await res.json()) as { text?: string };
+  await recordCostResult(cost, { units: 1, success: true });
   return NextResponse.json({ transcript: data.text ?? "" });
 }

@@ -7,7 +7,8 @@ import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import type { TaskContext } from "@/core/task-context";
 import { fetchWithRetry } from "@/lib/errors";
-import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,9 +30,14 @@ export async function summarizeTask(
   taskId: string,
   goal: string,
   ctx: TaskContext,
-  finalStatus: string
+  finalStatus: string,
+  userId?: string,
+  clientId?: string,
+  planId?: string
 ): Promise<string> {
   try {
+    const cost = await enforceCostGate({ operation: "summarize", userId, clientId, planId });
+    if (!cost.allowed) return "";
     const stepsText = ctx.stepLog
       .map(
         (e) =>
@@ -69,9 +75,13 @@ export async function summarizeTask(
       { maxRetries: 1 }
     );
 
-    if (!res.ok) return "";
+    if (!res.ok) {
+      await recordCostResult(cost, { success: false });
+      return "";
+    }
 
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     const summary: string =
       (
         data as { choices?: Array<{ message?: { content?: string } }> }

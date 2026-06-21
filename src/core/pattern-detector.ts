@@ -14,7 +14,8 @@
 import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import { fetchWithRetry } from "@/lib/errors";
-import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { OPENROUTER_URL, openRouterHeaders, extractUsage } from "@/lib/openrouter";
+import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,9 +46,12 @@ Given a pattern of recurring tasks, suggest automating it. Be specific about tim
 async function generateSuggestion(
   patternType: string,
   description: string,
-  exampleGoals: string[]
+  exampleGoals: string[],
+  userId?: string
 ): Promise<string> {
   try {
+    const cost = await enforceCostGate({ operation: "background", userId });
+    if (!cost.allowed) return "";
     const res = await fetchWithRetry(
       OPENROUTER_URL,
       {
@@ -68,9 +72,12 @@ async function generateSuggestion(
       { maxRetries: 1 }
     );
 
-    if (!res.ok)
+    if (!res.ok) {
+      await recordCostResult(cost, { success: false });
       return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
+    }
     const data = await res.json();
+    await recordCostResult(cost, { ...extractUsage(data), success: true });
     return (
       (
         data as { choices?: Array<{ message?: { content?: string } }> }
@@ -156,6 +163,7 @@ export async function generateSuggestionsViaBatch(
     patternType: string;
     description: string;
     exampleGoals: string[];
+    userId?: string;
   }>
 ): Promise<Map<string, string>> {
   if (!process.env.OPENROUTER_API_KEY) return new Map();
@@ -168,7 +176,12 @@ export async function generateSuggestionsViaBatch(
     const results = await Promise.all(
       chunk.map(async (p) => {
         try {
-          const text = await generateSuggestion(p.patternType, p.description, p.exampleGoals);
+          const text = await generateSuggestion(
+            p.patternType,
+            p.description,
+            p.exampleGoals,
+            p.userId
+          );
           return { id: p.id, text };
         } catch {
           return { id: p.id, text: "" };
@@ -235,7 +248,8 @@ export async function detectPatterns(
         : await generateSuggestion(
             "daily",
             rep,
-            items.map((i) => i.goal)
+            items.map((i) => i.goal),
+            userId
           );
       patterns.push({
         userId,
@@ -265,7 +279,8 @@ export async function detectPatterns(
         : await generateSuggestion(
             "weekly",
             rep,
-            items.map((i) => i.goal)
+            items.map((i) => i.goal),
+            userId
           );
       patterns.push({
         userId,
@@ -302,7 +317,7 @@ export async function detectPatterns(
     if (count < 4) continue;
     const suggestion = skipSuggestions
       ? undefined
-      : await generateSuggestion("tool_sequence", seq, exampleGoals);
+      : await generateSuggestion("tool_sequence", seq, exampleGoals, userId);
     patterns.push({
       userId,
       patternType: "tool_sequence",
