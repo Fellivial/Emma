@@ -205,3 +205,26 @@ describe("CRIT-01 + HIGH-05: production env validation covers Inngest and email"
     expect(PRODUCTION_REQUIRED_ENV).toContain("EMAIL_FROM");
   });
 });
+
+// ── CRIT-04 ──────────────────────────────────────────────────────────────────
+
+describe("CRIT-04: instrumentation.ts exists and calls validateProductionEnvironment", () => {
+  const instrSrc = readFileSync(resolve(process.cwd(), "src/instrumentation.ts"), "utf8");
+
+  it("exports a register function", () => {
+    expect(instrSrc).toContain("export async function register");
+  });
+
+  it("imports validateProductionEnvironment", () => {
+    expect(instrSrc).toContain("validateProductionEnvironment");
+  });
+
+  it("throws when validation fails", () => {
+    expect(instrSrc).toContain("throw new Error");
+  });
+
+  it("is a no-op outside production", () => {
+    expect(instrSrc).toContain('process.env.NODE_ENV !== "production"');
+    expect(instrSrc).toMatch(/NODE_ENV.*production.*return|return.*NODE_ENV.*production/s);
+  });
+});
