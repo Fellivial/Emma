@@ -169,3 +169,22 @@ describe("HIGH-04: task detail approvals are user-scoped", () => {
     expect(summaryBlock).not.toContain("user_id");
   });
 });
+
+// ── LB-01 ────────────────────────────────────────────────────────────────────
+
+describe("LB-01: pattern_detections allows connection_expiry pattern type", () => {
+  it("schema.sql constraint includes connection_expiry", () => {
+    expect(schemaSrc).toContain("'connection_expiry'");
+  });
+
+  it("migration file exists and contains connection_expiry", () => {
+    const migSrc = readFileSync(
+      resolve(
+        process.cwd(),
+        "supabase/migrations/20260622000002_pattern_type_connection_expiry.sql"
+      ),
+      "utf8"
+    );
+    expect(migSrc).toContain("connection_expiry");
+  });
+});
