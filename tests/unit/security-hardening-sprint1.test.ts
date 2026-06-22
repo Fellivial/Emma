@@ -133,3 +133,39 @@ describe("HIGH-03: audit_log INSERT policy is restrictive", () => {
     expect(auditBlock).toContain("with check (false)");
   });
 });
+
+// ── HIGH-04 ──────────────────────────────────────────────────────────────────
+
+describe("HIGH-04: task detail approvals are user-scoped", () => {
+  const taskDetailSrc = readFileSync(
+    resolve(process.cwd(), "src/app/api/emma/tasks/[id]/route.ts"),
+    "utf8"
+  );
+
+  it("approvals query includes user_id ownership filter", () => {
+    expect(taskDetailSrc).toMatch(/\.or\(`user_id\.eq\.\$\{user\.id\},user_id\.eq\.system`\)/);
+  });
+
+  it("task ownership is verified before any sub-query (user_id anchor)", () => {
+    // The .eq("user_id", user.id) on the tasks query must appear BEFORE the approvals query
+    const taskQueryIdx = taskDetailSrc.indexOf('.eq("user_id", user.id)');
+    const approvalsIdx = taskDetailSrc.indexOf('.from("approvals")');
+    expect(taskQueryIdx).toBeGreaterThan(-1);
+    expect(approvalsIdx).toBeGreaterThan(-1);
+    expect(taskQueryIdx).toBeLessThan(approvalsIdx);
+  });
+
+  it("action_log and agent_task_summaries are NOT given user_id filter (no such column)", () => {
+    const actionLogBlock = taskDetailSrc.slice(
+      taskDetailSrc.indexOf('.from("action_log")'),
+      taskDetailSrc.indexOf('.from("agent_task_summaries")')
+    );
+    expect(actionLogBlock).not.toContain("user_id");
+
+    const summaryBlock = taskDetailSrc.slice(
+      taskDetailSrc.indexOf('.from("agent_task_summaries")'),
+      taskDetailSrc.indexOf('.from("approvals")')
+    );
+    expect(summaryBlock).not.toContain("user_id");
+  });
+});

@@ -59,6 +59,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .from("approvals")
     .select("*")
     .eq("task_id", taskId)
+    .or(`user_id.eq.${user.id},user_id.eq.system`)
     .order("created_at", { ascending: true });
 
   const { data: patterns } = await supabase
