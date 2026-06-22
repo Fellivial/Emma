@@ -22,6 +22,7 @@ import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
 import type { CustomPersona, ToneAdjective, TopicTag } from "@/types/persona";
 import { embedText } from "@/lib/embeddings";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
+import { checkDistributedRateLimit } from "@/lib/ratelimit";
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -115,6 +116,29 @@ export async function POST(req: NextRequest) {
       }
       // ────────────────────────────────────────────────────────────────────
       sessionUserId = sessionUser.id;
+    }
+
+    // Per-user sliding-window guard: 20 requests / 60 s.
+    // checkDistributedRateLimit throws in production when Upstash is unconfigured (fail-closed).
+    if (sessionUserId) {
+      const rl = await checkDistributedRateLimit({
+        key: sessionUserId,
+        namespace: "req:brain",
+        limit: 20,
+        windowSeconds: 60,
+      });
+      if (!rl.allowed) {
+        return Response.json(
+          { error: "Too many requests. Please try again later." },
+          {
+            status: 429,
+            headers: {
+              "Cache-Control": "no-store",
+              "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+            },
+          }
+        );
+      }
     }
 
     const body = (await req.json()) as EmmaApiRequest;

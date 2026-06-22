@@ -10,6 +10,7 @@ import { checkAutonomousAccess } from "@/core/addon-enforcer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { parseAgentRequest } from "@/core/request-validation";
 import { enforceCostGate, costGateResponse } from "@/core/cost-gate";
+import { checkDistributedRateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,6 +56,25 @@ export async function POST(req: NextRequest) {
         const access = await checkAutonomousAccess(config.id, config.planId, "autonomous");
         if (!access.allowed) {
           return NextResponse.json({ error: access.reason }, { status: 403 });
+        }
+
+        // Per-user guard: 5 creates / 60 s (each create may run up to 5 LLM calls).
+        const agentRl = await checkDistributedRateLimit({
+          key: userId,
+          namespace: "req:agent",
+          limit: 5,
+          windowSeconds: 60,
+        });
+        if (!agentRl.allowed) {
+          return NextResponse.json(
+            { error: "Too many agent requests. Please try again later." },
+            {
+              status: 429,
+              headers: {
+                "Retry-After": String(Math.ceil((agentRl.resetAt - Date.now()) / 1000)),
+              },
+            }
+          );
         }
 
         const cost = await enforceCostGate({
@@ -119,9 +139,9 @@ export async function POST(req: NextRequest) {
 
         // Atomic claim: update status='approved' WHERE status='pending' and return the row.
         // Only one concurrent request can win this UPDATE; the loser gets null back.
-        // Prefer client_id so scheduled-task approvals (user_id="system") are visible;
-        // fall back to user_id when clientId is not yet resolved.
-        const updateQuery = supabase
+        // Always scope to the owning user. system exemption: scheduled tasks carry
+        // user_id="system" with a valid client_id — allow those through the or() path.
+        let updateQuery = supabase
           .from("approvals")
           .update({
             status: "approved",
@@ -131,9 +151,14 @@ export async function POST(req: NextRequest) {
           .eq("id", body.approvalId)
           .eq("status", "pending")
           .select("*, action_log(*), tasks(*, step_transcript)");
-        const { data: approval } = await (
-          clientId ? updateQuery.eq("client_id", clientId) : updateQuery.eq("user_id", userId)
-        ).single();
+        if (clientId) {
+          updateQuery = updateQuery
+            .eq("client_id", clientId)
+            .or(`user_id.eq.${userId},user_id.eq.system`);
+        } else {
+          updateQuery = updateQuery.eq("user_id", userId);
+        }
+        const { data: approval } = await updateQuery.single();
 
         if (!approval) {
           return NextResponse.json(
@@ -239,16 +264,21 @@ export async function POST(req: NextRequest) {
         }
 
         // Fetch approval first to get action_log_id and task_id for downstream updates.
-        // Prefer client_id so scheduled-task rejections are also reachable by client members.
-        const rejectQuery = supabase
+        // Always scope to the owning user; system exemption for scheduled tasks (see approve).
+        let rejectFetch = supabase
           .from("approvals")
           .select("action_log_id, task_id")
           .eq("id", body.approvalId);
-        const { data: approval } = await (
-          clientId ? rejectQuery.eq("client_id", clientId) : rejectQuery.eq("user_id", userId)
-        ).single();
+        if (clientId) {
+          rejectFetch = rejectFetch
+            .eq("client_id", clientId)
+            .or(`user_id.eq.${userId},user_id.eq.system`);
+        } else {
+          rejectFetch = rejectFetch.eq("user_id", userId);
+        }
+        const { data: approval } = await rejectFetch.single();
 
-        const rejectBase = supabase
+        let rejectUpdate = supabase
           .from("approvals")
           .update({
             status: "rejected",
@@ -256,7 +286,14 @@ export async function POST(req: NextRequest) {
             decided_at: new Date().toISOString(),
           })
           .eq("id", body.approvalId);
-        await (clientId ? rejectBase.eq("client_id", clientId) : rejectBase.eq("user_id", userId));
+        if (clientId) {
+          rejectUpdate = rejectUpdate
+            .eq("client_id", clientId)
+            .or(`user_id.eq.${userId},user_id.eq.system`);
+        } else {
+          rejectUpdate = rejectUpdate.eq("user_id", userId);
+        }
+        await rejectUpdate;
 
         audit({
           userId,

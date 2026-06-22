@@ -683,7 +683,7 @@ create policy "Members read webhooks" on public.webhook_endpoints for all using 
 drop policy if exists "Users read own audit" on public.audit_log;
 create policy "Users read own audit" on public.audit_log for select using (user_id = auth.uid()::text);
 drop policy if exists "Service inserts audit" on public.audit_log;
-create policy "Service inserts audit" on public.audit_log for insert with check (true);
+create policy "Service inserts audit" on public.audit_log for insert with check (false);
 
 -- Referrals
 drop policy if exists "Users see own referrals" on public.referrals;

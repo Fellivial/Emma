@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Verify HMAC — uses EMMA_UNSUBSCRIBE_SECRET if set, falls back to EMMA_ENCRYPTION_KEY
-  const key = process.env.EMMA_UNSUBSCRIBE_SECRET ?? process.env.EMMA_ENCRYPTION_KEY;
+  // Verify HMAC — dedicated unsubscribe secret required; no fallback to field-encryption key.
+  // If absent the !key guard below returns 500.
+  const key = process.env.EMMA_UNSUBSCRIBE_SECRET;
   if (!key) {
     return new Response(
       renderPage("Configuration Error", "The server is not configured correctly."),
