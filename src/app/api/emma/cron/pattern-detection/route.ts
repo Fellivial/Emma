@@ -43,68 +43,74 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No DB connection" }, { status: 500 });
   }
 
-  // Get all distinct user IDs that have completed tasks in last 30 days
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: userRows } = await supabase
-    .from("tasks")
-    .select("user_id")
-    .eq("status", "completed")
-    .gte("created_at", since);
+  return Sentry.withMonitor(
+    "emma-cron-pattern-detection",
+    async () => {
+      // Get all distinct user IDs that have completed tasks in last 30 days
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: userRows } = await supabase
+        .from("tasks")
+        .select("user_id")
+        .eq("status", "completed")
+        .gte("created_at", since);
 
-  if (!userRows) {
-    return NextResponse.json({ processed: 0 });
-  }
+      if (!userRows) {
+        return NextResponse.json({ processed: 0 });
+      }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userIds = [...new Set(userRows.map((r: any) => r.user_id as string))];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userIds = [...new Set(userRows.map((r: any) => r.user_id as string))];
 
-  // ── Phase 1: Detect patterns (no API calls) ───────────────────────────────
-  const allPatterns: DetectedPattern[] = [];
-  for (const userId of userIds) {
-    try {
-      const patterns = await detectPatterns(userId, true); // skip per-pattern API calls
-      allPatterns.push(...patterns);
-    } catch (err) {
-      Sentry.captureException(err, { extra: { userId } });
-    }
-  }
+      // ── Phase 1: Detect patterns (no API calls) ───────────────────────────────
+      const allPatterns: DetectedPattern[] = [];
+      for (const userId of userIds) {
+        try {
+          const patterns = await detectPatterns(userId, true); // skip per-pattern API calls
+          allPatterns.push(...patterns);
+        } catch (err) {
+          Sentry.captureException(err, { extra: { userId } });
+        }
+      }
 
-  if (allPatterns.length === 0) {
-    return NextResponse.json({
-      processed: userIds.length,
-      patternsFound: 0,
-      suggestionsGenerated: 0,
-      ranAt: new Date().toISOString(),
-    });
-  }
+      if (allPatterns.length === 0) {
+        return NextResponse.json({
+          processed: userIds.length,
+          patternsFound: 0,
+          suggestionsGenerated: 0,
+          ranAt: new Date().toISOString(),
+        });
+      }
 
-  // ── Phase 2: Generate suggestions sequentially ───────────────────────────
-  let suggestionsGenerated = 0;
-  const batchInputs = allPatterns.map((p, i) => ({
-    id: `p${i}`,
-    patternType: p.patternType,
-    description: p.description,
-    exampleGoals: p.exampleGoals,
-    userId: p.userId,
-  }));
+      // ── Phase 2: Generate suggestions sequentially ───────────────────────────
+      let suggestionsGenerated = 0;
+      const batchInputs = allPatterns.map((p, i) => ({
+        id: `p${i}`,
+        patternType: p.patternType,
+        description: p.description,
+        exampleGoals: p.exampleGoals,
+        userId: p.userId,
+      }));
 
-  const suggestions = await generateSuggestionsViaBatch("", batchInputs);
+      const suggestions = await generateSuggestionsViaBatch("", batchInputs);
 
-  for (let i = 0; i < allPatterns.length; i++) {
-    const text = suggestions.get(`p${i}`);
-    if (text) {
-      allPatterns[i].suggestion = text;
-      suggestionsGenerated++;
-    }
-  }
+      for (let i = 0; i < allPatterns.length; i++) {
+        const text = suggestions.get(`p${i}`);
+        if (text) {
+          allPatterns[i].suggestion = text;
+          suggestionsGenerated++;
+        }
+      }
 
-  // ── Phase 3: Persist all patterns ─────────────────────────────────────────
-  await persistPatterns(allPatterns);
+      // ── Phase 3: Persist all patterns ─────────────────────────────────────────
+      await persistPatterns(allPatterns);
 
-  return NextResponse.json({
-    processed: userIds.length,
-    patternsFound: allPatterns.length,
-    suggestionsGenerated,
-    ranAt: new Date().toISOString(),
-  });
+      return NextResponse.json({
+        processed: userIds.length,
+        patternsFound: allPatterns.length,
+        suggestionsGenerated,
+        ranAt: new Date().toISOString(),
+      });
+    },
+    { schedule: { type: "crontab" as const, value: "0 2 * * *" } }
+  );
 }

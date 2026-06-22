@@ -34,3 +34,69 @@ describe("CRIT-04: instrumentation.ts sanity", () => {
     expect(instrSrc).toContain("export async function register");
   });
 });
+
+// ── HIGH-01 ──────────────────────────────────────────────────────────────────
+
+const cronFiles: Array<{ path: string; slug: string; schedule: string }> = [
+  {
+    path: "src/app/api/emma/cron/email-sequences/route.ts",
+    slug: "emma-cron-email-sequences",
+    schedule: "*/15 * * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/scheduled-tasks/route.ts",
+    slug: "emma-cron-scheduled-tasks",
+    schedule: "* * * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/approvals-expiry/route.ts",
+    slug: "emma-cron-approvals-expiry",
+    schedule: "*/5 * * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/pattern-detection/route.ts",
+    slug: "emma-cron-pattern-detection",
+    schedule: "0 2 * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/memory-prune/route.ts",
+    slug: "emma-cron-memory-prune",
+    schedule: "0 4 * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/reflection/route.ts",
+    slug: "emma-cron-reflection",
+    schedule: "30 3 * * *",
+  },
+  {
+    path: "src/app/api/emma/cron/connection-health/route.ts",
+    slug: "emma-cron-connection-health",
+    schedule: "0 * * * *",
+  },
+];
+
+describe("HIGH-01: Sentry.withMonitor on all 7 remaining cron routes", () => {
+  for (const { path, slug, schedule } of cronFiles) {
+    const src = readFileSync(resolve(process.cwd(), path), "utf8");
+    const label = path.split("/").slice(-2, -1)[0];
+
+    it(`${label}: uses Sentry.withMonitor with correct slug`, () => {
+      expect(src).toContain(`"${slug}"`);
+      expect(src).toContain("Sentry.withMonitor");
+    });
+
+    it(`${label}: monitor has correct schedule`, () => {
+      expect(src).toContain(`"${schedule}"`);
+    });
+
+    it(`${label}: auth check runs before withMonitor`, () => {
+      // Files use either authOk(req) helper or inline authHeader check — both
+      // always emit an "Unauthorized" early return before Sentry.withMonitor.
+      const authIdx = src.indexOf("Unauthorized");
+      const monitorIdx = src.indexOf("Sentry.withMonitor");
+      expect(authIdx).toBeGreaterThan(-1);
+      expect(monitorIdx).toBeGreaterThan(-1);
+      expect(authIdx).toBeLessThan(monitorIdx);
+    });
+  }
+});

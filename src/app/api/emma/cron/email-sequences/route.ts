@@ -77,119 +77,127 @@ export async function GET(req: NextRequest) {
   const fromAddress = process.env.EMAIL_FROM || "Emma <emma@example.com>";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  try {
-    const now = new Date().toISOString();
-
-    // Fetch due emails (batch of 50)
-    const { data: pendingEmails, error: fetchErr } = await supabase
-      .from("email_sequences")
-      .select("*")
-      .eq("status", "pending")
-      .lte("scheduled_for", now)
-      .order("scheduled_for", { ascending: true })
-      .limit(50);
-
-    if (fetchErr || !pendingEmails || pendingEmails.length === 0) {
-      return NextResponse.json({ processed: 0 });
-    }
-
-    let sent = 0;
-    let skipped = 0;
-    let failed = 0;
-
-    for (const row of pendingEmails) {
+  return Sentry.withMonitor(
+    "emma-cron-email-sequences",
+    async () => {
       try {
-        // ── 1. Optimistic lock ────────────────────────────────────────
-        const { count } = await supabase
-          .from("email_sequences")
-          .update({ status: "sending" }, { count: "exact" })
-          .eq("id", row.id)
-          .eq("status", "pending");
+        const now = new Date().toISOString();
 
-        if (!count || count === 0) {
-          skipped++;
-          continue; // Another cron instance got it
+        // Fetch due emails (batch of 50)
+        const { data: pendingEmails, error: fetchErr } = await supabase
+          .from("email_sequences")
+          .select("*")
+          .eq("status", "pending")
+          .lte("scheduled_for", now)
+          .order("scheduled_for", { ascending: true })
+          .limit(50);
+
+        if (fetchErr || !pendingEmails || pendingEmails.length === 0) {
+          return NextResponse.json({ processed: 0 });
         }
 
-        // ── 2. Deduplication check ────────────────────────────────────
-        const { data: dupe } = await supabase
-          .from("email_sequences")
-          .select("id")
-          .eq("user_id", row.user_id)
-          .eq("template_id", row.template_id)
-          .eq("status", "sent")
-          .neq("id", row.id)
-          .limit(1)
-          .single();
+        let sent = 0;
+        let skipped = 0;
+        let failed = 0;
 
-        if (dupe) {
-          await supabase
-            .from("email_sequences")
-            .update({
-              status: "skipped",
-              error_detail: "Duplicate — already sent",
-            })
-            .eq("id", row.id);
-          skipped++;
-          continue;
+        for (const row of pendingEmails) {
+          try {
+            // ── 1. Optimistic lock ────────────────────────────────────────
+            const { count } = await supabase
+              .from("email_sequences")
+              .update({ status: "sending" }, { count: "exact" })
+              .eq("id", row.id)
+              .eq("status", "pending");
+
+            if (!count || count === 0) {
+              skipped++;
+              continue; // Another cron instance got it
+            }
+
+            // ── 2. Deduplication check ────────────────────────────────────
+            const { data: dupe } = await supabase
+              .from("email_sequences")
+              .select("id")
+              .eq("user_id", row.user_id)
+              .eq("template_id", row.template_id)
+              .eq("status", "sent")
+              .neq("id", row.id)
+              .limit(1)
+              .single();
+
+            if (dupe) {
+              await supabase
+                .from("email_sequences")
+                .update({
+                  status: "skipped",
+                  error_detail: "Duplicate — already sent",
+                })
+                .eq("id", row.id);
+              skipped++;
+              continue;
+            }
+
+            // ── 3. Build context ──────────────────────────────────────────
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("name")
+              .eq("id", row.user_id)
+              .single();
+
+            const context: EmailContext = {
+              name: profile?.name || "there",
+              email: row.email,
+              upgradeUrl: `${appUrl}/settings/billing?ref=email_${row.template_id}`,
+              unsubscribeUrl: generateUnsubscribeUrl(row.user_id),
+            };
+
+            // ── 4. Render template ────────────────────────────────────────
+            const rendered = renderEmail(row.template_id, context);
+
+            // ── 5. Send via Resend ────────────────────────────────────────
+            await resend.emails.send({
+              from: fromAddress,
+              to: row.email,
+              subject: rendered.subject,
+              html: rendered.html,
+              text: rendered.text,
+            });
+
+            // ── 6. Mark sent ──────────────────────────────────────────────
+            await supabase
+              .from("email_sequences")
+              .update({
+                status: "sent",
+                sent_at: new Date().toISOString(),
+              })
+              .eq("id", row.id);
+
+            sent++;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } catch (err: any) {
+            // ── 7. Mark failed ────────────────────────────────────────────
+            Sentry.captureException(err, {
+              extra: { emailId: row.id, templateId: row.template_id },
+            });
+            console.error(`[Cron:Email] Failed ${row.id}:`, err);
+            await supabase
+              .from("email_sequences")
+              .update({
+                status: "failed",
+                error_detail: err?.message || String(err),
+              })
+              .eq("id", row.id);
+            failed++;
+          }
         }
 
-        // ── 3. Build context ──────────────────────────────────────────
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name")
-          .eq("id", row.user_id)
-          .single();
-
-        const context: EmailContext = {
-          name: profile?.name || "there",
-          email: row.email,
-          upgradeUrl: `${appUrl}/settings/billing?ref=email_${row.template_id}`,
-          unsubscribeUrl: generateUnsubscribeUrl(row.user_id),
-        };
-
-        // ── 4. Render template ────────────────────────────────────────
-        const rendered = renderEmail(row.template_id, context);
-
-        // ── 5. Send via Resend ────────────────────────────────────────
-        await resend.emails.send({
-          from: fromAddress,
-          to: row.email,
-          subject: rendered.subject,
-          html: rendered.html,
-          text: rendered.text,
-        });
-
-        // ── 6. Mark sent ──────────────────────────────────────────────
-        await supabase
-          .from("email_sequences")
-          .update({
-            status: "sent",
-            sent_at: new Date().toISOString(),
-          })
-          .eq("id", row.id);
-
-        sent++;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        // ── 7. Mark failed ────────────────────────────────────────────
-        Sentry.captureException(err, { extra: { emailId: row.id, templateId: row.template_id } });
-        console.error(`[Cron:Email] Failed ${row.id}:`, err);
-        await supabase
-          .from("email_sequences")
-          .update({
-            status: "failed",
-            error_detail: err?.message || String(err),
-          })
-          .eq("id", row.id);
-        failed++;
+        return NextResponse.json({ processed: sent + skipped + failed, sent, skipped, failed });
+      } catch (err) {
+        Sentry.captureException(err);
+        console.error("[Cron:Email] Error:", err);
+        return NextResponse.json({ error: String(err) }, { status: 500 });
       }
-    }
-
-    return NextResponse.json({ processed: sent + skipped + failed, sent, skipped, failed });
-  } catch (err) {
-    Sentry.captureException(err);
-    console.error("[Cron:Email] Error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
+    },
+    { schedule: { type: "crontab" as const, value: "*/15 * * * *" } }
+  );
 }
