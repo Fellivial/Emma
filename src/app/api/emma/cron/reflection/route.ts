@@ -38,106 +38,112 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No DB connection" }, { status: 500 });
   }
 
-  // Find users with memories older than 7 days
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: userRows } = await supabase
-    .from("memories")
-    .select("user_id")
-    .eq("status", "active")
-    .lte("created_at", cutoff);
-
-  if (!userRows || userRows.length === 0) {
-    return NextResponse.json({ processed: 0, reflections: 0 });
-  }
-
-  const userIds = [...new Set(userRows.map((r: { user_id: string }) => r.user_id))];
-  let reflections = 0;
-
-  for (const userId of userIds) {
-    try {
-      // Skip if we already created a reflection for this user today
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-      const { count: alreadyRan } = await supabase
-        .from("pattern_detections")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("pattern_type", "memory_reflection")
-        .gte("detected_at", todayStart.toISOString());
-
-      if ((alreadyRan ?? 0) > 0) continue;
-
-      // Load up to 30 old active memories
-      const { data: memories } = await supabase
+  return Sentry.withMonitor(
+    "emma-cron-reflection",
+    async () => {
+      // Find users with memories older than 7 days
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: userRows } = await supabase
         .from("memories")
-        .select("key, value, category")
-        .eq("user_id", userId)
+        .select("user_id")
         .eq("status", "active")
-        .lte("created_at", cutoff)
-        .order("created_at", { ascending: false })
-        .limit(30);
+        .lte("created_at", cutoff);
 
-      if (!memories || memories.length === 0) continue;
-
-      const memoryText = memories
-        .map((m: { key: string; value: string; category: string }) => {
-          try {
-            return `- [${m.category}] ${m.key}: ${decrypt(m.value)}`;
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-        .join("\n");
-
-      if (!memoryText) continue;
-
-      const cost = await enforceCostGate({ operation: "memory_reflection", userId });
-      if (!cost.allowed) continue;
-
-      const llmRes = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: openRouterHeaders(),
-        body: JSON.stringify({
-          models: UTILITY_MODELS,
-          max_tokens: 60,
-          messages: [
-            { role: "system", content: REFLECTION_SYSTEM },
-            { role: "user", content: memoryText },
-          ],
-        }),
-      });
-
-      if (!llmRes.ok) {
-        await recordCostResult(cost, { success: false });
-        continue;
+      if (!userRows || userRows.length === 0) {
+        return NextResponse.json({ processed: 0, reflections: 0 });
       }
 
-      const data = await llmRes.json();
-      await recordCostResult(cost, { ...extractUsage(data), success: true });
-      const suggestion = extractText(data).trim();
-      if (!suggestion || suggestion === "NONE" || suggestion.length < 5) continue;
+      const userIds = [...new Set(userRows.map((r: { user_id: string }) => r.user_id))];
+      let reflections = 0;
 
-      await supabase.from("pattern_detections").insert({
-        user_id: userId,
-        pattern_type: "memory_reflection",
-        description: "Memory reflection: unresolved commitment",
-        suggestion,
-        frequency: 1,
-        status: "pending",
-        detected_at: new Date().toISOString(),
+      for (const userId of userIds) {
+        try {
+          // Skip if we already created a reflection for this user today
+          const todayStart = new Date();
+          todayStart.setUTCHours(0, 0, 0, 0);
+          const { count: alreadyRan } = await supabase
+            .from("pattern_detections")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("pattern_type", "memory_reflection")
+            .gte("detected_at", todayStart.toISOString());
+
+          if ((alreadyRan ?? 0) > 0) continue;
+
+          // Load up to 30 old active memories
+          const { data: memories } = await supabase
+            .from("memories")
+            .select("key, value, category")
+            .eq("user_id", userId)
+            .eq("status", "active")
+            .lte("created_at", cutoff)
+            .order("created_at", { ascending: false })
+            .limit(30);
+
+          if (!memories || memories.length === 0) continue;
+
+          const memoryText = memories
+            .map((m: { key: string; value: string; category: string }) => {
+              try {
+                return `- [${m.category}] ${m.key}: ${decrypt(m.value)}`;
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean)
+            .join("\n");
+
+          if (!memoryText) continue;
+
+          const cost = await enforceCostGate({ operation: "memory_reflection", userId });
+          if (!cost.allowed) continue;
+
+          const llmRes = await fetch(OPENROUTER_URL, {
+            method: "POST",
+            headers: openRouterHeaders(),
+            body: JSON.stringify({
+              models: UTILITY_MODELS,
+              max_tokens: 60,
+              messages: [
+                { role: "system", content: REFLECTION_SYSTEM },
+                { role: "user", content: memoryText },
+              ],
+            }),
+          });
+
+          if (!llmRes.ok) {
+            await recordCostResult(cost, { success: false });
+            continue;
+          }
+
+          const data = await llmRes.json();
+          await recordCostResult(cost, { ...extractUsage(data), success: true });
+          const suggestion = extractText(data).trim();
+          if (!suggestion || suggestion === "NONE" || suggestion.length < 5) continue;
+
+          await supabase.from("pattern_detections").insert({
+            user_id: userId,
+            pattern_type: "memory_reflection",
+            description: "Memory reflection: unresolved commitment",
+            suggestion,
+            frequency: 1,
+            status: "pending",
+            detected_at: new Date().toISOString(),
+          });
+
+          reflections++;
+        } catch (err) {
+          Sentry.captureException(err, { extra: { userId } });
+          console.error(`[Reflection cron] user ${userId}:`, err);
+        }
+      }
+
+      return NextResponse.json({
+        processed: userIds.length,
+        reflections,
+        ranAt: new Date().toISOString(),
       });
-
-      reflections++;
-    } catch (err) {
-      Sentry.captureException(err, { extra: { userId } });
-      console.error(`[Reflection cron] user ${userId}:`, err);
-    }
-  }
-
-  return NextResponse.json({
-    processed: userIds.length,
-    reflections,
-    ranAt: new Date().toISOString(),
-  });
+    },
+    { schedule: { type: "crontab" as const, value: "30 3 * * *" } }
+  );
 }

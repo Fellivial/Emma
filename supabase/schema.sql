@@ -1039,7 +1039,7 @@ alter table public.pattern_detections add column if not exists shown_at timestam
 -- Extend constraints to cover values the code actually uses
 alter table public.pattern_detections drop constraint if exists pattern_detections_pattern_type_check;
 alter table public.pattern_detections add constraint pattern_detections_pattern_type_check
-  check (pattern_type in ('daily','weekly','tool_sequence','daily_workflow','weekly_workflow','trigger_time','memory_reflection'));
+  check (pattern_type in ('daily','weekly','tool_sequence','daily_workflow','weekly_workflow','trigger_time','memory_reflection','connection_expiry'));
 alter table public.pattern_detections drop constraint if exists pattern_detections_status_check;
 alter table public.pattern_detections add constraint pattern_detections_status_check
   check (status in ('pending','detected','suggested','accepted','dismissed','scheduled','orphaned'));

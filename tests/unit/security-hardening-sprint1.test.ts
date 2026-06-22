@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PRODUCTION_REQUIRED_ENV } from "@/core/env-validation";
 
 const agentSrc = readFileSync(resolve(process.cwd(), "src/app/api/emma/agent/route.ts"), "utf8");
 const unsubSrc = readFileSync(
@@ -167,5 +168,63 @@ describe("HIGH-04: task detail approvals are user-scoped", () => {
       taskDetailSrc.indexOf('.from("approvals")')
     );
     expect(summaryBlock).not.toContain("user_id");
+  });
+});
+
+// ── LB-01 ────────────────────────────────────────────────────────────────────
+
+describe("LB-01: pattern_detections allows connection_expiry pattern type", () => {
+  it("schema.sql constraint includes connection_expiry", () => {
+    expect(schemaSrc).toContain("'connection_expiry'");
+  });
+
+  it("migration file exists and contains connection_expiry", () => {
+    const migSrc = readFileSync(
+      resolve(
+        process.cwd(),
+        "supabase/migrations/20260622000002_pattern_type_connection_expiry.sql"
+      ),
+      "utf8"
+    );
+    expect(migSrc).toContain("connection_expiry");
+  });
+});
+
+// ── CRIT-01 + HIGH-05 ────────────────────────────────────────────────────────
+
+describe("CRIT-01 + HIGH-05: production env validation covers Inngest and email", () => {
+  it("INNGEST_SIGNING_KEY is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("INNGEST_SIGNING_KEY");
+  });
+
+  it("RESEND_API_KEY is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("RESEND_API_KEY");
+  });
+
+  it("EMAIL_FROM is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("EMAIL_FROM");
+  });
+});
+
+// ── CRIT-04 ──────────────────────────────────────────────────────────────────
+
+describe("CRIT-04: instrumentation.ts exists and calls validateProductionEnvironment", () => {
+  const instrSrc = readFileSync(resolve(process.cwd(), "src/instrumentation.ts"), "utf8");
+
+  it("exports a register function", () => {
+    expect(instrSrc).toContain("export async function register");
+  });
+
+  it("imports validateProductionEnvironment", () => {
+    expect(instrSrc).toContain("validateProductionEnvironment");
+  });
+
+  it("throws when validation fails", () => {
+    expect(instrSrc).toContain("throw new Error");
+  });
+
+  it("is a no-op outside production", () => {
+    expect(instrSrc).toContain('process.env.NODE_ENV !== "production"');
+    expect(instrSrc).toMatch(/NODE_ENV.*production.*return|return.*NODE_ENV.*production/s);
   });
 });

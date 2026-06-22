@@ -18,12 +18,15 @@ const validProductionEnv = {
   NEXT_PUBLIC_APP_URL: "https://emma.acme.org",
   UPSTASH_REDIS_REST_URL: "https://cost-limit.upstash.io",
   UPSTASH_REDIS_REST_TOKEN: "upstash-production-token",
+  INNGEST_SIGNING_KEY: "signkey-prod-value",
+  RESEND_API_KEY: "re_prod_value",
+  EMAIL_FROM: "noreply@emma.acme.org",
 };
 
 describe("environment validation", () => {
   it("accepts a complete production environment", () => {
     expect(validateProductionEnvironment(validProductionEnv)).toEqual({ valid: true, issues: [] });
-    expect(PRODUCTION_REQUIRED_ENV).toHaveLength(10);
+    expect(PRODUCTION_REQUIRED_ENV).toHaveLength(13);
   });
 
   it.each([

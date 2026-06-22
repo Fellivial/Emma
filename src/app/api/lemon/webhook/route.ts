@@ -244,12 +244,21 @@ export async function POST(req: NextRequest) {
             orderVariantId === extraPackVariantId &&
             userId
           ) {
+            // Idempotency: skip if this order has already been processed
+            const purchaseRef = String(event.data?.id || "");
+            const { data: existingPack } = await supabase
+              .from("extra_packs")
+              .select("id")
+              .eq("purchase_ref", purchaseRef)
+              .maybeSingle();
+            if (existingPack) break;
+
             await supabase.from("extra_packs").insert({
               user_id: userId,
               tokens_granted: 500_000,
               tokens_remaining: 500_000,
               valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-              purchase_ref: String(event.data?.id || ""),
+              purchase_ref: purchaseRef,
             });
 
             audit({
