@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PRODUCTION_REQUIRED_ENV } from "@/core/env-validation";
 
 const agentSrc = readFileSync(resolve(process.cwd(), "src/app/api/emma/agent/route.ts"), "utf8");
 const unsubSrc = readFileSync(
@@ -186,5 +187,21 @@ describe("LB-01: pattern_detections allows connection_expiry pattern type", () =
       "utf8"
     );
     expect(migSrc).toContain("connection_expiry");
+  });
+});
+
+// ── CRIT-01 + HIGH-05 ────────────────────────────────────────────────────────
+
+describe("CRIT-01 + HIGH-05: production env validation covers Inngest and email", () => {
+  it("INNGEST_SIGNING_KEY is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("INNGEST_SIGNING_KEY");
+  });
+
+  it("RESEND_API_KEY is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("RESEND_API_KEY");
+  });
+
+  it("EMAIL_FROM is in PRODUCTION_REQUIRED_ENV", () => {
+    expect(PRODUCTION_REQUIRED_ENV).toContain("EMAIL_FROM");
   });
 });
