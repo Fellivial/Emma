@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { UTILITY_MODELS } from "@/core/models";
 import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
+import { sanitiseInput } from "@/core/security/sanitise";
 
 const adapter = new WhatsAppAdapter();
 
@@ -53,7 +54,10 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    if (clientId && supabase) {
+    if (!clientId) {
+      return NextResponse.json({ error: "Missing client_id" }, { status: 400 });
+    }
+    if (supabase) {
       const { data: clientRow } = await supabase
         .from("clients")
         .select("id")
@@ -113,6 +117,13 @@ async function replyToWhatsApp(
   supabase: any,
   windowExpiresAt: string
 ): Promise<void> {
+  const sanitised = sanitiseInput(inboundText);
+  if (sanitised.blocked) {
+    console.warn("[WhatsApp reply] Blocked injection attempt from", fromNumber);
+    return;
+  }
+  const safeText = sanitised.clean;
+
   // Load last 15 messages for this number (oldest first after reverse)
   const { data: history } = await supabase
     .from("ingested_whatsapp")
@@ -132,8 +143,8 @@ async function replyToWhatsApp(
     .filter((m) => m.content);
 
   // Guarantee the current inbound is the last user turn
-  if (!messages.length || messages[messages.length - 1].content !== inboundText) {
-    messages.push({ role: "user", content: inboundText });
+  if (!messages.length || messages[messages.length - 1].content !== safeText) {
+    messages.push({ role: "user", content: safeText });
   }
 
   let replyText = "";
