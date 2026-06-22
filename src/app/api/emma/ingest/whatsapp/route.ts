@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { WhatsAppAdapter } from "@/core/integrations/whatsapp";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { UTILITY_MODELS } from "@/core/models";
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
           try {
             await replyToWhatsApp(message.from, message.text, clientId, supabase, windowExpiresAt);
           } catch (err) {
+            Sentry.captureException(err, { extra: { fromNumber: message.from } });
             console.error("[WhatsApp reply] Unhandled error:", err);
           }
         });

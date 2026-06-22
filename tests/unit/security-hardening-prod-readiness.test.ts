@@ -100,3 +100,26 @@ describe("HIGH-01: Sentry.withMonitor on all 7 remaining cron routes", () => {
     });
   }
 });
+
+// ── HIGH-06 ──────────────────────────────────────────────────────────────────
+
+describe("HIGH-06: WhatsApp reply errors captured in Sentry", () => {
+  const waSrc = readFileSync(
+    resolve(process.cwd(), "src/app/api/emma/ingest/whatsapp/route.ts"),
+    "utf8"
+  );
+
+  it("Sentry.captureException is called in the after() catch block", () => {
+    const afterBlock = waSrc.slice(waSrc.indexOf("after(async"));
+    expect(afterBlock).toContain("Sentry.captureException");
+  });
+
+  it("captures fromNumber for context without logging message contents", () => {
+    const catchBlock = waSrc.slice(waSrc.indexOf("} catch (err)"));
+    expect(catchBlock).toContain("fromNumber");
+    expect(catchBlock).toContain("Sentry.captureException");
+    // Ensure catch block doesn't capture message.text
+    const beforeEndCatch = catchBlock.slice(0, catchBlock.indexOf("});"));
+    expect(beforeEndCatch).not.toContain("message.text");
+  });
+});
