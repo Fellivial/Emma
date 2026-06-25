@@ -8,8 +8,11 @@ import { UTILITY_MODELS } from "@/core/models";
 import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import { sanitiseInput } from "@/core/security/sanitise";
+import { checkDistributedRateLimit } from "@/lib/ratelimit";
 
 const adapter = new WhatsAppAdapter();
+export const WHATSAPP_SENDER_RATE_LIMIT = 4;
+export const WHATSAPP_SENDER_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -111,6 +114,16 @@ const WA_SYSTEM_PROMPT =
   "You are Emma, a concise AI assistant replying via WhatsApp. " +
   "Keep responses brief (1-3 short paragraphs). Plain text only — no markdown headers or bold.";
 
+async function checkWhatsAppSenderRateLimit(fromNumber: string, clientId: string | null) {
+  const senderHash = crypto.createHash("sha256").update(fromNumber).digest("hex");
+  return checkDistributedRateLimit({
+    key: `${clientId ?? "unknown"}:${senderHash}`,
+    namespace: "whatsapp_sender",
+    limit: WHATSAPP_SENDER_RATE_LIMIT,
+    windowSeconds: WHATSAPP_SENDER_RATE_WINDOW_SECONDS,
+  });
+}
+
 async function replyToWhatsApp(
   fromNumber: string,
   inboundText: string,
@@ -125,6 +138,18 @@ async function replyToWhatsApp(
     return;
   }
   const safeText = sanitised.clean;
+
+  try {
+    const senderLimit = await checkWhatsAppSenderRateLimit(fromNumber, clientId);
+    if (!senderLimit.allowed) {
+      console.warn("[WhatsApp reply] Sender rate limited");
+      return;
+    }
+  } catch (err) {
+    Sentry.captureException(err);
+    console.error("[WhatsApp reply] Sender rate limit unavailable");
+    return;
+  }
 
   // Load last 15 messages for this number (oldest first after reverse)
   const { data: history } = await supabase
