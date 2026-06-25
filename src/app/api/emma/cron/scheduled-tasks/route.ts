@@ -5,6 +5,12 @@ import { CronExpressionParser } from "cron-parser";
 import { runAgentLoop, type AgentTask } from "@/core/agent-loop";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 
+export const maxDuration = 60;
+
+export const SCHEDULED_TASK_BATCH_SIZE = 1;
+export const SCHEDULED_TASK_SAFE_RUNTIME_MS = 45_000;
+export const SCHEDULED_TASK_RETRY_LEASE_MS = 10 * 60_000;
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,15 +57,16 @@ export async function GET(req: NextRequest) {
     async () => {
       try {
         const now = new Date().toISOString();
+        const startedAt = Date.now();
 
-        // Fetch due tasks (batch of 10 — limit to prevent timeout)
+        // Fetch a tiny batch to keep each serverless invocation bounded.
         const { data: dueTasks, error: fetchErr } = await supabase
           .from("scheduled_tasks")
           .select("*")
           .eq("enabled", true)
           .lte("next_run_at", now)
           .order("next_run_at", { ascending: true })
-          .limit(10);
+          .limit(SCHEDULED_TASK_BATCH_SIZE);
 
         if (fetchErr || !dueTasks || dueTasks.length === 0) {
           return NextResponse.json({ processed: 0 });
@@ -71,6 +78,11 @@ export async function GET(req: NextRequest) {
 
         for (const scheduled of dueTasks) {
           try {
+            if (Date.now() - startedAt > SCHEDULED_TASK_SAFE_RUNTIME_MS) {
+              skipped++;
+              continue;
+            }
+
             // Check rate limit
             const rateCheck = await checkRateLimit(scheduled.client_id);
             if (!rateCheck.allowed) {
@@ -91,6 +103,19 @@ export async function GET(req: NextRequest) {
               triggerType: "cron",
               triggerSource: `scheduled:${scheduled.id}`,
             };
+
+            const leaseResult = await supabase
+              .from("scheduled_tasks")
+              .update({
+                next_run_at: new Date(Date.now() + SCHEDULED_TASK_RETRY_LEASE_MS).toISOString(),
+              })
+              .eq("id", scheduled.id);
+            if (leaseResult.error) {
+              Sentry.captureException(leaseResult.error, { extra: { taskId: scheduled.id } });
+              console.error(`[Cron:Scheduled] Failed to lease task ${scheduled.id}:`, leaseResult.error);
+              failed++;
+              continue;
+            }
 
             // Run agent loop
             const result = await runAgentLoop(task);

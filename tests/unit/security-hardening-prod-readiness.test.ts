@@ -123,3 +123,81 @@ describe("HIGH-06: WhatsApp reply errors captured in Sentry", () => {
     expect(beforeEndCatch).not.toContain("message.text");
   });
 });
+
+describe("HIGH-03: scheduled task cron stays within timeout budget", () => {
+  const scheduledSrc = readFileSync(
+    resolve(process.cwd(), "src/app/api/emma/cron/scheduled-tasks/route.ts"),
+    "utf8"
+  );
+
+  it("processes a single scheduled task per cron invocation", () => {
+    expect(scheduledSrc).toContain("SCHEDULED_TASK_BATCH_SIZE = 1");
+    expect(scheduledSrc).toContain(".limit(SCHEDULED_TASK_BATCH_SIZE)");
+  });
+
+  it("claims a scheduled task before running the agent loop", () => {
+    const leaseIdx = scheduledSrc.indexOf("const leaseResult = await supabase");
+    const runIdx = scheduledSrc.indexOf("await runAgentLoop(task)");
+    expect(leaseIdx).toBeGreaterThan(-1);
+    expect(runIdx).toBeGreaterThan(-1);
+    expect(leaseIdx).toBeLessThan(runIdx);
+  });
+
+  it("checks the lease update result before running the agent loop", () => {
+    const leaseCheckIdx = scheduledSrc.indexOf("if (leaseResult.error)");
+    const runIdx = scheduledSrc.indexOf("await runAgentLoop(task)");
+    expect(leaseCheckIdx).toBeGreaterThan(-1);
+    expect(runIdx).toBeGreaterThan(-1);
+    expect(leaseCheckIdx).toBeLessThan(runIdx);
+  });
+
+  it("does not execute the agent loop when the lease write fails", () => {
+    const leaseFailureBlock = scheduledSrc.slice(
+      scheduledSrc.indexOf("if (leaseResult.error)"),
+      scheduledSrc.indexOf("await runAgentLoop(task)")
+    );
+    expect(leaseFailureBlock).toContain("Sentry.captureException");
+    expect(leaseFailureBlock).toContain("failed++");
+    expect(leaseFailureBlock).toContain("continue");
+  });
+
+  it("checks elapsed runtime before starting task execution", () => {
+    const elapsedIdx = scheduledSrc.indexOf("Date.now() - startedAt");
+    const rateIdx = scheduledSrc.indexOf("await checkRateLimit");
+    expect(elapsedIdx).toBeGreaterThan(-1);
+    expect(rateIdx).toBeGreaterThan(-1);
+    expect(elapsedIdx).toBeLessThan(rateIdx);
+  });
+});
+
+describe("HIGH-08: WhatsApp sender rate limit ordering", () => {
+  const waSrc = readFileSync(
+    resolve(process.cwd(), "src/app/api/emma/ingest/whatsapp/route.ts"),
+    "utf8"
+  );
+
+  it("uses the distributed rate-limit infrastructure for per-sender limits", () => {
+    expect(waSrc).toContain("checkDistributedRateLimit");
+    expect(waSrc).toContain('namespace: "whatsapp_sender"');
+    expect(waSrc).toContain("WHATSAPP_SENDER_RATE_LIMIT");
+  });
+
+  it("hashes sender numbers before constructing the rate-limit key", () => {
+    expect(waSrc).toContain('createHash("sha256").update(fromNumber)');
+  });
+
+  it("checks sender rate before history loading, cost gate, and LLM fetch", () => {
+    const replyFnBody = waSrc.slice(waSrc.indexOf("async function replyToWhatsApp"));
+    const senderLimitIdx = replyFnBody.indexOf("checkWhatsAppSenderRateLimit");
+    const historyIdx = replyFnBody.indexOf('.from("ingested_whatsapp")');
+    const costIdx = replyFnBody.indexOf("enforceCostGate");
+    const fetchIdx = replyFnBody.indexOf("fetch(OPENROUTER_URL");
+    expect(senderLimitIdx).toBeGreaterThan(-1);
+    expect(historyIdx).toBeGreaterThan(-1);
+    expect(costIdx).toBeGreaterThan(-1);
+    expect(fetchIdx).toBeGreaterThan(-1);
+    expect(senderLimitIdx).toBeLessThan(historyIdx);
+    expect(senderLimitIdx).toBeLessThan(costIdx);
+    expect(senderLimitIdx).toBeLessThan(fetchIdx);
+  });
+});
