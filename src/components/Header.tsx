@@ -12,6 +12,7 @@ import {
   CreditCard,
   Plug,
   Cpu,
+  LifeBuoy,
 } from "lucide-react";
 import type { PersonaId, EmotionState, UserProfile } from "@/types/emma";
 import {
@@ -68,7 +69,7 @@ export function Header(props: HeaderProps) {
             </span>
           </div>
           <p className="text-[10px] font-light text-emma-200/25 uppercase tracking-[0.15em]">
-            Workspace Agent
+            AI Companion
           </p>
         </div>
       </div>
@@ -172,6 +173,12 @@ export function Header(props: HeaderProps) {
                 <Link href="/settings/billing" className="flex items-center gap-2">
                   <CreditCard size={13} />
                   Billing
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/support" className="flex items-center gap-2">
+                  <LifeBuoy size={13} />
+                  Support
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>

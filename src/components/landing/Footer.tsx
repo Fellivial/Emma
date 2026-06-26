@@ -4,6 +4,13 @@ const FOOTER_LINKS = [
   { label: "Capabilities", href: "#capabilities" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
+  { label: "Billing FAQ", href: "/billing-faq" },
+];
+
+const RESOURCE_LINKS = [
+  { label: "Beta", href: "/beta" },
+  { label: "Known Limitations", href: "/known-limitations" },
+  { label: "Support", href: "/support" },
 ];
 
 const LEGAL_LINKS = [
@@ -25,12 +32,12 @@ export default function Footer() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr auto auto",
+          gridTemplateColumns: "1fr auto auto auto",
           gap: "48px",
           padding: "40px 40px",
           alignItems: "start",
         }}
-        className="md:grid-cols-[1fr_auto_auto] grid-cols-1"
+        className="md:grid-cols-[1fr_auto_auto_auto] grid-cols-1"
       >
         {/* Brand */}
         <div>
@@ -76,6 +83,24 @@ export default function Footer() {
             >
               {link.label}
             </a>
+          ))}
+        </div>
+
+        {/* Resource links */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {RESOURCE_LINKS.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              style={{
+                fontFamily: "var(--font-l-body)",
+                fontSize: "13px",
+                color: "var(--l-muted)",
+                textDecoration: "none",
+              }}
+            >
+              {link.label}
+            </Link>
           ))}
         </div>
 
@@ -140,7 +165,7 @@ export default function Footer() {
             letterSpacing: "0.08em",
           }}
         >
-          All systems <span style={{ color: "var(--l-green)" }}>online</span>
+          <span style={{ color: "var(--l-green)" }}>Beta</span> service
         </span>
       </div>
     </footer>
