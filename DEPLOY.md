@@ -190,6 +190,20 @@ vercel logs emma.yourdomain.com --follow
 # Dashboard → Logs → API / Auth / Database
 ```
 
+## Staging Setup for Closed Beta Validation
+
+Before inviting closed beta users, complete the staging setup runbook and hosted validation checklist:
+
+- [Runbook: Staging Environment Setup](docs/runbook-staging-environment-setup.md)
+- [Checklist: Hosted Staging Validation](docs/checklist-staging-validation.md)
+- [.env.staging.example](.env.staging.example)
+
+Use the local preflight command to check variable presence without printing secret values or contacting providers:
+
+```bash
+npm run check:staging-env -- .env.staging
+```
+
 ## Environment Variable Reference
 
 | Variable                                    | Required         | Where                                                                             |
