@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
+import { ensureClientMembership } from "@/core/client-membership";
 import { getPlanByLemonVariant, FREE_TIER_CONFIG } from "@/core/pricing";
 import { audit } from "@/core/security/audit";
 import { getClientIp } from "@/lib/get-client-ip";
@@ -88,10 +89,21 @@ export async function POST(req: NextRequest) {
         cardBrand: attrs.card_brand ?? null,
         cardLastFour: attrs.card_last_four ?? null,
         status: attrs.status ?? null,
+        urls: attrs.urls ?? null,
       }
     : null;
 
   if (!userId) {
+    Sentry.captureMessage("Lemon webhook missing user_id", {
+      level: "warning",
+      extra: {
+        eventName,
+        lemonEventId: String(event.data?.id || ""),
+        variantId: variantId || null,
+        orderId: attrs?.order_id ?? null,
+        subscriptionId: attrs?.subscription_id ?? null,
+      },
+    });
     console.warn("[Lemon Webhook] No user_id in custom_data");
     return NextResponse.json({ received: true });
   }
@@ -108,106 +120,8 @@ export async function POST(req: NextRequest) {
         const plan = getPlanByLemonVariant(variantId);
 
         if (plan && isActive) {
-          const { data: membership } = await supabase
-            .from("client_members")
-            .select("client_id")
-            .eq("user_id", userId)
-            .single();
+          const membership = await ensureClientMembership(supabase, { userId });
 
-          if (membership) {
-            await supabase
-              .from("clients")
-              .update({
-                plan_id: plan.id,
-                token_budget_monthly: plan.tokenBudgetMonthly,
-                token_budget_daily: plan.tokenBudgetDaily,
-                message_limit_daily: plan.messageLimitDaily,
-                tools_enabled: plan.toolsEnabled,
-                ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", membership.client_id);
-
-            audit({
-              userId,
-              action: "write",
-              resource: "billing",
-              reason: `${eventName}: plan activated (variant ${variantId})`,
-              ip: getClientIp(req),
-            }).catch(() => {});
-          }
-        }
-        break;
-      }
-
-      // ── Subscription Cancelled ──────────────────────────────────────────
-      // Subscription remains active until billing period ends — do not downgrade here.
-      // Actual downgrade fires on subscription_expired.
-      case "subscription_cancelled": {
-        console.warn(
-          "[Lemon Webhook] subscription_cancelled for user",
-          userId,
-          "— awaiting subscription_expired to downgrade"
-        );
-        break;
-      }
-
-      // ── Subscription Expired ────────────────────────────────────────────
-      case "subscription_expired": {
-        const { data: membership } = await supabase
-          .from("client_members")
-          .select("client_id")
-          .eq("user_id", userId)
-          .single();
-
-        if (membership) {
-          await supabase
-            .from("clients")
-            .update({
-              plan_id: "free",
-              token_budget_monthly: FREE_TIER_CONFIG.tokenBudgetMonthly,
-              token_budget_daily: FREE_TIER_CONFIG.tokenBudgetDaily,
-              message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
-              tools_enabled: FREE_TIER_CONFIG.toolsEnabled,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", membership.client_id);
-        }
-        break;
-      }
-
-      // ── Payment Failed ──────────────────────────────────────────────────
-      case "subscription_payment_failed": {
-        const { data: membership } = await supabase
-          .from("client_members")
-          .select("client_id")
-          .eq("user_id", userId)
-          .single();
-
-        if (membership) {
-          // Grace period: reduce to free daily limit until payment recovers
-          await supabase
-            .from("clients")
-            .update({
-              message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", membership.client_id);
-        }
-        break;
-      }
-
-      // ── Payment Recovered ───────────────────────────────────────────────
-      // Reverses the grace-period limit reduction from subscription_payment_failed.
-      case "subscription_payment_recovered": {
-        const plan = getPlanByLemonVariant(variantId);
-        const { data: membership } = await supabase
-          .from("client_members")
-          .select("client_id")
-          .eq("user_id", userId)
-          .single();
-
-        if (membership && plan) {
           await supabase
             .from("clients")
             .update({
@@ -219,7 +133,94 @@ export async function POST(req: NextRequest) {
               ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
               updated_at: new Date().toISOString(),
             })
-            .eq("id", membership.client_id);
+            .eq("id", membership.clientId);
+
+          audit({
+            userId,
+            action: "write",
+            resource: "billing",
+            reason: `${eventName}: plan activated (variant ${variantId})`,
+            ip: getClientIp(req),
+          }).catch(() => {});
+        }
+        break;
+      }
+
+      // ── Subscription Cancelled ──────────────────────────────────────────
+      // Subscription remains active until billing period ends — do not downgrade here.
+      // Actual downgrade fires on subscription_expired.
+      case "subscription_cancelled": {
+        const membership = await ensureClientMembership(supabase, { userId });
+        await supabase
+          .from("clients")
+          .update({
+            ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", membership.clientId);
+
+        console.warn(
+          "[Lemon Webhook] subscription_cancelled for user",
+          userId,
+          "- awaiting subscription_expired to downgrade"
+        );
+        break;
+      }
+
+      // ── Subscription Expired ────────────────────────────────────────────
+      case "subscription_expired": {
+        const membership = await ensureClientMembership(supabase, { userId });
+
+        await supabase
+          .from("clients")
+          .update({
+            plan_id: "free",
+            token_budget_monthly: FREE_TIER_CONFIG.tokenBudgetMonthly,
+            token_budget_daily: FREE_TIER_CONFIG.tokenBudgetDaily,
+            message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
+            tools_enabled: FREE_TIER_CONFIG.toolsEnabled,
+            ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", membership.clientId);
+        break;
+      }
+
+      // ── Payment Failed ──────────────────────────────────────────────────
+      case "subscription_payment_failed": {
+        const membership = await ensureClientMembership(supabase, { userId });
+
+        // Grace period: reduce to free daily limit until payment recovers
+        await supabase
+          .from("clients")
+          .update({
+            message_limit_daily: FREE_TIER_CONFIG.messageLimitDaily,
+            ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", membership.clientId);
+        break;
+      }
+
+      // ── Payment Recovered ───────────────────────────────────────────────
+      // Reverses the grace-period limit reduction from subscription_payment_failed.
+      case "subscription_payment_recovered": {
+        const plan = getPlanByLemonVariant(variantId);
+        const membership = await ensureClientMembership(supabase, { userId });
+
+        if (plan) {
+          await supabase
+            .from("clients")
+            .update({
+              plan_id: plan.id,
+              token_budget_monthly: plan.tokenBudgetMonthly,
+              token_budget_daily: plan.tokenBudgetDaily,
+              message_limit_daily: plan.messageLimitDaily,
+              tools_enabled: plan.toolsEnabled,
+              ...(lemonMeta ? { lemon_meta: lemonMeta } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", membership.clientId);
 
           audit({
             userId,
