@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
-import { checkUsage } from "@/core/usage-enforcer";
+import { normaliseBillingState, type LemonBillingMeta } from "@/core/billing-state";
+import { ensureClientMembership } from "@/core/client-membership";
 import { getPlan } from "@/core/pricing";
+import { checkUsage } from "@/core/usage-enforcer";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,17 +36,17 @@ export async function GET() {
         { status: 501 }
       );
 
-    // Get user's plan
-    const { data: membership } = await supabase
-      .from("client_members")
-      .select("client_id, clients(plan_id)")
-      .eq("user_id", user.id)
+    // Ensure billing and usage always have a client row to read from.
+    const membership = await ensureClientMembership(supabase, { userId: user.id });
+    const { data: client } = await supabase
+      .from("clients")
+      .select("plan_id, lemon_meta")
+      .eq("id", membership.clientId)
       .single();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const planId = (membership as any)?.clients?.plan_id || "free";
+    const planId = client?.plan_id || "free";
     const plan = getPlan(planId);
-
+    const billing = normaliseBillingState(planId, client?.lemon_meta as LemonBillingMeta | null);
     // Run usage check and pack detail query in parallel — both are independent of each other
     const [result, { data: packs }] = await Promise.all([
       checkUsage(user.id, planId),
@@ -85,6 +87,7 @@ export async function GET() {
         })),
       },
       planId,
+      billing,
       limits: {
         daily: { tokens: plan?.tokenBudgetDaily || 0, messages: plan?.messageLimitDaily || 0 },
         weekly: { tokens: plan?.tokenBudgetWeekly || 0, messages: plan?.messageLimitWeekly || 0 },

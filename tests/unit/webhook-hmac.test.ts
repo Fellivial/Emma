@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import crypto from "crypto";
 import { NextRequest } from "next/server";
+const mockSentry = vi.hoisted(() => ({
+  captureMessage: vi.fn(),
+  captureException: vi.fn(),
+}));
 
 // Minimal Supabase mock — webhook tests need a configured DB to reach HMAC check
 const mockSupabase = vi.hoisted(() => ({
@@ -20,6 +24,8 @@ const mockSupabase = vi.hoisted(() => ({
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => mockSupabase),
 }));
+
+vi.mock("@sentry/nextjs", () => mockSentry);
 
 vi.mock("@/core/security/audit", () => ({
   audit: vi.fn().mockResolvedValue(undefined),
@@ -111,13 +117,39 @@ describe("LemonSqueezy webhook — HMAC verification", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 200 with received:true when signature is valid and user_id absent", async () => {
-    const req = makeRequest(minimalEvent, validHmac(minimalEvent));
+  it("returns 200 with received:true and captures safe context when user_id is absent", async () => {
+    const payload = JSON.stringify({
+      meta: { event_name: "subscription_created", custom_data: {} },
+      data: {
+        id: "sub_123",
+        attributes: {
+          status: "active",
+          variant_id: "999",
+          order_id: "order_123",
+          subscription_id: "sub_attr_123",
+          user_email: "private@example.com",
+        },
+      },
+    });
+    const req = makeRequest(payload, validHmac(payload));
     const res = await POST(req);
-    // No user_id in custom_data → early-return 200
+
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.received).toBe(true);
+    expect(mockSentry.captureMessage).toHaveBeenCalledWith("Lemon webhook missing user_id", {
+      level: "warning",
+      extra: {
+        eventName: "subscription_created",
+        lemonEventId: "sub_123",
+        variantId: "999",
+        orderId: "order_123",
+        subscriptionId: "sub_attr_123",
+      },
+    });
+    expect(JSON.stringify(mockSentry.captureMessage.mock.calls)).not.toContain(
+      "private@example.com"
+    );
   });
 
   it("accepts valid signature for a different payload", async () => {

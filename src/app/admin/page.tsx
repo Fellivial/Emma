@@ -9,6 +9,9 @@ import {
   Zap,
   TrendingUp,
   Database,
+  Search,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Client {
@@ -81,7 +84,7 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState<FeedbackStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"clients" | "waitlist">("clients");
+  const [activeTab, setActiveTab] = useState<"clients" | "waitlist" | "diagnostics">("clients");
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [wlStats, setWlStats] = useState<WaitlistStats | null>(null);
   const [capInput, setCapInput] = useState("");
@@ -90,6 +93,13 @@ export default function AdminPage() {
   const [wlError, setWlError] = useState<string | null>(null);
   const [capSaving, setCapSaving] = useState(false);
   const [capSaved, setCapSaved] = useState(false);
+  const [diagnosticLookupType, setDiagnosticLookupType] = useState<"email" | "userId" | "clientId">(
+    "email"
+  );
+  const [diagnosticLookup, setDiagnosticLookup] = useState("");
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin")
@@ -142,6 +152,29 @@ export default function AdminPage() {
     }
   }
 
+  async function fetchDiagnostics() {
+    const value = diagnosticLookup.trim();
+    if (!value) return;
+    setDiagnosticsLoading(true);
+    setDiagnosticsError(null);
+    try {
+      const params = new URLSearchParams({ [diagnosticLookupType]: value });
+      const res = await fetch(`/api/admin/diagnostics?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setDiagnostics(null);
+        setDiagnosticsError(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      setDiagnostics(data);
+    } catch (err) {
+      setDiagnostics(null);
+      setDiagnosticsError(String(err));
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }
+
   async function inviteUser(id: string) {
     setInviting(id);
     try {
@@ -183,6 +216,11 @@ export default function AdminPage() {
     setTimeout(() => setCapSaved(false), 1500);
   }
 
+  const userDiagnostics = asRecord(diagnostics?.userDiagnostics);
+  const billingDiagnostics = asRecord(diagnostics?.billingDiagnostics);
+  const aiDiagnostics = asRecord(diagnostics?.aiDiagnostics);
+  const operationalDiagnostics = asRecord(diagnostics?.operationalDiagnostics);
+  const supportSummary = asRecord(diagnostics?.supportSummary);
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emma-950 via-emma-900 to-emma-950 font-sans">
@@ -217,7 +255,7 @@ export default function AdminPage() {
 
       <div className="border-b border-surface-border bg-emma-950/60">
         <div className="max-w-7xl mx-auto px-6 flex">
-          {(["clients", "waitlist"] as const).map((tab) => (
+          {(["clients", "diagnostics", "waitlist"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -350,6 +388,135 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      ) : activeTab === "diagnostics" ? (
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="rounded-xl border border-surface-border bg-surface p-5 mb-6">
+            <div className="flex items-center gap-2 mb-4 text-emma-300/70">
+              <ShieldCheck size={16} />
+              <h2 className="text-xs font-medium uppercase tracking-widest">Support Diagnostics</h2>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[160px_1fr_auto]">
+              <select
+                value={diagnosticLookupType}
+                onChange={(e) =>
+                  setDiagnosticLookupType(e.target.value as "email" | "userId" | "clientId")
+                }
+                className="bg-emma-950 border border-surface-border rounded-md px-3 py-2 text-xs text-emma-200/70 focus:outline-none focus:border-emma-300/40"
+              >
+                <option value="email">Email</option>
+                <option value="userId">User ID</option>
+                <option value="clientId">Client ID</option>
+              </select>
+              <input
+                value={diagnosticLookup}
+                onChange={(e) => setDiagnosticLookup(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") fetchDiagnostics();
+                }}
+                placeholder="Lookup value"
+                className="bg-emma-950 border border-surface-border rounded-md px-3 py-2 text-xs text-emma-200/70 focus:outline-none focus:border-emma-300/40"
+              />
+              <button
+                onClick={fetchDiagnostics}
+                disabled={diagnosticsLoading || !diagnosticLookup.trim()}
+                className="min-h-[38px] px-4 rounded-md bg-emma-300/10 text-emma-300/70 hover:bg-emma-300/20 disabled:opacity-40 transition-colors flex items-center justify-center gap-2 text-xs"
+              >
+                <Search size={14} />
+                {diagnosticsLoading ? "Checking" : "Lookup"}
+              </button>
+            </div>
+            {diagnosticsError && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-red-300/70">
+                <AlertTriangle size={14} />
+                {diagnosticsError}
+              </div>
+            )}
+          </div>
+
+          {diagnostics ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <DiagnosticSection title="Support Summary">
+                <DiagnosticList label="Why can't use Emma" value={supportSummary.whyCantUseEmma} />
+                <DiagnosticList label="Why still Free" value={supportSummary.whyStillFree} />
+                <DiagnosticList label="Why tools fail" value={supportSummary.whyCantAccessTools} />
+                <DiagnosticLine label="Over budget" value={supportSummary.areTheyOverBudget} />
+                <DiagnosticLine label="Billing healthy" value={supportSummary.isBillingHealthy} />
+                <DiagnosticLine label="Recent failures" value={supportSummary.hasRecentFailures} />
+              </DiagnosticSection>
+
+              <DiagnosticSection title="User Diagnostics">
+                <DiagnosticLine label="Account" value={userDiagnostics.accountStatus} />
+                <DiagnosticLine label="Waitlist" value={userDiagnostics.waitlistStatus} />
+                <DiagnosticLine label="Onboarding" value={userDiagnostics.onboardingComplete} />
+                <DiagnosticLine label="Plan" value={userDiagnostics.currentPlan} />
+                <DiagnosticLine label="Subscription" value={userDiagnostics.subscriptionStatus} />
+                <DiagnosticLine label="Token balance" value={userDiagnostics.tokenBalance} />
+                <DiagnosticLine label="Memory enabled" value={userDiagnostics.memoryEnabled} />
+              </DiagnosticSection>
+
+              <DiagnosticSection title="Billing Diagnostics">
+                <DiagnosticLine label="Lemon customer" value={billingDiagnostics.lemonCustomerId} />
+                <DiagnosticLine label="Subscription ID" value={billingDiagnostics.subscriptionId} />
+                <DiagnosticLine label="Status" value={billingDiagnostics.subscriptionStatus} />
+                <DiagnosticLine label="Renewal" value={billingDiagnostics.renewalDate} />
+                <DiagnosticLine label="Cancellation" value={billingDiagnostics.cancellationState} />
+                <DiagnosticLine
+                  label="Payment recovery"
+                  value={billingDiagnostics.paymentRecoveryState}
+                />
+                <DiagnosticLine
+                  label="Extra pack tokens"
+                  value={billingDiagnostics.extraPackTokenBalance}
+                />
+              </DiagnosticSection>
+
+              <DiagnosticSection title="AI Diagnostics">
+                <DiagnosticLine
+                  label="Conversations"
+                  value={aiDiagnostics.recentConversationCount}
+                />
+                <DiagnosticLine label="Messages" value={aiDiagnostics.recentMessageCount} />
+                <DiagnosticLine
+                  label="OpenRouter failures"
+                  value={arrayLength(aiDiagnostics.recentOpenRouterFailures)}
+                />
+                <DiagnosticLine
+                  label="Approval requests"
+                  value={arrayLength(aiDiagnostics.recentToolApprovalRequests)}
+                />
+                <DiagnosticLine
+                  label="Cost-gate blocks"
+                  value={aiDiagnostics.recentCostGateBlocks}
+                />
+              </DiagnosticSection>
+
+              <DiagnosticSection title="Operational Diagnostics">
+                <DiagnosticLine label="Last login" value={operationalDiagnostics.lastLogin} />
+                <DiagnosticLine label="Last activity" value={operationalDiagnostics.lastActivity} />
+                <DiagnosticLine
+                  label="Audit entries"
+                  value={arrayLength(operationalDiagnostics.recentAuditLogEntries)}
+                />
+                <DiagnosticLine
+                  label="Action entries"
+                  value={arrayLength(operationalDiagnostics.recentActionLogEntries)}
+                />
+                <DiagnosticLine
+                  label="MCP enabled"
+                  value={asRecord(operationalDiagnostics.mcp).enabled}
+                />
+                <DiagnosticLine
+                  label="WhatsApp linked"
+                  value={operationalDiagnostics.whatsappLinked}
+                />
+              </DiagnosticSection>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-surface-border bg-surface p-10 text-center text-xs text-emma-200/25">
+              Look up a beta user to generate a read-only support summary.
             </div>
           )}
         </div>
@@ -678,6 +845,65 @@ function WaitlistBadge({ status }: { status: string }) {
   );
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function arrayLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function displayValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return value.toLocaleString();
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function DiagnosticSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-surface-border bg-surface p-5">
+      <h3 className="text-xs font-medium text-emma-200/30 uppercase tracking-widest mb-3">
+        {title}
+      </h3>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function DiagnosticLine({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-surface-border/40 pb-2 last:border-0 last:pb-0">
+      <span className="text-[11px] text-emma-200/30">{label}</span>
+      <span className="max-w-[65%] text-right text-[11px] text-emma-200/65 font-mono break-words">
+        {displayValue(value)}
+      </span>
+    </div>
+  );
+}
+
+function DiagnosticList({ label, value }: { label: string; value: unknown }) {
+  const rows = Array.isArray(value) ? value.map(displayValue) : [];
+  return (
+    <div className="border-b border-surface-border/40 pb-2 last:border-0 last:pb-0">
+      <div className="text-[11px] text-emma-200/30 mb-1">{label}</div>
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-emma-200/20">-</div>
+      ) : (
+        <div className="space-y-1">
+          {rows.map((row, index) => (
+            <div key={`${label}-${index}`} className="text-[11px] text-emma-200/65">
+              {row}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;

@@ -217,7 +217,7 @@ export function ChatPanel({
               </span>
             </div>
             <p style={{ fontSize: "11px", color: "rgba(232,160,191,0.35)", lineHeight: "1.4" }}>
-              500 extra messages, valid for 30 days
+              500K extra tokens, valid for 30 days
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
               <Link
