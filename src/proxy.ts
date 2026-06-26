@@ -10,6 +10,9 @@ const publicPaths = [
   "/api/waitlist",
   "/api/emma/webhook",
   "/waitlist",
+  "/privacy",
+  "/terms",
+  "/contact",
   "/api/emma/unsubscribe",
 ] as const;
 
@@ -126,6 +129,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Match all routes except static files and Next.js internals
-    "/((?!_next/static|_next/image|favicon.ico|live2d|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|live2d|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

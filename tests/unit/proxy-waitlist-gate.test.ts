@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -47,6 +47,19 @@ describe("proxy.ts — waitlist gate structure", () => {
       proxySrc.indexOf("isPublic")
     );
     expect(publicPathsBlock).toContain('"/waitlist"');
+  });
+  it("leaves service worker and legal pages public for beta users", () => {
+    // Regression: closed beta QA found /sw.js was redirected to /login, which browsers reject.
+    const publicPathsBlock = proxySrc.slice(
+      proxySrc.indexOf("publicPaths"),
+      proxySrc.indexOf("isPublic")
+    );
+    const matcherBlock = proxySrc.slice(proxySrc.indexOf("matcher"));
+
+    expect(publicPathsBlock).toContain('"/privacy"');
+    expect(publicPathsBlock).toContain('"/terms"');
+    expect(publicPathsBlock).toContain('"/contact"');
+    expect(matcherBlock).toContain("sw.js");
   });
 });
 
