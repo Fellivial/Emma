@@ -8,6 +8,7 @@ import { PLANS, EXTRA_PACK, type Plan } from "@/core/pricing";
 function BillingPageInner() {
   const [currentPlan, setCurrentPlan] = useState("free");
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const paymentSuccess = searchParams.get("success") === "true";
 
@@ -23,6 +24,7 @@ function BillingPageInner() {
   const handleSubscribe = async (variantId: string) => {
     if (!variantId) return;
     setLoading(variantId);
+    setError(null);
     try {
       const res = await fetch("/api/lemon/checkout", {
         method: "POST",
@@ -32,12 +34,16 @@ function BillingPageInner() {
       const data = await res.json();
       // eslint-disable-next-line react-hooks/immutability
       if (data.url) window.location.href = data.url;
-    } catch {}
+      else setError(data.error || "Checkout is unavailable right now.");
+    } catch {
+      setError("Could not start checkout. Please try again.");
+    }
     setLoading(null);
   };
 
   const handleExtraPack = async () => {
     setLoading("extra_pack");
+    setError(null);
     try {
       const res = await fetch("/api/lemon/checkout", {
         method: "POST",
@@ -46,7 +52,10 @@ function BillingPageInner() {
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
-    } catch {}
+      else setError(data.error || "Extra response packs are unavailable right now.");
+    } catch {
+      setError("Could not start checkout. Please try again.");
+    }
     setLoading(null);
   };
 
@@ -66,6 +75,12 @@ function BillingPageInner() {
           <p className="text-sm text-emerald-300/80">
             Payment confirmed — your plan is now active.
           </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-400/20 bg-red-400/6 px-4 py-3 mb-6">
+          <p className="text-sm text-red-300/80">{error}</p>
         </div>
       )}
 
