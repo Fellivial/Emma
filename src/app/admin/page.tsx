@@ -90,6 +90,7 @@ export default function AdminPage() {
   const [capInput, setCapInput] = useState("");
   const [inviting, setInviting] = useState<string | null>(null);
   const [wlLoading, setWlLoading] = useState(false);
+  const [wlError, setWlError] = useState<string | null>(null);
   const [capSaving, setCapSaving] = useState(false);
   const [capSaved, setCapSaved] = useState(false);
   const [diagnosticLookupType, setDiagnosticLookupType] = useState<"email" | "userId" | "clientId">(
@@ -122,6 +123,7 @@ export default function AdminPage() {
 
   async function fetchWaitlist() {
     setWlLoading(true);
+    setWlError(null);
     try {
       const [listRes, statsRes] = await Promise.all([
         fetch("/api/emma/waitlist-manage", {
@@ -135,11 +137,16 @@ export default function AdminPage() {
           body: JSON.stringify({ action: "stats" }),
         }),
       ]);
-      const { entries } = await listRes.json();
+      const listData = await listRes.json();
       const stats = await statsRes.json();
+      if (!listRes.ok) throw new Error(listData.error || `Waitlist list failed (${listRes.status})`);
+      if (!statsRes.ok) throw new Error(stats.error || `Waitlist stats failed (${statsRes.status})`);
+      const { entries } = listData;
       setWaitlist(entries || []);
       setWlStats(stats);
       setCapInput((prev) => prev || String(stats.maxSpots ?? ""));
+    } catch (err) {
+      setWlError(err instanceof Error ? err.message : "Failed to load waitlist");
     } finally {
       setWlLoading(false);
     }
@@ -171,12 +178,17 @@ export default function AdminPage() {
   async function inviteUser(id: string) {
     setInviting(id);
     try {
-      await fetch("/api/emma/waitlist-manage", {
+      setWlError(null);
+      const res = await fetch("/api/emma/waitlist-manage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invite", waitlistId: id }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Invite failed (${res.status})`);
       await fetchWaitlist();
+    } catch (err) {
+      setWlError(err instanceof Error ? err.message : "Failed to approve user");
     } finally {
       setInviting(null);
     }
@@ -186,14 +198,21 @@ export default function AdminPage() {
     const n = parseInt(capInput, 10);
     if (!n || n < 1) return;
     setCapSaving(true);
-    await fetch("/api/emma/waitlist-manage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_cap", maxUsers: n }),
-    });
-    await fetchWaitlist();
+    setWlError(null);
+    try {
+      const res = await fetch("/api/emma/waitlist-manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_cap", maxUsers: n }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Seat cap failed (${res.status})`);
+      await fetchWaitlist();
+      setCapSaved(true);
+    } catch (err) {
+      setWlError(err instanceof Error ? err.message : "Failed to update seat cap");
+    }
     setCapSaving(false);
-    setCapSaved(true);
     setTimeout(() => setCapSaved(false), 1500);
   }
 
@@ -307,6 +326,12 @@ export default function AdminPage() {
           </div>
 
           {/* ── Waitlist Table ────────────────────────────────────────────── */}
+          {wlError && (
+            <div className="rounded-xl border border-red-400/20 bg-red-400/6 px-4 py-3 mb-4 text-sm text-red-300/80">
+              {wlError}
+            </div>
+          )}
+
           {wlLoading ? (
             <div className="text-center text-sm text-emma-200/20 py-12">Loading waitlist…</div>
           ) : (

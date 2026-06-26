@@ -186,8 +186,7 @@ function WaitlistForm() {
                   No exceptions.
                 </h1>
                 <p className="text-xs font-light text-emma-200/25 leading-relaxed">
-                  Emma is an AI agent that sees, speaks, remembers, and acts — built for one
-                  specific problem in your business.
+                  Emma is an AI companion that sees, speaks, remembers, and acts with you across your day.
                 </p>
               </div>
 

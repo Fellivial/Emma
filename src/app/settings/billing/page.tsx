@@ -75,10 +75,11 @@ function BillingPageInner() {
         body: JSON.stringify({ variantId }),
       });
       const data = await res.json();
-      if (data.url) window.location.assign(data.url);
-      else setError(data.error || "Checkout is temporarily unavailable.");
+      // eslint-disable-next-line react-hooks/immutability
+      if (data.url) window.location.href = data.url;
+      else setError(data.error || "Checkout is unavailable right now.");
     } catch {
-      setError("Checkout is temporarily unavailable.");
+      setError("Could not start checkout. Please try again.");
     }
     setLoading(null);
   };
@@ -93,10 +94,10 @@ function BillingPageInner() {
         body: JSON.stringify({ variantId: process.env.NEXT_PUBLIC_LEMON_VARIANT_EXTRA_PACK }),
       });
       const data = await res.json();
-      if (data.url) window.location.assign(data.url);
-      else setError(data.error || "Extra pack checkout is temporarily unavailable.");
+      if (data.url) window.location.href = data.url;
+      else setError(data.error || "Extra response packs are unavailable right now.");
     } catch {
-      setError("Extra pack checkout is temporarily unavailable.");
+      setError("Could not start checkout. Please try again.");
     }
     setLoading(null);
   };
@@ -124,14 +125,12 @@ function BillingPageInner() {
       )}
 
       {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/6 px-4 py-3 mb-6">
-          <AlertTriangle size={15} className="text-amber-300 shrink-0" />
-          <p className="text-sm text-amber-200/80">{error}</p>
+        <div className="rounded-xl border border-red-400/20 bg-red-400/6 px-4 py-3 mb-6">
+          <p className="text-sm text-red-300/80">{error}</p>
         </div>
       )}
 
-      <BillingStatusPanel plan={current} billing={billing} extraTokens={extraTokens} />
-
+      {/* Plan tiers (Free, Starter, Pro) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
         {plans.map((plan) => (
           <PlanCard

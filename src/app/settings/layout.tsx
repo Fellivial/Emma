@@ -38,6 +38,28 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: "privacy",
+    label: "Data & Privacy",
+    href: "/settings/privacy",
+    icon: (active: boolean) => (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <path
+          d="M8 1.75l5 2v3.6c0 3.2-1.95 5.95-5 6.9-3.05-.95-5-3.7-5-6.9v-3.6l5-2z"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M5.8 8.1l1.35 1.35 3-3"
+          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "persona",
     label: "Persona",
     href: "/settings/persona",
@@ -205,6 +227,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/profile": "Profile",
   "/settings/usage": "Usage",
   "/settings/billing": "Billing",
+  "/settings/privacy": "Data & Privacy",
   "/settings/persona": "Persona",
   "/settings/documents": "Documents",
   "/settings/integrations": "Integrations",
@@ -215,7 +238,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/more": "More",
 };
 
-const MOBILE_NAV_IDS = ["profile", "usage", "billing", "integrations", "tasks"];
+const MOBILE_NAV_IDS = ["profile", "usage", "billing", "privacy", "tasks"];
 const MOBILE_NAV = [
   ...NAV_ITEMS.filter((item) => MOBILE_NAV_IDS.includes(item.id)),
   {
