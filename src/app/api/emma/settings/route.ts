@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { createClient } from "@supabase/supabase-js";
+import { ensureClientMembership } from "@/core/client-membership";
 import { audit } from "@/core/security/audit";
 
 function getServiceSupabase() {
@@ -118,43 +119,20 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!membership) {
-      // No client yet — create one
-      const { data: newClient, error: createErr } = await supabase
-        .from("clients")
-        .insert({
-          slug: `client-${user.id.slice(0, 8)}`,
-          name: body.name || "My Emma",
-          owner_id: user.id,
-          persona_name: body.personaName || "Emma",
-          persona_prompt: body.personaPrompt || null,
-          persona_greeting: body.personaGreeting || null,
-          voice_id: body.voiceId || null,
-          autonomy_tier: body.autonomyTier ?? 2,
-          proactive_vision: body.proactiveVision ?? false,
-        })
-        .select("id")
-        .single();
-
-      if (createErr || !newClient) {
-        return NextResponse.json({ error: "Failed to create client" }, { status: 500 });
-      }
-
-      await supabase.from("client_members").insert({
-        client_id: newClient.id,
-        user_id: user.id,
-        role: "owner",
+      const repaired = await ensureClientMembership(supabase, {
+        userId: user.id,
+        defaults: body,
       });
 
       audit({
         userId: user.id,
         action: "write",
         resource: "client_config",
-        resourceId: newClient.id,
-        reason: "Initial client creation",
+        resourceId: repaired.clientId,
+        reason: repaired.createdClient ? "Initial client creation" : "Client membership repair",
       }).catch((e) => console.error("[audit]", e));
-      return NextResponse.json({ success: true, clientId: newClient.id });
+      return NextResponse.json({ success: true, clientId: repaired.clientId });
     }
-
     // Check permission (owner or admin)
     if (membership.role !== "owner" && membership.role !== "admin") {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });

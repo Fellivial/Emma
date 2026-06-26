@@ -1,7 +1,16 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { lemonSqueezySetup, createCheckout } from "@lemonsqueezy/lemonsqueezy.js";
+import { ensureClientMembership } from "@/core/client-membership";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createSupabaseClient(url, key);
+}
 
 function initLemon() {
   const key = process.env.LEMONSQUEEZY_API_KEY;
@@ -33,6 +42,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No variantId provided" }, { status: 400 });
     }
 
+    const supabase = getSupabase();
+    if (!supabase) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 501 });
+    }
+    await ensureClientMembership(supabase, { userId: user.id });
     const storeId = process.env.LEMONSQUEEZY_STORE_ID;
     if (!storeId) {
       return NextResponse.json({ error: "Store ID not configured" }, { status: 501 });
