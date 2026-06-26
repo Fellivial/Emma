@@ -218,5 +218,7 @@ Optional. Leave unset to rely on Vercel cron only. When set, the `GET /api/innge
 ## Related
 
 - [Tutorial: Getting Started](tutorial-getting-started.md) — minimum setup
+- [Runbook: Staging Environment Setup](runbook-staging-environment-setup.md) — closed beta staging access checklist
+- [Checklist: Hosted Staging Validation](checklist-staging-validation.md) — live validation sign-off checklist
 - [How to: Connect Integrations](howto-connect-integrations.md) — OAuth app setup
 - [How to: Add Billing](howto-add-billing.md) — LemonSqueezy setup
