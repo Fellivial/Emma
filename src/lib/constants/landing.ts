@@ -159,10 +159,10 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Everything in Pro",
       "Unlimited autonomous actions",
       "White-label deployment",
-      "99.9% SLA + dedicated support",
+      "Custom deployment review",
     ],
-    cta: "Contact Us",
-    ctaHref: "/contact",
+    cta: "Contact Support",
+    ctaHref: "/support",
   },
 ];
 
@@ -201,7 +201,7 @@ export const FAQS: FAQ[] = [
     n: "06",
     question: "When is the SaaS tier launching?",
     answer:
-      "Full SaaS is live now. Starter and Pro are available immediately. Enterprise is contact-based for custom deployment requirements.",
+      "Starter and Pro checkout are available when LemonSqueezy billing is configured. Enterprise is contact-based for custom deployment requirements.",
   },
   {
     n: "07",

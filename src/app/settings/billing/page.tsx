@@ -44,7 +44,7 @@ interface UsageData {
   };
 }
 
-const SUPPORT_BILLING_HREF = "mailto:support@emma.ai?subject=Manage%20Emma%20subscription";
+const SUPPORT_BILLING_HREF = "/support";
 
 function BillingPageInner() {
   const [currentPlan, setCurrentPlan] = useState("free");
@@ -156,14 +156,14 @@ function BillingPageInner() {
             )}
           </div>
           <p className="text-xs font-light text-emma-200/30">
-            Unlimited autonomous actions, 99.9% SLA, white-label, dedicated support
+            Custom deployment review, white-label configuration, and support planning
           </p>
         </div>
         <a
-          href="mailto:enterprise@emma.ai"
+          href="/support"
           className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 hover:opacity-90 transition-opacity shrink-0"
         >
-          Contact Sales
+          Contact Support
         </a>
       </div>
 
@@ -308,7 +308,7 @@ function BillingStatusPanel({
               href={SUPPORT_BILLING_HREF}
               className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-surface border border-surface-border text-[11px] text-emma-200/55 hover:bg-surface-hover transition-all"
             >
-              Contact billing support
+              Open support
             </a>
           )}
         </div>
