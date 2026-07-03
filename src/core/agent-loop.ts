@@ -83,15 +83,26 @@ export interface AgentResult {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // Tools that return attacker-controllable external content — outputs wrapped in [EXTERNAL DATA].
-const EXTERNAL_READ_TOOLS = new Set([
-  "web_search",
-  "web_fetch",
+// Must stay in sync with the registry names in tool-registry.ts: any tool whose
+// output can contain third-party-authored text (email bodies, chat messages,
+// uploaded documents, CRM records, shared files) belongs in this set.
+export const EXTERNAL_READ_TOOLS = new Set([
+  "read_recent_emails",
+  "read_whatsapp_messages",
+  "read_ingested_document",
+  "ocr_image",
   "drive_read_file",
+  "drive_list_files",
   "notion_search_pages",
   "slack_list_channels",
   "calendar_get_upcoming",
   "calendar_get_today",
-  "read_emails",
+  "hubspot_get_contacts",
+  "hubspot_get_deals",
+  "hubspot_get_contact",
+  // Guards for future web tools — not currently registered.
+  "web_search",
+  "web_fetch",
 ]);
 
 const MAX_TOOL_OUTPUT = 8_000;
