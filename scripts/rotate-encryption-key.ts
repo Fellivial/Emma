@@ -18,6 +18,10 @@
  *   - Every new ciphertext is verified to decrypt back to the original
  *     plaintext with the NEW key before it is written.
  *   - Values that decrypt with NEITHER key are reported and left untouched.
+ *   - Writes are compare-and-swap: a value is only replaced if it still equals
+ *     the ciphertext that was read. If the live app rewrote it concurrently,
+ *     the write is skipped — the concurrent write already used the NEW key,
+ *     so nothing is lost. Skips are reported; confirm with a final dry run.
  *
  * Full procedure (dual-key rotation, zero downtime):
  *   see docs/runbook-encryption-key-escrow.md → "Key Rotation Plan".
@@ -55,6 +59,7 @@ interface Stats {
   alreadyNewKey: number;
   notEncrypted: number;
   undecryptable: number;
+  concurrentSkipped: number;
   writeErrors: number;
 }
 
@@ -89,6 +94,7 @@ async function rotateTable(
     alreadyNewKey: 0,
     notEncrypted: 0,
     undecryptable: 0,
+    concurrentSkipped: 0,
     writeErrors: 0,
   };
 
@@ -111,7 +117,7 @@ async function rotateTable(
 
     for (const row of rows as unknown as Array<Record<string, unknown>>) {
       stats.scanned += 1;
-      const update: Record<string, string> = {};
+      const pending: Array<{ column: string; oldValue: string; newValue: string }> = [];
 
       for (const column of spec.columns) {
         const value = row[column];
@@ -149,25 +155,40 @@ async function rotateTable(
           continue;
         }
 
-        update[column] = reEncrypted;
+        pending.push({ column, oldValue: value, newValue: reEncrypted });
       }
 
-      if (Object.keys(update).length > 0) {
+      for (const { column, oldValue, newValue } of pending) {
         if (execute) {
-          const { error: writeError } = await supabase
+          // Compare-and-swap: only replace the value if it still equals what we
+          // read. The app is live during rotation — if it rewrote this column
+          // since our read, that write already used the NEW key, and blindly
+          // updating here would revert the user's newer data to a stale value.
+          const { data: updatedRows, error: writeError } = await supabase
             .from(spec.table)
-            .update(update)
-            .eq(spec.idColumn, row[spec.idColumn]);
+            .update({ [column]: newValue })
+            .eq(spec.idColumn, row[spec.idColumn])
+            .eq(column, oldValue)
+            .select(spec.idColumn);
           if (writeError) {
             stats.writeErrors += 1;
             console.error(
               `  [${spec.table}] ${spec.idColumn}=${String(row[spec.idColumn])} ` +
-                `write error: ${writeError.message}`
+                `column=${column} write error: ${writeError.message}`
+            );
+            continue;
+          }
+          if (!updatedRows || updatedRows.length === 0) {
+            stats.concurrentSkipped += 1;
+            console.warn(
+              `  [${spec.table}] ${spec.idColumn}=${String(row[spec.idColumn])} ` +
+                `column=${column}: rewritten concurrently by the app — skipped ` +
+                `(concurrent writes already use the NEW key)`
             );
             continue;
           }
         }
-        stats.reEncrypted += Object.keys(update).length;
+        stats.reEncrypted += 1;
       }
     }
 
@@ -207,7 +228,8 @@ async function main() {
     console.log(
       `  scanned=${stats.scanned} reEncrypted=${stats.reEncrypted} ` +
         `alreadyNewKey=${stats.alreadyNewKey} plaintextSkipped=${stats.notEncrypted} ` +
-        `undecryptable=${stats.undecryptable} writeErrors=${stats.writeErrors}`
+        `undecryptable=${stats.undecryptable} concurrentSkipped=${stats.concurrentSkipped} ` +
+        `writeErrors=${stats.writeErrors}`
     );
     totalUndecryptable += stats.undecryptable;
     totalWriteErrors += stats.writeErrors;
