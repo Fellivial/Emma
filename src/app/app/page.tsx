@@ -52,6 +52,7 @@ import { RoutinePanel } from "@/components/RoutinePanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
 import { TimelinePanel } from "@/components/TimelinePanel";
 import { UserPanel } from "@/components/UserPanel";
+import { VisionPanel } from "@/components/VisionPanel";
 
 // ─── EMMA L4 Shell — Physical Integration ────────────────────────────────────
 
@@ -91,6 +92,15 @@ export default function EmmaPage() {
   // ── Hooks ──────────────────────────────────────────────────────────────────
   const voice = useVoice();
   const vision = useVision();
+  // Destructured for JSX: once `vision.previewRef` is used in render, the
+  // react-hooks/refs rule taints every inline `vision.*` read as a ref access.
+  const {
+    active: visionActive,
+    supported: visionSupported,
+    analyzing: visionAnalyzing,
+    lastAnalysis: visionLastAnalysis,
+    previewRef: visionPreviewRef,
+  } = vision;
   const timeline = useTimeline();
   const multiUser = useMultiUser();
   const emotion = useEmotion();
@@ -518,22 +528,6 @@ export default function EmmaPage() {
   }, []);
 
   // ── Vision ─────────────────────────────────────────────────────────────────
-  const handleVisionToggle = useCallback(async () => {
-    if (vision.active) {
-      vision.stop();
-    } else {
-      const ok = await vision.start();
-      if (ok)
-        timeline.log({
-          type: "system_event",
-          source: "user",
-          title: "Vision activated",
-          detail: "Camera connected",
-        });
-    }
-  }, [vision, timeline]);
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleVisionAnalyze = useCallback(async () => {
     const analysis = await vision.analyzeScene();
     if (analysis) {
@@ -545,6 +539,25 @@ export default function EmmaPage() {
       });
     }
   }, [vision, timeline]);
+
+  const handleVisionToggle = useCallback(async () => {
+    if (vision.active) {
+      vision.stop();
+    } else {
+      const ok = await vision.start();
+      if (ok) {
+        timeline.log({
+          type: "system_event",
+          source: "user",
+          title: "Vision activated",
+          detail: "Screen sharing connected",
+        });
+        // Warm the first analysis so Emma has screen context immediately,
+        // instead of waiting for the first message or a manual analyze click.
+        void handleVisionAnalyze();
+      }
+    }
+  }, [vision, timeline, handleVisionAnalyze]);
 
   // ── Send Message ───────────────────────────────────────────────────────────
   const sendMessage = useCallback(
@@ -568,21 +581,12 @@ export default function EmmaPage() {
         executeRoutineById(preMatchedRoutineId, "user");
       }
 
-      let visionContext: string | undefined;
-      if (vision.active && vision.lastAnalysis) {
-        visionContext = vision.lastAnalysis.description;
-        if (vision.lastAnalysis.objects.length > 0) {
-          visionContext += ` Objects: ${vision.lastAnalysis.objects.join(", ")}.`;
-        }
-      }
-
       const userMsg: ChatMessageType = {
         id: uid(),
         role: "user",
         content: text.trim(),
         display: text.trim(),
         timestamp: Date.now(),
-        visionContext,
         userId: multiUser.activeUser.id,
         emotion: combinedEmotion,
       };
@@ -592,6 +596,29 @@ export default function EmmaPage() {
       const preSendApiMessages = apiMessages;
       setMessages((prev) => [...prev, userMsg]);
       setLoading(true);
+
+      // ── Vision: give Emma the CURRENT screen, not a stale snapshot ─────
+      // Runs after the user's bubble renders so the refresh never delays the UI.
+      // Refresh when sharing is active and the last analysis is missing or old;
+      // fall back to the last snapshot if the refresh fails.
+      const VISION_STALE_MS = 30_000;
+      let visionContext: string | undefined;
+      if (vision.active) {
+        let analysis = vision.lastAnalysis;
+        if (!analysis || Date.now() - analysis.timestamp > VISION_STALE_MS) {
+          // Same refresh cadence feeds the vision emotion signal (best-effort,
+          // fire-and-forget; fuses via the emotion engine's 30s freshness window).
+          const frame = vision.captureFrame();
+          if (frame) void emotion.analyzeFromVision(frame.base64);
+          analysis = (await vision.analyzeScene(text.trim())) ?? vision.lastAnalysis;
+        }
+        if (analysis) {
+          visionContext = analysis.description;
+          if (analysis.objects.length > 0) {
+            visionContext += ` Objects: ${analysis.objects.join(", ")}.`;
+          }
+        }
+      }
 
       // ── Context Management: trim/summarize before sending ──────────────
       const { managed, summarized } = await contextManager.processMessages(newApiMsgs);
@@ -619,6 +646,16 @@ export default function EmmaPage() {
         detail: text.trim().slice(0, 80),
         userId: multiUser.activeUser.id,
       });
+
+      // ── Early TTS: prefetch first-sentence audio while the stream runs ──
+      // Cuts perceived voice latency from (full stream + full-text TTS) to
+      // roughly the first-sentence TTS time; the remainder generates while
+      // chunk 1 plays. Expression for chunk 1 is unknown mid-stream, so it
+      // uses the neutral voice profile; chunk 2 carries the real expression.
+      const FIRST_SENTENCE_MIN = 12; // don't burn a request on a bare "Mmm."
+      const FIRST_SENTENCE_MAX = 220; // fire even without a boundary by this point
+      let streamedForTts = "";
+      let ttsPrefetch: { sentence: string; blobPromise: Promise<Blob | null> } | null = null;
 
       try {
         // Create placeholder assistant message for streaming
@@ -659,14 +696,53 @@ export default function EmmaPage() {
                     : m
                 )
               );
+
+              // Kick off first-sentence TTS as soon as a sentence boundary
+              // streams in (or the buffer grows past the no-boundary cap).
+              if (ttsEnabled && !ttsPrefetch) {
+                streamedForTts += safe;
+                // First boundary whose prefix clears the minimum — a leading
+                // filler like "Mmm." keeps growing to include the next sentence.
+                let sentence: string | null = null;
+                const boundaryRe = /[.!?](?=\s)/g;
+                let b: RegExpExecArray | null;
+                while ((b = boundaryRe.exec(streamedForTts))) {
+                  const candidate = streamedForTts.slice(0, b.index + 1);
+                  if (candidate.trim().length >= FIRST_SENTENCE_MIN) {
+                    sentence = candidate;
+                    break;
+                  }
+                }
+                if (!sentence && streamedForTts.length >= FIRST_SENTENCE_MAX) {
+                  sentence = streamedForTts;
+                }
+                if (sentence) {
+                  ttsPrefetch = {
+                    sentence,
+                    blobPromise: voice.fetchAudioBlob(sentence),
+                  };
+                }
+              }
             },
 
             // ── Final event: commands, expression, full text ─────────────
             onDone: async (event: StreamDoneEvent) => {
-              // Kick off TTS immediately — runs in parallel with all state updates below
+              // Kick off TTS immediately — runs in parallel with all state updates below.
+              // If the first-sentence prefetch matched the final text, only the
+              // remainder is fetched here; otherwise the full response (as before).
+              const prefetch =
+                ttsEnabled &&
+                event.text &&
+                ttsPrefetch &&
+                event.text.startsWith(ttsPrefetch.sentence)
+                  ? ttsPrefetch
+                  : null;
+              const restText = prefetch
+                ? event.text.slice(prefetch.sentence.length).trim()
+                : event.text;
               const audioBlobPromise =
-                ttsEnabled && event.text
-                  ? voice.fetchAudioBlob(event.text, undefined, event.expression ?? undefined)
+                ttsEnabled && restText
+                  ? voice.fetchAudioBlob(restText, undefined, event.expression ?? undefined)
                   : Promise.resolve(null);
 
               // Finalize message with parsed data
@@ -749,13 +825,39 @@ export default function EmmaPage() {
 
               // Commands parsed but no longer dispatched to physical devices
 
-              // TTS + lip sync — audioBlob was already in-flight from top of onDone
+              // TTS + lip sync — audio was already in-flight from top of onDone.
               // Expression is fired inside onAudioStart so it syncs with actual playback,
               // not with response parse (~800ms–2s before audio begins).
               if (ttsEnabled && event.text) {
-                const audioBlob = await audioBlobPromise;
-                if (audioBlob) {
-                  avatar.startTalkingWithAudio(audioBlob, () => {
+                const firstBlob = prefetch ? await prefetch.blobPromise : null;
+                if (prefetch && firstBlob) {
+                  // Two-chunk pipeline: the prefetched first sentence plays now;
+                  // the remainder is already generating and follows seamlessly.
+                  avatar.startTalkingWithAudio(
+                    firstBlob,
+                    () => {
+                      if (event.expression) avatar.setExpression(event.expression);
+                    },
+                    () => {
+                      void audioBlobPromise.then((restBlob) => {
+                        if (restBlob) {
+                          avatar.startTalkingWithAudio(restBlob);
+                        } else if (restText) {
+                          // Remainder fetch failed mid-reply — finish via WebSpeech
+                          // rather than dropping spoken content.
+                          voice.speakFallback(
+                            restText,
+                            event.expression ?? undefined,
+                            () => avatar.startTalkingContinuous(),
+                            () => avatar.stopTalking()
+                          );
+                        }
+                      });
+                    }
+                  );
+                } else if (!prefetch && (await audioBlobPromise)) {
+                  const audioBlob = await audioBlobPromise;
+                  avatar.startTalkingWithAudio(audioBlob!, () => {
                     if (event.expression) avatar.setExpression(event.expression);
                   });
                 } else {
@@ -830,8 +932,14 @@ export default function EmmaPage() {
       return;
     }
     const transcript = await voice.listen();
-    if (transcript) setVoiceTranscript(transcript);
-  }, [voice]);
+    if (transcript) {
+      // Voice emotion: analyze the captured utterance audio so getCombined()
+      // fuses the voice signal when this transcript is sent.
+      const sample = voice.getLastAudioSample();
+      if (sample) emotion.analyzeVoice(sample.samples, sample.sampleRate);
+      setVoiceTranscript(transcript);
+    }
+  }, [voice, emotion]);
 
   const handleSend = useCallback(
     (text: string) => {
@@ -951,6 +1059,15 @@ export default function EmmaPage() {
           onDismiss={notifications.dismiss}
         />
 
+        {/* Offscreen video sink for screen capture — VisionPanel isn't rendered
+            on mobile, but frame capture still needs a playing <video> element. */}
+        <video
+          ref={visionPreviewRef}
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+          muted
+          playsInline
+        />
+
         {/* Full-screen avatar background */}
         <div className="absolute inset-0 z-0">
           <AvatarCanvas
@@ -1020,7 +1137,7 @@ export default function EmmaPage() {
             blocked={!!usageBlocked}
             onTypingStart={handleTypingStart}
             onTypingStop={handleTypingStop}
-            visionActive={vision.active}
+            visionActive={visionActive}
             onVisionToggle={handleVisionToggle}
             transcript={voiceTranscript}
             voiceError={voice.error}
@@ -1045,12 +1162,10 @@ export default function EmmaPage() {
       `}</style>
       <Header
         persona={persona}
-        visionActive={vision.active}
+        visionActive={visionActive}
         elConnected={false}
         memoryCount={memories.length}
-        scheduleCount={
-          ENABLE_ROUTINES ? scheduler.schedules.filter((s) => s.enabled).length : 0
-        }
+        scheduleCount={ENABLE_ROUTINES ? scheduler.schedules.filter((s) => s.enabled).length : 0}
         activeUser={multiUser.activeUser}
         currentEmotion={emotion.currentEmotion}
       />
@@ -1116,7 +1231,7 @@ export default function EmmaPage() {
               pendingApprovals={pendingApprovals}
               onApprove={handleApprove}
               onCancelApproval={handleCancelApproval}
-              visionActive={vision.active}
+              visionActive={visionActive}
               onVisionToggle={handleVisionToggle}
               transcript={voiceTranscript}
               voiceError={voice.error}
@@ -1148,6 +1263,19 @@ export default function EmmaPage() {
         >
           {/* Autonomous tasks */}
           <AutonomousTasksPanel tasks={autonomousTasks} onViewTask={handleViewTask} />
+
+          {/* Vision — screen share + on-demand analysis */}
+          <SideSection label="Vision">
+            <VisionPanel
+              active={visionActive}
+              supported={visionSupported}
+              analyzing={visionAnalyzing}
+              lastAnalysis={visionLastAnalysis}
+              previewRef={visionPreviewRef}
+              onToggle={handleVisionToggle}
+              onAnalyze={handleVisionAnalyze}
+            />
+          </SideSection>
 
           {/* Memory */}
           <SideSection label="Memory" count={memories.length}>

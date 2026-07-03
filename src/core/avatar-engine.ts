@@ -77,7 +77,7 @@ interface UseAvatarReturn {
   setExpression: (expr: AvatarExpression) => void;
   startTalking: (text: string) => void;
   startTalkingContinuous: (onAudioStart?: () => void) => void;
-  startTalkingWithAudio: (audioBlob: Blob, onAudioStart?: () => void) => void;
+  startTalkingWithAudio: (audioBlob: Blob, onAudioStart?: () => void, onEnded?: () => void) => void;
   stopTalking: () => void;
   setListening: () => void;
   setLayout: (layout: AvatarLayout) => void;
@@ -465,7 +465,7 @@ export function useAvatar(): UseAvatarReturn {
   // ── Audio-Driven Lip Sync ──────────────────────────────────────────────────
 
   const startTalkingWithAudio = useCallback(
-    (audioBlob: Blob, onAudioStart?: () => void) => {
+    (audioBlob: Blob, onAudioStart?: () => void, onEnded?: () => void) => {
       resetIdleTimer();
       setState((s) => ({ ...s, talking: true }));
 
@@ -543,18 +543,21 @@ export function useAvatar(): UseAvatarReturn {
         }
         URL.revokeObjectURL(url);
         setState((s) => ({ ...s, talking: false }));
+        onEnded?.();
       };
 
       audio.onerror = () => {
         onAudioStart?.(); // fire expression even on audio error
         URL.revokeObjectURL(url);
         setState((s) => ({ ...s, talking: false }));
+        onEnded?.();
       };
 
       audio.play().catch(() => {
         onAudioStart?.(); // fire expression even if audio is blocked by autoplay policy
         URL.revokeObjectURL(url);
         setState((s) => ({ ...s, talking: false }));
+        onEnded?.();
       });
     },
     [resetIdleTimer]

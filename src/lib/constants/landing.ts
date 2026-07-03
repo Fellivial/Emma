@@ -61,12 +61,12 @@ export const CAPABILITIES: Capability[] = [
   {
     num: "01",
     title: "Sees your world",
-    body: "Webcam via Claude Vision. Reads space, expression, mood.",
+    body: "Screen sharing via Claude Vision. Reads what you're working on, in context.",
   },
   {
     num: "02",
     title: "Remembers everything",
-    body: "Server-side JSON, context summarization, sliding window.",
+    body: "Encrypted server-side memory, rolling summaries, context that compounds.",
   },
   {
     num: "03",
@@ -100,7 +100,7 @@ export const STATS: StatItem[] = [
 export const TERMINAL_LINES: TerminalLine[] = [
   { text: "> Loading Live2D model (10 expressions)...    OK" },
   { text: "> Initializing Web Speech TTS...              OK" },
-  { text: "> Connecting webcam · Claude Vision...        OK" },
+  { text: "> Connecting screen share · Claude Vision...  OK" },
   { text: "> Loading persistent memory · 847 entries" },
   { text: "> Agent loop initialized · 8 tools registered" },
   { text: "> Emotion engine online · 3-signal fusion" },

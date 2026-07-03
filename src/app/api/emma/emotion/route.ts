@@ -4,7 +4,7 @@ import { getUser } from "@/lib/supabase/server";
 import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
-const EMOTION_VISION_PROMPT = `Analyze the facial expression in the webcam frame for an emotion detection system.
+const EMOTION_VISION_PROMPT = `Analyze the facial expression of any person visible in the provided frame (a screen capture, which may include a webcam feed or video call) for an emotion detection system.
 
 Emotion labels: neutral, happy, sad, angry, anxious, tired, excited, frustrated, calm, stressed.
 Valence: -1 = very negative, 0 = neutral, 1 = very positive.

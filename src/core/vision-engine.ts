@@ -103,7 +103,9 @@ export function useVision(): UseVisionReturn {
   const captureFrame = useCallback((): VisionFrame | null => {
     const video = previewRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || !active) return null;
+    // Gate on the live stream ref, not `active` state: state lags one render,
+    // which made captures silently fail when triggered right after start().
+    if (!video || !canvas || !streamRef.current) return null;
 
     // Scale down for API efficiency
     const maxWidth = 1024;
@@ -125,7 +127,7 @@ export function useVision(): UseVisionReturn {
       base64,
       mediaType: "image/jpeg",
     };
-  }, [active]);
+  }, []);
 
   const analyzeScene = useCallback(
     async (context?: string): Promise<VisionAnalysis | null> => {
