@@ -128,15 +128,21 @@ See [Runbook: Incident Response → Compromised Encryption Key](runbook-incident
 
 **Recommended frequency:** Annually, or immediately after any suspected compromise.
 
-> **Critical:** Rotating `EMMA_ENCRYPTION_KEY` without first re-encrypting all stored ciphertext will make all existing encrypted records unreadable. The data migration must complete before the new key is deployed.
+Rotation is implemented as a **dual-key window** plus a re-encryption script:
+
+- `decrypt()` in [src/core/security/encryption.ts](../src/core/security/encryption.ts) first tries `EMMA_ENCRYPTION_KEY`, then falls back to `EMMA_ENCRYPTION_KEY_PREVIOUS`. Writes always use `EMMA_ENCRYPTION_KEY`.
+- [scripts/rotate-encryption-key.ts](../scripts/rotate-encryption-key.ts) re-encrypts every stored ciphertext from the old key to the new key. It is idempotent (safe to re-run after a partial failure), dry-run by default, verifies each re-encrypted value round-trips before writing, and never destroys a value it cannot decrypt.
+
+Because reads fall back to the previous key during the window, there is **no maintenance gap and no data loss** even before the migration script finishes.
+
+Encrypted columns covered by the script: `client_integrations.access_token/refresh_token`, `memories.value`, `messages.content/display`, `chat_messages.content/display`, `conversations.title/summary`, `personas.voice_id/description`.
 
 ### Pre-rotation checklist
 
 - [ ] Escrow copy of the **current** key is accessible and verified
 - [ ] Production database backup taken within the last hour (restore point)
-- [ ] Maintenance window scheduled (OAuth integrations will be interrupted during the gap)
-- [ ] Re-encryption script written and tested on a staging copy first
-- [ ] Rollback plan confirmed: if migration fails, old key is still in Vercel and data is intact from backup
+- [ ] Rotation rehearsed on staging first (dry run + execute + smoke test)
+- [ ] Rollback plan confirmed: the old key remains in escrow and as `EMMA_ENCRYPTION_KEY_PREVIOUS` until migration is verified
 
 ### Rotation procedure
 
@@ -145,31 +151,31 @@ See [Runbook: Incident Response → Compromised Encryption Key](runbook-incident
 NEW_KEY=$(openssl rand -hex 32)
 # → Store NEW_KEY in password manager NOW before any other step
 
-# Step 2: Count affected records (staging SQL editor, read-only)
-SELECT count(*) FROM client_integrations WHERE access_token  IS NOT NULL;
-SELECT count(*) FROM client_integrations WHERE refresh_token IS NOT NULL;
-SELECT count(*) FROM memories       WHERE value   IS NOT NULL;
-SELECT count(*) FROM messages       WHERE content IS NOT NULL;
-SELECT count(*) FROM conversations  WHERE title   IS NOT NULL OR summary IS NOT NULL;
+# Step 2: Open the dual-key window (no downtime, no data loss)
+#   In Vercel → Environment Variables:
+#     EMMA_ENCRYPTION_KEY          = <NEW_KEY>
+#     EMMA_ENCRYPTION_KEY_PREVIOUS = <old key>
+#   Redeploy. New writes use the new key; old ciphertext still decrypts
+#   via the previous-key fallback.
 
-# Step 3: Write and test re-encryption script
-# The script must (per field):
-#   a. Read the current ciphertext
-#   b. Decrypt with OLD key
-#   c. Re-encrypt with NEW key
-#   d. Verify new ciphertext decrypts correctly before writing
-#   e. Write back
-# Test on a staging snapshot first.
+# Step 3: Dry-run the re-encryption script against staging, then production
+NEXT_PUBLIC_SUPABASE_URL=<url> \
+SUPABASE_SERVICE_ROLE_KEY=<service-role> \
+EMMA_ENCRYPTION_KEY_OLD=<old key> \
+EMMA_ENCRYPTION_KEY_NEW=<NEW_KEY> \
+npx tsx scripts/rotate-encryption-key.ts
+# Expected: "PASS (dry run)" with zero undecryptable values
 
-# Step 4: Run on staging. Smoke-test. Confirm zero decryption errors.
+# Step 4: Execute the migration
+# (same env vars) npx tsx scripts/rotate-encryption-key.ts --execute
+# Expected: "PASS: all encrypted values are now on the new key."
+# The script is idempotent — re-run it if it was interrupted.
 
-# Step 5: Production rotation
-#   a. Enable maintenance mode or shed non-critical traffic
-#   b. Take a final backup
-#   c. Run re-encryption script against production DB
-#   d. Update EMMA_ENCRYPTION_KEY in Vercel → redeploy
-#   e. Smoke-test: connect/disconnect an OAuth integration
-#   f. Retire the old key entry in escrow; mark it with the rotation date
+# Step 5: Close the dual-key window
+#   a. Re-run the script without --execute: confirm alreadyNewKey covers all rows
+#   b. Remove EMMA_ENCRYPTION_KEY_PREVIOUS from Vercel → redeploy
+#   c. Smoke-test: send a chat message, open a memory, connect/disconnect an OAuth integration
+#   d. Retire the old key entry in escrow; mark it with the rotation date
 
 # Step 6: Verify
 curl -s -o /dev/null -w "%{http_code}" https://yourdomain.com/api/emma/settings
@@ -178,12 +184,12 @@ curl -s -o /dev/null -w "%{http_code}" https://yourdomain.com/api/emma/settings
 
 ### Rotation rollback
 
-If the re-encryption migration fails partway:
+If anything fails during the window:
 
-1. The old key is still active in Vercel — the application still works with old ciphertext
-2. Restore the database from the pre-rotation backup taken in Step 5b
-3. The old key remains valid — zero data loss
-4. Investigate the failure, fix the migration script, and schedule a new window
+1. Old ciphertext is never modified destructively — the script only writes values it has verified decrypt correctly with the new key, and it skips (and reports) anything it cannot decrypt.
+2. To abort: set `EMMA_ENCRYPTION_KEY` back to the old key and keep the new key as `EMMA_ENCRYPTION_KEY_PREVIOUS`, then redeploy — both generations of ciphertext remain readable while you investigate.
+3. Re-running the script with old/new swapped migrates any already-converted values back.
+4. The database backup from the pre-rotation checklist remains the last-resort restore point; it should not be needed because the migration never leaves a value in an unreadable state.
 
 ---
 

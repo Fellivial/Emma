@@ -20,7 +20,7 @@ configuration is missing, malformed, blank, or an obvious placeholder.
 | `EMMA_ENCRYPTION_KEY`           | AES-256-GCM key for encrypting tokens and memories at rest                                                           | `openssl rand -hex 32`                                  |
 | `EMMA_UNSUBSCRIBE_SECRET`       | HMAC key for unsubscribe link tokens — decoupled from `EMMA_ENCRYPTION_KEY` so key rotation doesn't break sent links | `openssl rand -hex 32`                                  |
 | `NEXT_PUBLIC_APP_URL`           | Base URL for OG images, email links, and OAuth redirects                                                             | Your deployment URL, e.g. `https://emma.yourdomain.com` |
-| `CRON_SECRET`                   | Authenticates Vercel cron calls                                                                                       | Generate a strong random secret                         |
+| `CRON_SECRET`                   | Authenticates Vercel cron calls                                                                                      | Generate a strong random secret                         |
 
 **Minimal local dev:** Only `OPENROUTER_API_KEY` is needed for chat to work.
 Supabase variables enable auth and persistence. Local development and tests may
@@ -29,6 +29,12 @@ when `NODE_ENV=production`.
 
 `EMMA_ENCRYPTION_KEY` must be exactly 64 hexadecimal characters; generate it
 with `openssl rand -hex 32`.
+
+`EMMA_ENCRYPTION_KEY_PREVIOUS` (optional) holds the retiring key during a
+key-rotation window: reads fall back to it, writes never use it. Set it when
+opening a rotation, remove it after `scripts/rotate-encryption-key.ts` has
+migrated all ciphertext — see
+[Runbook: Encryption Key Escrow → Key Rotation Plan](runbook-encryption-key-escrow.md#key-rotation-plan).
 Supabase and application URLs must be valid HTTP(S) URLs. Values such as
 `changeme`, `your-secret`, `placeholder`, `dummy`, `test`, and similar obvious
 placeholders are rejected. Secret values are never included in configuration

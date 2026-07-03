@@ -13,6 +13,12 @@
  *
  * Key: EMMA_ENCRYPTION_KEY env var (32-byte hex = 64 chars).
  * Generate with: openssl rand -hex 32
+ *
+ * Key rotation: set the new key as EMMA_ENCRYPTION_KEY and the old key as
+ * EMMA_ENCRYPTION_KEY_PREVIOUS. Writes use the new key; reads fall back to
+ * the previous key for ciphertext not yet migrated. Run
+ * scripts/rotate-encryption-key.ts to re-encrypt stored data, then remove
+ * EMMA_ENCRYPTION_KEY_PREVIOUS. See docs/runbook-encryption-key-escrow.md.
  */
 
 import * as crypto from "crypto";
@@ -21,10 +27,20 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const PREFIX = "enc:v1:";
 
-function getKey(): Buffer | null {
-  const hex = process.env.EMMA_ENCRYPTION_KEY;
-  if (!hex || !/^[0-9a-fA-F]{64}$/.test(hex)) return null;
+const KEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/;
+
+function keyFromHex(hex: string | undefined): Buffer | null {
+  if (!hex || !KEY_HEX_PATTERN.test(hex)) return null;
   return Buffer.from(hex, "hex");
+}
+
+function getKey(): Buffer | null {
+  return keyFromHex(process.env.EMMA_ENCRYPTION_KEY);
+}
+
+/** Previous key, present only during a rotation window. Never used for writes. */
+function getPreviousKey(): Buffer | null {
+  return keyFromHex(process.env.EMMA_ENCRYPTION_KEY_PREVIOUS);
 }
 
 export class EncryptionConfigurationError extends Error {
@@ -86,10 +102,26 @@ export function decrypt(ciphertext: string | null | undefined): string {
     return "[encrypted — key missing]";
   }
 
-  try {
-    const parts = ciphertext.slice(PREFIX.length).split(":");
-    if (parts.length !== 3) return "[malformed encrypted data]";
+  const parts = ciphertext.slice(PREFIX.length).split(":");
+  if (parts.length !== 3) return "[malformed encrypted data]";
 
+  const primary = tryDecryptParts(parts, key);
+  if (primary !== null) return primary;
+
+  // Rotation window: ciphertext may still be encrypted with the previous key.
+  const previousKey = getPreviousKey();
+  if (previousKey) {
+    const fallback = tryDecryptParts(parts, previousKey);
+    if (fallback !== null) return fallback;
+  }
+
+  console.error("[Encryption] Decrypt failed: ciphertext does not match any configured key");
+  return "[decryption failed]";
+}
+
+/** Attempt GCM decryption with one key; null on auth/format failure. */
+function tryDecryptParts(parts: string[], key: Buffer): string | null {
+  try {
     const [ivHex, encHex, tagHex] = parts;
     const iv = Buffer.from(ivHex, "hex");
     const encrypted = Buffer.from(encHex, "hex");
@@ -102,10 +134,48 @@ export function decrypt(ciphertext: string | null | undefined): string {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
 
     return decrypted.toString("utf8");
-  } catch (err) {
-    console.error("[Encryption] Decrypt failed:", err);
-    return "[decryption failed]";
+  } catch {
+    return null;
   }
+}
+
+/**
+ * Encrypt with an explicit key (hex). Used by the key-rotation script;
+ * application code should use encrypt(), which reads the env key.
+ */
+export function encryptWithKeyHex(plaintext: string, keyHex: string): string {
+  const key = keyFromHex(keyHex);
+  if (!key) throw new EncryptionConfigurationError();
+
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+
+  let encrypted = cipher.update(plaintext, "utf8", "hex");
+  encrypted += cipher.final("hex");
+
+  const tag = cipher.getAuthTag();
+
+  return `${PREFIX}${iv.toString("hex")}:${encrypted}:${tag.toString("hex")}`;
+}
+
+/**
+ * Decrypt with an explicit key (hex). Returns null when the value is not
+ * decryptable with that key (wrong key, malformed, or not encrypted).
+ * Used by the key-rotation script.
+ */
+export function decryptWithKeyHex(ciphertext: string, keyHex: string): string | null {
+  if (!ciphertext.startsWith(PREFIX)) return null;
+  const key = keyFromHex(keyHex);
+  if (!key) throw new EncryptionConfigurationError();
+
+  const parts = ciphertext.slice(PREFIX.length).split(":");
+  if (parts.length !== 3) return null;
+  return tryDecryptParts(parts, key);
+}
+
+/** True when a value carries the field-encryption prefix. */
+export function isEncryptedValue(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.startsWith(PREFIX);
 }
 
 /**
