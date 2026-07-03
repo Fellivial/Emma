@@ -2,6 +2,21 @@
 
 Use this checklist after [Runbook: Staging Environment Setup](runbook-staging-environment-setup.md) is complete. Record `PASS`, `FAIL`, or `BLOCKED` for every line. Do not mark a live journey as pass unless it was tested against the hosted staging URL.
 
+## Validation Status — 2026-07-03 (Phase 1 repo-level preflight)
+
+Hosted validation remains **BLOCKED**: no staging URL or provider credentials have been provisioned (unchanged since the `ops/p2-staging-validation` NO-GO recorded in the setup runbook). Every live-journey line below is therefore `BLOCKED` as of this date. The template below is intentionally left blank for the first hosted run.
+
+Everything verifiable from the repository was verified as part of the Phase 1 trust-foundation pass:
+
+- `PASS` Env var inventory — [.env.staging.example](../.env.staging.example) covers all variables required by `npm run check:staging-env` ([scripts/check-staging-env.mjs](../scripts/check-staging-env.mjs)) and the setup runbook's table, including billing, email, OpenRouter, Sentry, Inngest, push, and ingest secrets.
+- `PASS` OAuth configuration — the runbook's provider redirect URIs match the implemented services exactly (`gmail`, `google_calendar`, `google_drive`, `notion`, `slack` in `src/app/api/integrations/[service]/oauth/start/route.ts`); HubSpot and ElevenLabs connect via API key and need no redirect URI.
+- `PASS` Cron jobs — all 8 cron paths in `vercel.json` have matching route files under `src/app/api/emma/cron/` (email-sequences, scheduled-tasks, approvals-expiry, pattern-detection, memory-prune, reflection, heartbeat, connection-health), each authenticated by `CRON_SECRET`.
+- `PASS` Monitoring surface — `/api/inngest` route exists; Sentry DSN/org/project variables are in the staging template and preflight script.
+- `PASS` Build — `npm run build` passes on this commit (see Phase 1 verification results).
+- `BLOCKED` All hosted checks (deployment, auth, onboarding, first conversation, billing sandbox, webhooks, admin diagnostics, GDPR journeys, browser QA, monitoring events) — require the founder-provided staging URL, Supabase staging project, Lemon sandbox, and provider keys listed in the setup runbook's owner checklist.
+
+**Unblock path:** complete the "Setup Owner Checklist" in [Runbook: Staging Environment Setup](runbook-staging-environment-setup.md), then run this checklist against the hosted URL.
+
 Staging URL: `_____________________________`  
 Date: `_____________________________`  
 Validator: `_____________________________`  
