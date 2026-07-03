@@ -17,6 +17,8 @@ interface UseVoiceReturn {
   supported: boolean;
   error: VoiceError;
   listen: () => Promise<string | null>;
+  /** Audio features of the most recent utterance, for voice emotion analysis. */
+  getLastAudioSample: () => AudioSample | null;
   stopListening: () => void;
   speak: (text: string, clientId?: string, emotion?: string) => void;
   fetchAudioBlob: (text: string, clientId?: string, expression?: string) => Promise<Blob | null>;
@@ -160,6 +162,52 @@ function getChunkConfig(chunk: string, base: VoiceParams): VoiceParams & { gapMs
   return { ...base, gapMs: 80 };
 }
 
+// ── Audio tap for voice emotion analysis ─────────────────────────────────────
+//
+// Collects time-domain snapshots while the user speaks so the emotion engine
+// can estimate arousal/valence from real audio features (RMS, ZCR, centroid).
+// Best-effort: any failure yields null and voice emotion is skipped for that
+// utterance — never blocks or breaks speech recognition itself.
+const TAP_FFT_SIZE = 2048;
+const TAP_INTERVAL_MS = 200;
+
+export interface AudioSample {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+function startAudioTap(stream: MediaStream): { stop: () => AudioSample | null } {
+  try {
+    const ctx = new AudioContext();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = TAP_FFT_SIZE;
+    source.connect(analyser);
+    const chunks: Float32Array[] = [];
+    const interval = setInterval(() => {
+      const buf = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buf);
+      chunks.push(buf);
+    }, TAP_INTERVAL_MS);
+    let stopped = false;
+    return {
+      stop: () => {
+        if (stopped) return null;
+        stopped = true;
+        clearInterval(interval);
+        const sampleRate = ctx.sampleRate;
+        ctx.close().catch(() => {});
+        if (chunks.length === 0) return null;
+        const merged = new Float32Array(chunks.length * TAP_FFT_SIZE);
+        chunks.forEach((c, i) => merged.set(c, i * TAP_FFT_SIZE));
+        return { samples: merged, sampleRate };
+      },
+    };
+  } catch {
+    return { stop: () => null };
+  }
+}
+
 // Pick the best audio MIME type supported by this browser's MediaRecorder.
 function getSupportedMimeType(): string {
   const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
@@ -206,6 +254,8 @@ export function useVoice(): UseVoiceReturn {
   // MediaRecorder refs for the server STT path
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  // Audio features of the most recent utterance (for voice emotion analysis)
+  const lastAudioSampleRef = useRef<AudioSample | null>(null);
   // After a 501 (ElevenLabs not configured), skip all future TTS requests this session.
   const elevenLabsUnavailableRef = useRef(false);
 
@@ -241,6 +291,7 @@ export function useVoice(): UseVoiceReturn {
         .getUserMedia({ audio: true })
         .then((stream) => {
           mediaStreamRef.current = stream;
+          const tap = startAudioTap(stream);
           const mimeType = getSupportedMimeType();
           const recorder = mimeType
             ? new MediaRecorder(stream, { mimeType })
@@ -278,6 +329,7 @@ export function useVoice(): UseVoiceReturn {
 
           recorder.onstop = async () => {
             clearInterval(silenceInterval);
+            lastAudioSampleRef.current = tap.stop();
             stream.getTracks().forEach((t) => t.stop());
             audioCtx.close().catch(() => {});
             mediaRecorderRef.current = null;
@@ -322,6 +374,7 @@ export function useVoice(): UseVoiceReturn {
 
           recorder.onerror = () => {
             clearInterval(silenceInterval);
+            tap.stop();
             stream.getTracks().forEach((t) => t.stop());
             audioCtx.close().catch(() => {});
             mediaRecorderRef.current = null;
@@ -364,14 +417,44 @@ export function useVoice(): UseVoiceReturn {
         clearTimeout(silenceTimerRef.current);
       }
 
+      // Web Speech gives no audio access, so run a parallel best-effort mic tap
+      // for voice emotion features. Permission is already granted to the page
+      // by recognition itself; failures are silent.
+      let tap: { stop: () => AudioSample | null } | null = null;
+      let tapStream: MediaStream | null = null;
+      let tapDone = false;
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((s) => {
+            if (tapDone) {
+              s.getTracks().forEach((t) => t.stop());
+              return;
+            }
+            tapStream = s;
+            tap = startAudioTap(s);
+          })
+          .catch(() => {});
+      }
+      const finishTap = () => {
+        if (tapDone) return;
+        tapDone = true;
+        lastAudioSampleRef.current = tap ? tap.stop() : null;
+        tap = null;
+        tapStream?.getTracks().forEach((t) => t.stop());
+        tapStream = null;
+      };
+
       r.onresult = (e: SpeechRecognitionEvent) => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        finishTap();
         setMode("thinking");
         resolve(e.results[0][0].transcript);
       };
 
       r.onerror = (e: Event) => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        finishTap();
         setMode("idle");
 
         const errEvent = e as unknown as { error: string };
@@ -403,6 +486,7 @@ export function useVoice(): UseVoiceReturn {
 
       r.onend = () => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        finishTap();
         // Only reset to idle if we haven't transitioned to thinking
         setMode((prev) => (prev === "listening" ? "idle" : prev));
         resolve(null);
@@ -413,6 +497,7 @@ export function useVoice(): UseVoiceReturn {
       try {
         r.start();
       } catch {
+        finishTap();
         setMode("idle");
         resolve(null);
         return;
@@ -423,6 +508,7 @@ export function useVoice(): UseVoiceReturn {
         try {
           r.stop();
         } catch {}
+        finishTap();
         setMode("idle");
         resolve(null);
       }, SILENCE_TIMEOUT);
@@ -664,6 +750,8 @@ export function useVoice(): UseVoiceReturn {
     setError(null);
   }, []);
 
+  const getLastAudioSample = useCallback(() => lastAudioSampleRef.current, []);
+
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -715,6 +803,7 @@ export function useVoice(): UseVoiceReturn {
     supported,
     error,
     listen,
+    getLastAudioSample,
     stopListening,
     speak,
     fetchAudioBlob,
