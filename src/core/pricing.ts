@@ -186,7 +186,7 @@ export const PLANS: Record<string, Plan> = {
     featureList: [
       "Everything in Free",
       "Persistent memory",
-      "Screen & camera vision",
+      "Screen sharing vision",
       "Emotion detection",
       "Routines & schedules",
       "Autonomous mode (3 actions/hr) — New",

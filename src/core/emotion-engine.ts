@@ -19,8 +19,9 @@ interface UseEmotionReturn {
  * Voice: Analyzes audio features (energy, pitch variance, speaking rate)
  *        to estimate arousal/valence → maps to emotion labels.
  *
- * Vision: Sends webcam frame to /api/emma/emotion with Claude Vision
- *         for facial expression analysis.
+ * Vision: Sends a screen-capture frame to /api/emma/emotion with Claude Vision
+ *         for facial expression analysis (e.g. a webcam feed or video call
+ *         visible on the shared screen).
  *
  * Text: Simple keyword/pattern-based sentiment from user messages.
  *
