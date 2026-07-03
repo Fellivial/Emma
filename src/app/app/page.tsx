@@ -92,6 +92,15 @@ export default function EmmaPage() {
   // ── Hooks ──────────────────────────────────────────────────────────────────
   const voice = useVoice();
   const vision = useVision();
+  // Destructured for JSX: once `vision.previewRef` is used in render, the
+  // react-hooks/refs rule taints every inline `vision.*` read as a ref access.
+  const {
+    active: visionActive,
+    supported: visionSupported,
+    analyzing: visionAnalyzing,
+    lastAnalysis: visionLastAnalysis,
+    previewRef: visionPreviewRef,
+  } = vision;
   const timeline = useTimeline();
   const multiUser = useMultiUser();
   const emotion = useEmotion();
@@ -1053,7 +1062,7 @@ export default function EmmaPage() {
         {/* Offscreen video sink for screen capture — VisionPanel isn't rendered
             on mobile, but frame capture still needs a playing <video> element. */}
         <video
-          ref={vision.previewRef}
+          ref={visionPreviewRef}
           className="absolute w-px h-px opacity-0 pointer-events-none"
           muted
           playsInline
@@ -1128,7 +1137,7 @@ export default function EmmaPage() {
             blocked={!!usageBlocked}
             onTypingStart={handleTypingStart}
             onTypingStop={handleTypingStop}
-            visionActive={vision.active}
+            visionActive={visionActive}
             onVisionToggle={handleVisionToggle}
             transcript={voiceTranscript}
             voiceError={voice.error}
@@ -1153,7 +1162,7 @@ export default function EmmaPage() {
       `}</style>
       <Header
         persona={persona}
-        visionActive={vision.active}
+        visionActive={visionActive}
         elConnected={false}
         memoryCount={memories.length}
         scheduleCount={ENABLE_ROUTINES ? scheduler.schedules.filter((s) => s.enabled).length : 0}
@@ -1222,7 +1231,7 @@ export default function EmmaPage() {
               pendingApprovals={pendingApprovals}
               onApprove={handleApprove}
               onCancelApproval={handleCancelApproval}
-              visionActive={vision.active}
+              visionActive={visionActive}
               onVisionToggle={handleVisionToggle}
               transcript={voiceTranscript}
               voiceError={voice.error}
@@ -1258,11 +1267,11 @@ export default function EmmaPage() {
           {/* Vision — screen share + on-demand analysis */}
           <SideSection label="Vision">
             <VisionPanel
-              active={vision.active}
-              supported={vision.supported}
-              analyzing={vision.analyzing}
-              lastAnalysis={vision.lastAnalysis}
-              previewRef={vision.previewRef}
+              active={visionActive}
+              supported={visionSupported}
+              analyzing={visionAnalyzing}
+              lastAnalysis={visionLastAnalysis}
+              previewRef={visionPreviewRef}
               onToggle={handleVisionToggle}
               onAnalyze={handleVisionAnalyze}
             />
