@@ -111,3 +111,64 @@ describe("encryption", () => {
     expect(result.num).toBe(99);
   });
 });
+
+describe("encryption key rotation", () => {
+  const OLD_KEY = "a".repeat(64);
+  const NEW_KEY = "b".repeat(64);
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("decrypts old-key ciphertext via EMMA_ENCRYPTION_KEY_PREVIOUS during rotation", async () => {
+    const { encrypt, decrypt } = await import("@/core/security/encryption");
+
+    // Encrypt while the old key is active
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", OLD_KEY);
+    const legacyCiphertext = encrypt("memory written before rotation");
+
+    // Rotate: new key active, old key kept as previous
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", NEW_KEY);
+    vi.stubEnv("EMMA_ENCRYPTION_KEY_PREVIOUS", OLD_KEY);
+
+    expect(decrypt(legacyCiphertext)).toBe("memory written before rotation");
+  });
+
+  it("writes with the new key during the rotation window", async () => {
+    const { encrypt, decryptWithKeyHex } = await import("@/core/security/encryption");
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", NEW_KEY);
+    vi.stubEnv("EMMA_ENCRYPTION_KEY_PREVIOUS", OLD_KEY);
+
+    const ciphertext = encrypt("written during rotation");
+    expect(decryptWithKeyHex(ciphertext, NEW_KEY)).toBe("written during rotation");
+    expect(decryptWithKeyHex(ciphertext, OLD_KEY)).toBeNull();
+  });
+
+  it("fails safely when ciphertext matches neither key", async () => {
+    const { encrypt, decrypt } = await import("@/core/security/encryption");
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", "c".repeat(64));
+    const strayCiphertext = encrypt("value on an unrelated key");
+
+    vi.stubEnv("EMMA_ENCRYPTION_KEY", NEW_KEY);
+    vi.stubEnv("EMMA_ENCRYPTION_KEY_PREVIOUS", OLD_KEY);
+    expect(decrypt(strayCiphertext)).toBe("[decryption failed]");
+  });
+
+  it("keyed helpers round-trip and reject wrong keys (rotation script primitives)", async () => {
+    const { encryptWithKeyHex, decryptWithKeyHex, isEncryptedValue } =
+      await import("@/core/security/encryption");
+
+    const ciphertext = encryptWithKeyHex("re-encrypt me", OLD_KEY);
+    expect(isEncryptedValue(ciphertext)).toBe(true);
+    expect(decryptWithKeyHex(ciphertext, OLD_KEY)).toBe("re-encrypt me");
+    expect(decryptWithKeyHex(ciphertext, NEW_KEY)).toBeNull();
+
+    // Simulate the script's migrate step: old → plaintext → new, verified
+    const migrated = encryptWithKeyHex(decryptWithKeyHex(ciphertext, OLD_KEY)!, NEW_KEY);
+    expect(decryptWithKeyHex(migrated, NEW_KEY)).toBe("re-encrypt me");
+
+    // Non-encrypted values are not treated as ciphertext
+    expect(isEncryptedValue("plain text")).toBe(false);
+    expect(decryptWithKeyHex("plain text", NEW_KEY)).toBeNull();
+  });
+});

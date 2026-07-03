@@ -149,13 +149,13 @@ Tokens are decrypted **only at call time** in `getIntegrationTokens()` (`src/cor
 
 ### Key rotation
 
-There is currently no automated key rotation. To rotate:
+Key rotation uses a dual-key window plus a re-encryption script:
 
-1. Generate a new key: `openssl rand -hex 32`
-2. Re-encrypt all stored tokens (read → decrypt with old key → encrypt with new key → write)
-3. Update `EMMA_ENCRYPTION_KEY`
+1. Generate a new key (`openssl rand -hex 32`), set it as `EMMA_ENCRYPTION_KEY`, and keep the old key as `EMMA_ENCRYPTION_KEY_PREVIOUS` — reads fall back to the previous key, writes use the new key, so nothing breaks mid-rotation.
+2. Run `scripts/rotate-encryption-key.ts` (dry-run by default, `--execute` to write) to re-encrypt all stored ciphertext. The script is idempotent, verifies every value round-trips before writing, and never destroys a value it cannot decrypt.
+3. Remove `EMMA_ENCRYPTION_KEY_PREVIOUS` and redeploy.
 
-No key rotation tooling is provided out of the box — this is a known gap.
+Full procedure and rollback: [Runbook: Encryption Key Escrow → Key Rotation Plan](runbook-encryption-key-escrow.md#key-rotation-plan).
 
 ### Memory and history compatibility
 
