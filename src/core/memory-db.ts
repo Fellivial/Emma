@@ -475,14 +475,18 @@ export async function getConversationMessages(
   const supabase = getSupabase();
   if (!supabase) return [];
 
+  // Fetch the MOST RECENT `limit` rows (descending), then reverse into
+  // chronological order. Ascending+limit would return the oldest rows, which
+  // rewinds long conversations on reload and feeds stale context to summaries.
   const { data } = await supabase
     .from("messages")
     .select("role, content, display, created_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   return (data || [])
+    .reverse()
     .map((row) => {
       const content = decrypt(row.content as string);
       const display = decrypt(row.display as string);
