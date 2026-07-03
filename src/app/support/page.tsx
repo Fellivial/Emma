@@ -9,8 +9,7 @@ export const metadata: Metadata = {
 const sections: PublicInfoSection[] = [
   {
     title: "Contact method",
-    body:
-      "No dedicated support email is configured yet in the application. Add a SUPPORT_EMAIL or NEXT_PUBLIC_SUPPORT_EMAIL configuration before public launch, then replace this placeholder with the approved contact address. Do not use EMAIL_FROM as a customer support inbox unless that mailbox is actively monitored.",
+    body: "No dedicated support email is configured yet. During closed beta, reach the team through the channel you were invited from — your beta invitation thread or direct contact with the team. A staffed support inbox will be announced on this page before public launch.",
   },
   {
     title: "Bug reports",
@@ -24,18 +23,15 @@ const sections: PublicInfoSection[] = [
   },
   {
     title: "Billing support",
-    body:
-      "For subscription issues, include the plan, Lemon checkout or customer-portal context, payment status shown in Settings > Billing, and whether the issue is upgrade, cancellation, payment recovery, or Extra Response Pack related.",
+    body: "For subscription issues, include the plan, Lemon checkout or customer-portal context, payment status shown in Settings > Billing, and whether the issue is upgrade, cancellation, payment recovery, or Extra Response Pack related.",
   },
   {
     title: "Account issues",
-    body:
-      "For login, waitlist, export, or deletion issues, include your account email and the exact action you attempted. Emma's current deletion endpoint removes directly user-owned app data but preserves the Supabase auth login until support or an admin completes full credential deletion.",
+    body: "For login, waitlist, export, or deletion issues, include your account email and the exact action you attempted. Emma's current deletion endpoint removes directly user-owned app data but preserves the Supabase auth login until support or an admin completes full credential deletion.",
   },
   {
     title: "Response expectations",
-    body:
-      "No public response-time promise or priority-support SLA is implemented yet. Beta support should be treated as best-effort until an approved support policy and staffed inbox are configured.",
+    body: "No public response-time promise or priority-support SLA is implemented yet. Beta support should be treated as best-effort until an approved support policy and staffed inbox are configured.",
   },
 ];
 

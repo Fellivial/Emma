@@ -9,14 +9,16 @@ export default function ContactPage() {
         </Link>
         <h1 className="text-3xl font-light mt-8 mb-4">Contact</h1>
         <p className="text-sm font-light text-emma-200/55 leading-relaxed mb-6">
-          For enterprise access, support, billing, or closed beta questions, email the Emma team.
+          Emma is in closed beta and a dedicated contact inbox is not staffed yet. For enterprise
+          access, billing, or beta questions, use the channel you were invited from, or see the
+          Support page for what to include in a report.
         </p>
-        <a
-          href="mailto:enterprise@emma.ai"
+        <Link
+          href="/support"
           className="inline-flex px-5 py-2.5 rounded-xl bg-gradient-to-r from-emma-300 to-emma-400 text-sm font-medium text-emma-950 hover:opacity-90 transition-opacity"
         >
-          enterprise@emma.ai
-        </a>
+          Support
+        </Link>
       </div>
     </main>
   );
