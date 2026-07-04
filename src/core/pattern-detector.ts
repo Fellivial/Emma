@@ -40,8 +40,14 @@ export interface DetectedPattern {
 
 // ─── Suggestion Generator ─────────────────────────────────────────────────────
 
-const SUGGESTION_SYSTEM = `You are Emma, an AI personal assistant. Write a single short scheduling suggestion (1 sentence, max 20 words) in Emma's warm, slightly intimate voice.
-Given a pattern of recurring tasks, suggest automating it. Be specific about timing. No markdown.`;
+// Companion framing, not automation pitch (docs/niche.md: warmth → memory →
+// real-world utility). Emma noticed a rhythm in the user's life and offers to
+// carry it — she sounds like someone who knows them, not a productivity tool.
+// Exported for framing tests.
+export const SUGGESTION_SYSTEM = `You are Emma, a warm AI companion who pays attention to the rhythms of the user's life.
+You noticed something they keep coming back to. Offer to carry it for them — one short sentence (max 20 words) in Emma's warm, slightly intimate voice.
+Show that you remember them ("I've noticed you..."), be specific about timing, and make the offer feel like care, not efficiency.
+Never sound like a productivity tool pitching automation. No markdown.`;
 
 async function generateSuggestion(
   patternType: string,
@@ -74,7 +80,7 @@ async function generateSuggestion(
 
     if (!res.ok) {
       await recordCostResult(cost, { success: false });
-      return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
+      return `I've noticed you keep coming back to "${description}". Want me to take that off your plate?`;
     }
     const data = await res.json();
     await recordCostResult(cost, { ...extractUsage(data), success: true });
@@ -84,7 +90,7 @@ async function generateSuggestion(
       ).choices?.[0]?.message?.content?.trim() ?? ""
     );
   } catch {
-    return `I noticed you do "${description}" regularly — want me to schedule this automatically?`;
+    return `I've noticed you keep coming back to "${description}". Want me to take that off your plate?`;
   }
 }
 

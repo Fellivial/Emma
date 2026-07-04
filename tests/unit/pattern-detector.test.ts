@@ -22,7 +22,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 import { fetchWithRetry } from "@/lib/errors";
-import { generateSuggestionsViaBatch } from "@/core/pattern-detector";
+import { generateSuggestionsViaBatch, SUGGESTION_SYSTEM } from "@/core/pattern-detector";
 
 const MOCK_PATTERNS = [
   {
@@ -137,5 +137,27 @@ describe("generateSuggestionsViaBatch", () => {
     // generateSuggestion catches non-ok and returns a fallback string (non-empty)
     // so the pattern entry IS stored in the map
     await expect(generateSuggestionsViaBatch("sk-key", [MOCK_PATTERNS[0]])).resolves.not.toThrow();
+  });
+});
+
+describe("companion voice framing (docs/niche.md alignment)", () => {
+  it("suggestion prompt frames Emma as a companion, not an assistant", () => {
+    expect(SUGGESTION_SYSTEM).toMatch(/companion/i);
+    expect(SUGGESTION_SYSTEM).toMatch(/care/i);
+    expect(SUGGESTION_SYSTEM).not.toMatch(/personal assistant/i);
+  });
+
+  it("suggestion prompt explicitly forbids the automation pitch", () => {
+    expect(SUGGESTION_SYSTEM).toMatch(/never sound like a productivity tool/i);
+  });
+
+  it("fallback suggestion is companion-toned and keeps the pattern description", async () => {
+    vi.mocked(fetchWithRetry).mockRejectedValue(new Error("network error"));
+
+    const result = await generateSuggestionsViaBatch("sk-key", [MOCK_PATTERNS[0]]);
+    const text = result.get("p1")!;
+    expect(text).toContain("send morning report");
+    expect(text).toMatch(/noticed/i);
+    expect(text).not.toMatch(/schedule this automatically/i);
   });
 });
