@@ -63,6 +63,15 @@ const PERSONA_BASELINES: Record<PersonaId, BehaviorFlags> = {
   },
 };
 
+/**
+ * Read-only access to a persona's baseline flags. Consumers use this to tell
+ * "flag lowered below baseline" from "flag at its natural default" (e.g. voice
+ * modulation only calms delivery when initiative was actively lowered).
+ */
+export function getPersonaBaseline(personaId: PersonaId): Readonly<BehaviorFlags> {
+  return PERSONA_BASELINES[personaId];
+}
+
 // ─── Memory Preference Matching ──────────────────────────────────────────────
 
 /**

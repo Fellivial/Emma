@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { PersonaId } from "@/types/emma";
+import type { BehaviorFlags } from "@/core/behavior-flags";
+import { applyFlagsToWebSpeechParams } from "@/core/voice-behavior";
 
 // ─── Voice State Machine ─────────────────────────────────────────────────────
 
@@ -31,6 +34,8 @@ interface UseVoiceReturn {
   stopSpeaking: () => void;
   setMode: (mode: VoiceMode) => void;
   setCurrentEmotion: (emotion: string) => void;
+  /** Behavior flags + persona for voice modulation (warmth softens delivery). */
+  setBehaviorContext: (flags: BehaviorFlags | null, personaId: PersonaId) => void;
   clearError: () => void;
 }
 
@@ -258,6 +263,9 @@ export function useVoice(): UseVoiceReturn {
   const lastAudioSampleRef = useRef<AudioSample | null>(null);
   // After a 501 (ElevenLabs not configured), skip all future TTS requests this session.
   const elevenLabsUnavailableRef = useRef(false);
+  // Behavior flags + persona for voice modulation, set by the app shell.
+  const behaviorFlagsRef = useRef<BehaviorFlags | null>(null);
+  const behaviorPersonaRef = useRef<PersonaId>("mommy");
 
   // Derived booleans for backward compat
   const listening = mode === "listening";
@@ -521,10 +529,18 @@ export function useVoice(): UseVoiceReturn {
     async (text: string, clientId?: string, expression?: string): Promise<Blob | null> => {
       if (elevenLabsUnavailableRef.current) return null;
       try {
+        const flags = behaviorFlagsRef.current;
         const res = await fetch("/api/emma/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, clientId, expression }),
+          body: JSON.stringify({
+            text,
+            clientId,
+            expression,
+            warmth: flags?.warmth,
+            initiative: flags?.initiative,
+            personaId: behaviorPersonaRef.current,
+          }),
         });
         if (res.status === 501) {
           // 501 = TTS endpoint permanently disabled — skip for rest of session
@@ -623,7 +639,13 @@ export function useVoice(): UseVoiceReturn {
 
       const processedText = processForEmma(text);
       const emo = emotion || currentEmotionRef.current || "neutral";
-      const base = VOICE_PARAMS[emo] || VOICE_PARAMS.neutral;
+      // Emotion preset first, then the behavior-flag pass (warmth softens,
+      // lowered initiative calms pace). Identity when flags are at baseline.
+      const base = applyFlagsToWebSpeechParams(
+        VOICE_PARAMS[emo] || VOICE_PARAMS.neutral,
+        behaviorPersonaRef.current,
+        behaviorFlagsRef.current ?? undefined
+      );
       const voice = getBestVoice();
 
       // Chrome silently cuts off utterances > ~160 chars, so we must split.
@@ -746,6 +768,11 @@ export function useVoice(): UseVoiceReturn {
     currentEmotionRef.current = emotion;
   }, []);
 
+  const setBehaviorContext = useCallback((flags: BehaviorFlags | null, personaId: PersonaId) => {
+    behaviorFlagsRef.current = flags;
+    behaviorPersonaRef.current = personaId;
+  }, []);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -811,6 +838,7 @@ export function useVoice(): UseVoiceReturn {
     stopSpeaking,
     setMode,
     setCurrentEmotion,
+    setBehaviorContext,
     clearError,
   };
 }

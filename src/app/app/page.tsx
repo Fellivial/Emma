@@ -124,6 +124,12 @@ export default function EmmaPage() {
     [persona, memories, emotion.currentEmotion]
   );
 
+  // Voice modulation reads flags at speak time via a ref — keep it fed.
+  const { setBehaviorContext } = voice;
+  useEffect(() => {
+    setBehaviorContext(behaviorFlags, persona);
+  }, [setBehaviorContext, behaviorFlags, persona]);
+
   // ── Execute workflow routine ───────────────────────────────────────────────
   const executeRoutineById = useCallback(
     (routineId: string, source: "user" | "scheduler" | "proactive") => {
