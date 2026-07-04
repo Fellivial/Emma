@@ -2,8 +2,10 @@
 //
 // Covers the T-3 autonomy-tier gating paths in runAgentLoop:
 //   - autonomyTier === 1 + moderate tool => skips execution, returns informational result
-//   - autonomyTier === 2 + moderate tool => executes (no skip)
-//   - autonomyTier === 3 (DEFAULT_CONFIG) when no client config found => executes
+//   - autonomyTier === 2 + moderate tool => pauses for approval (awaiting_approval)
+//   - autonomyTier === 3 + moderate tool => executes only after the pre-execution
+//     evaluator approves; evaluator failure/unavailability => action NOT executed (P5)
+//   - DEFAULT_CONFIG.autonomyTier === 2 (suggest & confirm) when no client config found
 //
 // The existing agent-loop.test.ts does not mock loadClientConfigForUser and
 // does not exercise the moderate-risk tier gate. This file is additive.
@@ -53,6 +55,13 @@ vi.mock("@/core/rate-limiter", () => ({
   consumeRateLimit: () => Promise.resolve(),
 }));
 
+// Cost gate always allows — its module-level rate limiter otherwise accumulates
+// across tests in this file and masks the evaluator paths under test.
+vi.mock("@/core/cost-gate", () => ({
+  enforceCostGate: () => Promise.resolve({ allowed: true, message: "" }),
+  recordCostResult: () => Promise.resolve(),
+}));
+
 vi.mock("@/core/provenance", () => ({
   startChain: () => ({ id: "chain-1", steps: [] }),
   addStep: (chain: any, step: any) => ({ ...chain, steps: [...chain.steps, step] }),
@@ -100,7 +109,7 @@ vi.mock("@/core/client-config", () => ({
     id: "default",
     slug: "default",
     name: "Emma",
-    autonomyTier: 3,
+    autonomyTier: 2,
     customRoutines: [],
   },
 }));
@@ -224,11 +233,37 @@ describe("runAgentLoop — autonomy tier 1 (T-3)", () => {
   });
 });
 
-describe("runAgentLoop — autonomy tier 3 default (T-3)", () => {
-  it("tier 3 moderate tool is executed (not skipped) — falls through to execution", async () => {
+describe("runAgentLoop — autonomy tier 2 (P5)", () => {
+  it("tier 2 moderate tool pauses for approval instead of executing", async () => {
+    mockClientConfig.autonomyTier = 2;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        makeOpenRouterResponse([
+          {
+            name: "slack_send_message",
+            input: { channel: "#general", message: "hello", thread_ts: "" },
+          },
+        ])
+      )
+    );
+
+    const result = await runAgentLoop(BASE_TASK);
+
+    expect(result.status).toBe("awaiting_approval");
+    const step = result.steps.find((s) => s.toolName === "slack_send_message");
+    expect(step).toBeDefined();
+    expect(step!.status).toBe("awaiting_approval");
+  });
+});
+
+describe("runAgentLoop — autonomy tier 3 (T-3 / P5 evaluator gate)", () => {
+  it("tier 3 moderate tool executes after the evaluator approves (not skipped)", async () => {
     mockClientConfig.autonomyTier = 3;
 
-    // slack_send_message at tier 3 => executes. May fail (no real Slack) but is not skipped.
+    // Call order: brain (tool call) → evaluator (PROCEED) → Slack adapter fetches
+    // (fail — no real Slack, still counts as executed) → brain (complete_task).
     vi.stubGlobal(
       "fetch",
       vi
@@ -241,25 +276,88 @@ describe("runAgentLoop — autonomy tier 3 default (T-3)", () => {
             },
           ])
         )
-        .mockResolvedValueOnce(
+        .mockResolvedValueOnce(makeOpenRouterResponse([], "stop", "PROCEED"))
+        .mockResolvedValue(
           makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Sent" } }])
         )
     );
 
     const result = await runAgentLoop(BASE_TASK);
 
-    // At tier 3 the tool executes (may fail with no real Slack, but not skipped)
-    // The output must NOT be the tier-1 skip message
+    // At tier 3 with evaluator approval the tool executes (may fail with no real
+    // Slack, but is neither the tier-1 skip nor an evaluator rejection)
     const step = result.steps.find((s) => s.toolName === "slack_send_message");
     expect(step).toBeDefined();
     expect(step!.output).not.toMatch(/requires manual approval \(autonomy tier 1\)/i);
+    expect(step!.output).not.toMatch(/Evaluator rejected/i);
+  });
+
+  it("tier 3 moderate tool is NOT executed when the evaluator errors (fail-closed)", async () => {
+    mockClientConfig.autonomyTier = 3;
+
+    // Call order: brain (tool call) → evaluator (network error) → brain (complete_task).
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeOpenRouterResponse([
+            {
+              name: "slack_send_message",
+              input: { channel: "#general", message: "hello", thread_ts: "" },
+            },
+          ])
+        )
+        .mockRejectedValueOnce(new Error("evaluator network down"))
+        .mockResolvedValue(
+          makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
+        )
+    );
+
+    const result = await runAgentLoop(BASE_TASK);
+
+    const step = result.steps.find((s) => s.toolName === "slack_send_message");
+    expect(step).toBeDefined();
+    expect(step!.status).toBe("failed");
+    expect(step!.output).toMatch(/Evaluator rejected/i);
+    expect(step!.output).toMatch(/not executed/i);
+  });
+
+  it("tier 3 moderate tool is NOT executed when the evaluator returns non-OK (fail-closed)", async () => {
+    mockClientConfig.autonomyTier = 3;
+
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeOpenRouterResponse([
+            {
+              name: "slack_send_message",
+              input: { channel: "#general", message: "hello", thread_ts: "" },
+            },
+          ])
+        )
+        .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve("down") })
+        .mockResolvedValue(
+          makeOpenRouterResponse([{ name: "complete_task", input: { summary: "Done" } }])
+        )
+    );
+
+    const result = await runAgentLoop(BASE_TASK);
+
+    const step = result.steps.find((s) => s.toolName === "slack_send_message");
+    expect(step).toBeDefined();
+    expect(step!.status).toBe("failed");
+    expect(step!.output).toMatch(/Evaluator rejected/i);
+    expect(step!.output).toMatch(/not executed/i);
   });
 });
 
 describe("runAgentLoop — autonomy defaults (T-3 unit assertion)", () => {
-  it("DEFAULT_CONFIG.autonomyTier is 3 (from mock — mirrors real source)", async () => {
+  it("DEFAULT_CONFIG.autonomyTier is 2 (from mock — mirrors real source)", async () => {
     const { DEFAULT_CONFIG } = await import("@/core/client-config");
-    expect(DEFAULT_CONFIG.autonomyTier).toBe(3);
+    expect(DEFAULT_CONFIG.autonomyTier).toBe(2);
   });
 
   it("DEFAULT_CONFIG.customRoutines is an empty array (from mock — mirrors real source)", async () => {

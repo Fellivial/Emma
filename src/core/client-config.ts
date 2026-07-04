@@ -41,7 +41,10 @@ const DEFAULT_CONFIG: ClientConfig = {
   tokenBudgetDaily: 50_000,
   messageLimitDaily: 50,
   planId: "free",
-  autonomyTier: 3,
+  // Tier 2 (suggest & confirm) — matches the DB-read fallbacks below and the
+  // new-client default in client-membership.ts. An unknown config must never
+  // grant more autonomy than a configured one.
+  autonomyTier: 2,
   proactiveVision: false,
   customRoutines: [],
 };
