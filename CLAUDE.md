@@ -39,20 +39,26 @@ The brain route streams SSE deltas to the client. After the full response is col
 
 All engines are React hooks or plain modules in `src/core/`:
 
-| Engine                    | Purpose                                                                                                    |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `personas.ts`             | Builds the full system prompt: persona + memories + vision context + emotion state + routines              |
-| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision)                                     |
-| `memory-db.ts`            | In-memory store + Supabase persistence with AES-256-GCM field encryption                                   |
-| `client-config.ts`        | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`                     |
-| `usage-enforcer.ts`       | 5-hour single-window token/message metering; must fail-open (never block on DB errors)                     |
-| `avatar-engine.ts`        | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip)                             |
-| `emotion-engine.ts`       | Detects user emotional state from voice/vision/text (confidence-weighted fusion); feeds into system prompt |
-| `autonomy-engine.ts`      | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                                      |
-| `routines-engine.ts`      | Workflow routines — built-in and user-defined                                                              |
-| `integrations/adapter.ts` | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot                   |
-| `security/sanitise.ts`    | Prompt injection detection and input cleaning                                                              |
-| `security/encryption.ts`  | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                                          |
+| Engine                    | Purpose                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `personas.ts`             | Builds the full system prompt: persona + memories + vision context + emotion state + routines + behavior directives                                                                    |
+| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision)                                                                                                                 |
+| `memory-db.ts`            | In-memory store + Supabase persistence with AES-256-GCM field encryption                                                                                                               |
+| `client-config.ts`        | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`                                                                                                 |
+| `usage-enforcer.ts`       | 5-hour single-window token/message metering; must fail-open (never block on DB errors)                                                                                                 |
+| `avatar-engine.ts`        | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip)                                                                                                         |
+| `emotion-engine.ts`       | Detects user emotional state from voice/vision/text (confidence-weighted fusion); feeds behavior flags + system prompt                                                                 |
+| `behavior-flags.ts`       | Deterministic behavioral layer (ADR 0001): derives verbosity/emoji/teasing/warmth/initiative from persona + memories + emotion + time; single source of truth for behavioral decisions |
+| `response-validator.ts`   | Confirms responses honored their behavior flags (emoji/length/teasing heuristics); log-only, never rewrites                                                                            |
+| `greeting-engine.ts`      | Session-aware greetings: time of day, absence length (quick return → very long absence), memory-enriched follow-ups                                                                    |
+| `proactive-speech.ts`     | Unprompted speech on idle (45s comment, 2min concern, late-night nudge), memory-personalized                                                                                           |
+| `pattern-detector.ts`     | Daily cron: detects recurring task patterns, generates in-persona scheduling suggestions                                                                                               |
+| `context-manager.ts`      | Token-budget-aware conversation summarization/trimming for long chats                                                                                                                  |
+| `autonomy-engine.ts`      | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                                                                                                                  |
+| `routines-engine.ts`      | Workflow routines — built-in and user-defined                                                                                                                                          |
+| `integrations/adapter.ts` | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot                                                                                               |
+| `security/sanitise.ts`    | Prompt injection detection and input cleaning                                                                                                                                          |
+| `security/encryption.ts`  | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                                                                                                                      |
 
 ### API Routes
 

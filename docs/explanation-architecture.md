@@ -72,6 +72,32 @@ buildSystemPrompt()  →  stablePrompt + "\n\n" + dynamicContext
 
 ---
 
+## Behavior Flags: State → Behavior, Deterministically
+
+Before the system prompt is assembled, the brain route derives a set of **behavior flags** — the single source of truth for behavioral decisions (see [ADR 0001](adr/0001-behavior-flags.md)):
+
+```
+persona baseline → custom persona settings → memory preferences → emotion/time modulation
+        │
+        ▼
+deriveBehaviorFlags()           ← src/core/behavior-flags.ts (pure, deterministic)
+        │
+        ├──► personas.ts        renders compact "## Behavior Directives" in the dynamic block
+        └──► response-validator confirms the reply honored the flags (log-only)
+```
+
+Five flags: `verbosity`, `emojiUsage`, `teasingLevel`, `warmth`, `initiative` — small closed enums, each mapping to a concrete directive and (where checkable) a validator rule.
+
+Key invariants:
+
+- Durable preferences beat per-turn emotion for style flags — a sad user who hates emojis still hates emojis.
+- Negative emotion always suppresses teasing, and can only ever lower it — distress leads with care, regardless of persona or preference.
+- A fully-baseline flag set renders zero extra prompt text.
+
+After the full response is parsed, `validateResponseBehavior()` (`src/core/response-validator.ts`) checks emoji usage, prose length, and teasing markers against the flags. Violations are logged and surfaced as `behaviorViolations` in the SSE `done` event — observability only, the response is never rewritten.
+
+---
+
 ## The Emotion Tag
 
 Every response from Claude ends with `[emotion: <expression>]`. This is not shown to users.
@@ -174,8 +200,23 @@ See [Explanation: Security](explanation-security.md) for the full pattern list a
 
 ---
 
+## Companion Presence Systems
+
+Several client-side engines make Emma feel present between messages. They predate Phase 3 but were previously undocumented:
+
+- **Greeting engine** (`src/core/greeting-engine.ts`) — on app load, picks a greeting from persona-specific banks keyed by time of day and absence length (`quick_return` < 1h, `long_absence` > 24h, `very_long_absence` > 72h, tracked via `localStorage`). ~40% of the time it swaps in the user's name from memory; ~50% of the time it appends a follow-up drawn from a high-confidence goal/relationship/habit memory ("How's Alex doing?").
+
+- **Proactive speech** (`src/core/proactive-speech.ts`) — timers reset on user activity trigger unprompted speech: a playful comment at 45s idle (occasionally personalized from memory), a genuine check-in at 2min, and a bedtime nudge after 5min during late-night hours. Wired in the app shell via `useProactiveSpeech`.
+
+- **Pattern detector** (`src/core/pattern-detector.ts` + `/api/emma/patterns`) — a daily cron clusters the last 30 days of completed tasks, detects daily/weekly recurrences and repeated tool sequences, and generates an in-persona scheduling suggestion. The app shell surfaces the top unseen pattern as proactive speech ~4s after the greeting (quiet-hours aware, capped at 3/day).
+
+- **Context manager** (`src/core/context-manager.ts`) — token-budget-aware summarization for long conversations: at 75% budget utilization, older messages are compressed into a `[SUMMARY]` message via `/api/emma/summarize`, always preserving the 10 most recent messages. Falls back to trimming when summarization fails.
+
+---
+
 ## Related
 
+- [ADR 0001: Behavior Flags](adr/0001-behavior-flags.md)
 - [Reference: API routes](reference-api.md)
 - [Reference: Plans and limits](reference-plans.md)
 - [Explanation: Security](explanation-security.md)
