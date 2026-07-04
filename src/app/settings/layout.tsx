@@ -176,58 +176,13 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    id: "workflows",
-    label: "Workflows",
-    href: "/settings/workflows",
-    icon: (active: boolean) => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-        <rect
-          x="1.5"
-          y="1.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="9.5"
-          y="1.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="1.5"
-          y="9.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="9.5"
-          y="9.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
 ];
 
 // Information architecture: everyday companion settings first, power-user
 // surfaces (external services, autonomous tasks, audit) under "Advanced".
 // /settings/mcp stays unlinked — it is gated by the server-only
 // ENABLE_MCP_TOOLS flag, which the client cannot read.
-const ADVANCED_IDS = ["integrations", "tasks", "provenance", "workflows"];
+const ADVANCED_IDS = ["integrations", "tasks", "provenance"];
 
 const NAV_SECTIONS: { label: string; items: typeof NAV_ITEMS }[] = [
   { label: "Companion", items: NAV_ITEMS.filter((item) => !ADVANCED_IDS.includes(item.id)) },
@@ -244,7 +199,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/integrations": "Integrations",
   "/settings/notifications": "Notifications",
   "/settings/tasks": "Tasks",
-  "/settings/workflows": "Workflows",
   "/settings/provenance": "Audit Trail",
   "/settings/more": "More",
 };
