@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { AvatarExpression, AvatarState, AvatarLayout } from "@/types/emma";
+import type { BehaviorFlags } from "@/core/behavior-flags";
 
 // ─── Timing Constants ────────────────────────────────────────────────────────
 
@@ -68,6 +69,31 @@ function pickIdleVariant(): IdleVariant {
   return IDLE_VARIANTS[0];
 }
 
+// ─── Behavior-Flag Modulation (pure, exported for tests) ─────────────────────
+
+/**
+ * Tap-on-body reaction by teasing level. The flirty escalation only happens
+ * when teasing is fully allowed; "light" softens it to amused, "off" reacts
+ * reserved with no escalation. Head taps stay "amused" at every level.
+ */
+export function resolveBodyTapReaction(teasingLevel: BehaviorFlags["teasingLevel"]): {
+  first: AvatarExpression;
+  followUp: AvatarExpression | null;
+} {
+  if (teasingLevel === "off") return { first: "skeptical", followUp: null };
+  if (teasingLevel === "light") return { first: "skeptical", followUp: "amused" };
+  return { first: "skeptical", followUp: "flirty" };
+}
+
+/**
+ * Idle micro-movement pacing by initiative — lower initiative means Emma
+ * seeks attention less often. Light touch: scales the delay between idle
+ * behaviors, never changes which behaviors exist.
+ */
+export function idleDelayScale(initiative: BehaviorFlags["initiative"]): number {
+  return initiative === "forward" ? 1 : initiative === "balanced" ? 1.25 : 1.5;
+}
+
 // ─── Hook Return Type ────────────────────────────────────────────────────────
 
 interface UseAvatarReturn {
@@ -84,6 +110,8 @@ interface UseAvatarReturn {
   toggleVisible: () => void;
   destroy: () => void;
   resetIdleTimer: () => void;
+  /** Behavior flags for tap reactions and idle pacing (ADR 0001 consumer). */
+  setBehaviorFlags: (flags: BehaviorFlags | null) => void;
 }
 
 /**
@@ -117,6 +145,8 @@ export function useAvatar(): UseAvatarReturn {
   const idleBehaviorRef = useRef<NodeJS.Timeout | null>(null);
   const breathFrameRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  // Behavior flags, set by the app shell; read at interaction/idle time.
+  const behaviorFlagsRef = useRef<BehaviorFlags | null>(null);
 
   // ── Idle Behavior Loop ─────────────────────────────────────────────────────
 
@@ -214,8 +244,10 @@ export function useAvatar(): UseAvatarReturn {
         break;
     }
 
-    // Schedule next idle behavior
-    const nextDelay = MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN);
+    // Schedule next idle behavior — lowered initiative stretches the cadence
+    // so Emma seeks attention less often (distress, late night).
+    const scale = idleDelayScale(behaviorFlagsRef.current?.initiative ?? "forward");
+    const nextDelay = (MICRO_MOVE_MIN + Math.random() * (MICRO_MOVE_MAX - MICRO_MOVE_MIN)) * scale;
     idleBehaviorRef.current = setTimeout(() => runIdleBehavior(model), nextDelay);
   }, []);
 
@@ -399,13 +431,20 @@ export function useAvatar(): UseAvatarReturn {
             try {
               model.motion("Tap_Body");
             } catch {}
-            setState((s) => ({ ...s, expression: "skeptical" }));
-            setTimeout(() => {
-              try {
-                model.expression("flirty");
-              } catch {}
-              setState((s) => ({ ...s, expression: "flirty" }));
-            }, 800);
+            // Escalation respects teasingLevel — no flirty when teasing is off.
+            const reaction = resolveBodyTapReaction(
+              behaviorFlagsRef.current?.teasingLevel ?? "playful"
+            );
+            setState((s) => ({ ...s, expression: reaction.first }));
+            if (reaction.followUp) {
+              const followUp = reaction.followUp;
+              setTimeout(() => {
+                try {
+                  model.expression(followUp);
+                } catch {}
+                setState((s) => ({ ...s, expression: followUp }));
+              }, 800);
+            }
           }
         };
         canvas.addEventListener("pointerdown", onPointerDown);
@@ -677,6 +716,10 @@ export function useAvatar(): UseAvatarReturn {
     setState((s) => ({ ...s, visible: !s.visible }));
   }, []);
 
+  const setBehaviorFlags = useCallback((flags: BehaviorFlags | null) => {
+    behaviorFlagsRef.current = flags;
+  }, []);
+
   const destroy = useCallback(() => {
     if (lipSyncFrameRef.current) cancelAnimationFrame(lipSyncFrameRef.current);
     if (breathFrameRef.current) cancelAnimationFrame(breathFrameRef.current);
@@ -724,5 +767,6 @@ export function useAvatar(): UseAvatarReturn {
     toggleVisible,
     destroy,
     resetIdleTimer,
+    setBehaviorFlags,
   };
 }
