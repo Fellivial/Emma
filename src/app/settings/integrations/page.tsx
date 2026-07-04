@@ -70,9 +70,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "gmail",
     name: "Gmail",
-    tagline: "Send emails on your behalf",
+    tagline: "Let Emma handle the emails you keep putting off",
     description:
-      "Let Emma send emails through your Gmail account. Useful for follow-ups, scheduling, and outreach — Emma composes and sends with your signature.",
+      "When something needs sending — a reply you've been dreading, a follow-up you'd forget — Emma composes it and sends it from your own account, with your approval.",
     category: "productivity",
     authType: "oauth",
     initials: "G",
@@ -83,9 +83,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "google_calendar",
     name: "Google Calendar",
-    tagline: "Book appointments and manage events",
+    tagline: "Emma helps you keep track of your days",
     description:
-      "Emma can create calendar events, schedule meetings, and book appointments directly in your Google Calendar.",
+      "Mention an appointment in conversation and Emma can put it on your calendar — the dentist visit, the call with your mum, the time you meant to set aside for yourself.",
     category: "productivity",
     authType: "oauth",
     initials: "GC",
@@ -96,9 +96,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "google_drive",
     name: "Google Drive",
-    tagline: "Access and organize your files",
+    tagline: "Emma can save things and find them again",
     description:
-      "Emma can upload documents, list files in your Drive, and retrieve file contents — useful for knowledge management and document workflows.",
+      "The notes she writes you, the documents you talk through together — Emma can keep them in your Drive and pull them back up when you need them.",
     category: "productivity",
     authType: "oauth",
     initials: "GD",
@@ -113,9 +113,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "notion",
     name: "Notion",
-    tagline: "Create pages and search your workspace",
+    tagline: "So what you two talk through doesn't get lost",
     description:
-      "Emma can create new pages, update existing ones, and search your Notion workspace — turning conversations into documentation.",
+      "Emma can write your conversations into Notion pages, keep them updated, and search your workspace — the plans you make together end up somewhere real.",
     category: "productivity",
     authType: "oauth",
     initials: "N",
@@ -130,9 +130,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "slack",
     name: "Slack",
-    tagline: "Send messages and post to channels",
+    tagline: "Emma can pass a message along for you",
     description:
-      "Emma can send messages to channels, post files, and read channel history — making it easy to share updates directly to your team.",
+      "When something needs posting to Slack — an update, a file, a quick message — Emma sends it for you so you can stay in the conversation with her.",
     category: "communication",
     authType: "oauth",
     initials: "S",
@@ -151,9 +151,9 @@ const CONNECTORS: Connector[] = [
   {
     id: "hubspot",
     name: "HubSpot",
-    tagline: "Log contacts and track your pipeline",
+    tagline: "Emma remembers the people you work with",
     description:
-      "Emma can create contacts, log calls, and update deals in your HubSpot CRM. Connect with a private app token from your HubSpot portal.",
+      "Tell Emma about a call or a deal and she can keep your HubSpot contacts, notes, and pipeline up to date for you. Connect with a private app token from your HubSpot portal.",
     category: "crm",
     authType: "api_key",
     initials: "HS",
@@ -169,9 +169,9 @@ const CONNECTORS: Connector[] = [
 const CATEGORIES = [
   { id: "all", label: "All" },
   { id: "voice", label: "Voice" },
-  { id: "productivity", label: "Productivity" },
+  { id: "productivity", label: "Daily Life" },
   { id: "communication", label: "Communication" },
-  { id: "crm", label: "CRM" },
+  { id: "crm", label: "Work" },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -238,7 +238,8 @@ export default function IntegrationsPage() {
       <div className="mb-6">
         <h1 className="text-xl font-light text-emma-100">Integrations</h1>
         <p className="text-xs text-emma-300/50 mt-1">
-          Connect external services to extend Emma&apos;s capabilities.
+          Connect the parts of your life you want Emma&apos;s help with — so what she knows about
+          you can become real help.
         </p>
       </div>
 
