@@ -89,10 +89,10 @@ Evaluated for Phase 3:
 
 - **Prompt Builder** (`personas.ts`) — **wired now.** Renders flags as a compact `## Behavior Directives` block in the dynamic prompt section (flags change per turn with emotion). The behavioral prose in the emotion block ("Adapt your tone accordingly…") moves here, so net prompt size stays roughly constant.
 - **Response Validation** (`response-validator.ts`) — **wired now.** After the full response is parsed in the brain route, checks emoji count, sentence count, and teasing markers against the flags. Violations are logged (`console.warn`) and surfaced in the SSE `done` event as `behaviorViolations` for observability. It never rewrites the response.
-- **Voice (TTS)** — **not wired.** Delivery style (rate/stability by warmth) is a natural consumer, but TTS work is explicitly out of Phase 3 scope. The flag object is client-visible in the future via the done event if needed.
-- **Avatar** — **not wired.** Expression is already driven by the `[emotion:]` tag grounded in the actual response text, which is better evidence than a pre-response flag. No change.
-- **Proactive Speech / Greeting Engine** — **not wired in v1.** Both are client-side with hand-authored message banks; consuming `teasingLevel` there (e.g. skip smirk-bank lines when teasing is off) is the first Phase 3.x follow-up, and the module is client-safe ("no fs, no server imports") specifically to allow it.
-- **Future Live2D** — out of scope; noted as a possible consumer of `warmth`/`initiative` for idle-motion selection.
+- **Voice (TTS)** — **wired in Phase 4.** `src/core/voice-behavior.ts` applies a light warmth/initiative pass on top of the expression presets for both the ElevenLabs route and the WebSpeech fallback; identity at baseline, never raises energy.
+- **Avatar** — **partially wired in Phase 4.** Expression selection stays driven by the `[emotion:]` tag (grounded in actual response text — better evidence than a pre-response flag). Interaction and idle behavior now consume flags: body-tap escalation is gated by `teasingLevel`, idle cadence stretches when `initiative` is lowered.
+- **Proactive Speech / Greeting Engine** — **wired in Phase 4** (the planned 3.x follow-up). Both consume `teasingLevel` (soft mommy banks when off) and `warmth` (distress skips the playful idle nudge; greeting expression softens). The client-safe design ("no fs, no server imports") made this a signature-level change.
+- **Future Live2D** — deeper idle-motion selection by flags remains out of scope; Phase 4 only scales existing idle timing.
 
 ## Design Constraints
 
@@ -113,8 +113,8 @@ Evaluated for Phase 3:
 
 Incremental adoption; no rewrites:
 
-1. **Phase 3 (this ADR):** add the layer + wire the two server-side consumers (prompt builder, validator). Existing systems keep working untouched; the emotion block in the prompt loses its behavioral sentences (now flag directives) but keeps its factual state.
-2. **Phase 3.x:** proactive speech and greeting engine consume `teasingLevel`/`warmth` to filter message banks — replacing their private category/confidence heuristics gradually.
-3. **Later phases:** voice delivery and Live2D idle behavior read flags when those systems are redesigned. If validation data shows persistent violations, escalate specific checks from log-only to response-shaping — a deliberate, separate decision.
+1. **Phase 3 (this ADR):** add the layer + wire the two server-side consumers (prompt builder, validator). Existing systems keep working untouched; the emotion block in the prompt loses its behavioral sentences (now flag directives) but keeps its factual state. ✅ Done.
+2. **Phase 3.x:** proactive speech and greeting engine consume `teasingLevel`/`warmth` to filter message banks — replacing their private category/confidence heuristics gradually. ✅ Done in Phase 4 (soft banks + distress-aware idle skipping; the app shell derives flags client-side from persona + memories + live emotion).
+3. **Later phases:** ~~voice delivery and Live2D idle behavior read flags when those systems are redesigned~~ — voice delivery and avatar tap/idle behavior gained light flag modulation in Phase 4 _without_ redesign (`voice-behavior.ts`, `resolveBodyTapReaction`/`idleDelayScale`). Still open: escalating specific validator checks from log-only to response-shaping if violation data warrants it — a deliberate, separate decision.
 
 Rollback is trivial at every step: omit `behaviorFlags` from the prompt context and the prompt renders exactly as before.

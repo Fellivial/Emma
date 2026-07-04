@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import type { AvatarExpression, MemoryEntry, PersonaId } from "@/types/emma";
+import type { BehaviorFlags } from "@/core/behavior-flags";
 
 // ─── Proactive Trigger Configuration ─────────────────────────────────────────
 
@@ -9,7 +10,7 @@ const IDLE_COMMENT_DELAY = 45_000; // 45s of silence → she comments
 const IDLE_CONCERN_DELAY = 120_000; // 2 min → she checks in
 const LATE_NIGHT_CHECK_DELAY = 300_000; // 5 min at night → she nudges bedtime
 
-interface ProactiveMessage {
+export interface ProactiveMessage {
   text: string;
   expression: AvatarExpression;
 }
@@ -34,6 +35,26 @@ const MOMMY_LATE_NIGHT_NUDGE: ProactiveMessage[] = [
   { text: "Baby. It's late. You should probably get some sleep.", expression: "concerned" },
   { text: "Mmm. Still up? I can get your bedroom ready if you want.", expression: "warm" },
   { text: "It's getting really late. Want me to run the bedtime routine?", expression: "warm" },
+];
+
+// Soft variants used when behavior flags suppress teasing (preference memory,
+// interaction_vibe, or emotional distress). Same presence, same timing slots,
+// zero teasing markers — no "baby", no sentence-initial "Mmm", nothing flirty.
+const MOMMY_IDLE_COMMENTS_SOFT: ProactiveMessage[] = [
+  { text: "I'm still here, whenever you're ready.", expression: "listening" },
+  { text: "Take your time. I'm not going anywhere.", expression: "neutral" },
+  { text: "You've gone quiet. Thinking about something?", expression: "listening" },
+];
+
+const MOMMY_IDLE_CONCERN_SOFT: ProactiveMessage[] = [
+  { text: "Hey. You've been quiet for a while. Everything okay?", expression: "concerned" },
+  { text: "I'm here, you know. Whenever you're ready.", expression: "warm" },
+  { text: "Talk to me when you're ready. No rush.", expression: "warm" },
+];
+
+const MOMMY_LATE_NIGHT_NUDGE_SOFT: ProactiveMessage[] = [
+  { text: "It's late. You should get some rest — I'll be here tomorrow.", expression: "concerned" },
+  { text: "It's getting really late. Be kind to yourself and get some sleep.", expression: "warm" },
 ];
 
 // ─── Neutral Persona Message Banks ───────────────────────────────────────────
@@ -62,6 +83,51 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ─── Behavior-Flag Bank Selection (pure, exported for tests) ─────────────────
+
+/**
+ * Picks the message banks for a persona under the given behavior flags.
+ * Mommy with teasing suppressed gets the soft banks; neutral banks contain no
+ * teasing to begin with. The flags are derived elsewhere (behavior-flags.ts) —
+ * this function only selects, it never re-derives behavior.
+ */
+export function selectProactiveBanks(
+  personaId: PersonaId,
+  flags?: BehaviorFlags
+): {
+  idleComments: ProactiveMessage[];
+  idleConcern: ProactiveMessage[];
+  lateNightNudge: ProactiveMessage[];
+} {
+  if (personaId !== "mommy") {
+    return {
+      idleComments: NEUTRAL_IDLE_COMMENTS,
+      idleConcern: NEUTRAL_IDLE_CONCERN,
+      lateNightNudge: NEUTRAL_LATE_NIGHT_NUDGE,
+    };
+  }
+  if (flags?.teasingLevel === "off") {
+    return {
+      idleComments: MOMMY_IDLE_COMMENTS_SOFT,
+      idleConcern: MOMMY_IDLE_CONCERN_SOFT,
+      lateNightNudge: MOMMY_LATE_NIGHT_NUDGE_SOFT,
+    };
+  }
+  return {
+    idleComments: MOMMY_IDLE_COMMENTS,
+    idleConcern: MOMMY_IDLE_CONCERN,
+    lateNightNudge: MOMMY_LATE_NIGHT_NUDGE,
+  };
+}
+
+/**
+ * During distress (warmth elevated), the playful 45s idle comment is skipped
+ * entirely — the 2-minute concern check-in covers presence without piling on.
+ */
+export function shouldSkipPlayfulIdle(flags?: BehaviorFlags): boolean {
+  return flags?.warmth === "elevated";
+}
+
 // ─── Memory-Personalized Idle Comments ────────────────────────────────────────
 
 const MEMORY_IDLE_CATEGORIES: MemoryEntry["category"][] = ["goal", "relationship", "habit"];
@@ -73,9 +139,10 @@ const MEMORY_IDLE_CATEGORIES: MemoryEntry["category"][] = ["goal", "relationship
  */
 export function buildMemoryIdleComment(
   memories: MemoryEntry[],
-  personaId: PersonaId = "mommy"
+  personaId: PersonaId = "mommy",
+  soft = false
 ): string | null {
-  const isMommy = personaId === "mommy";
+  const isMommy = personaId === "mommy" && !soft;
   for (const cat of MEMORY_IDLE_CATEGORIES) {
     const candidates = memories
       .filter((m) => m.category === cat && m.confidence >= 0.75)
@@ -133,12 +200,15 @@ interface UseProactiveSpeechReturn {
  * @param enabled - whether proactive speech is active
  * @param memories - user memories for personalizing idle comments (optional)
  * @param personaId - active persona, selects the appropriate message bank
+ * @param flags - behavior flags; teasingLevel selects soft banks, elevated
+ *                warmth (distress) skips the playful idle comment
  */
 export function useProactiveSpeech(
   onSpeak: (text: string, expression: AvatarExpression) => void,
   enabled: boolean = true,
   memories: MemoryEntry[] = [],
-  personaId: PersonaId = "mommy"
+  personaId: PersonaId = "mommy",
+  flags?: BehaviorFlags
 ): UseProactiveSpeechReturn {
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const concernTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -167,24 +237,29 @@ export function useProactiveSpeech(
     if (!enabled) return;
 
     const isMommy = personaId === "mommy";
-    const idleComments = isMommy ? MOMMY_IDLE_COMMENTS : NEUTRAL_IDLE_COMMENTS;
-    const idleConcern = isMommy ? MOMMY_IDLE_CONCERN : NEUTRAL_IDLE_CONCERN;
-    const lateNightNudge = isMommy ? MOMMY_LATE_NIGHT_NUDGE : NEUTRAL_LATE_NIGHT_NUDGE;
+    const soft = isMommy && flags?.teasingLevel === "off";
+    const { idleComments, idleConcern, lateNightNudge } = selectProactiveBanks(personaId, flags);
 
-    // 45s idle → playful comment, occasionally personalized from memory
-    idleTimerRef.current = setTimeout(() => {
-      if (!firedRef.current.has("idle")) {
-        firedRef.current.add("idle");
-        const memComment =
-          memories.length > 0 && Math.random() < 0.4
-            ? buildMemoryIdleComment(memories, personaId)
-            : null;
-        const msg = memComment
-          ? { text: memComment, expression: (isMommy ? "smirk" : "listening") as AvatarExpression }
-          : pickRandom(idleComments);
-        onSpeak(msg.text, msg.expression);
-      }
-    }, IDLE_COMMENT_DELAY);
+    // 45s idle → playful comment, occasionally personalized from memory.
+    // Skipped entirely during distress — the concern check-in covers presence.
+    if (!shouldSkipPlayfulIdle(flags)) {
+      idleTimerRef.current = setTimeout(() => {
+        if (!firedRef.current.has("idle")) {
+          firedRef.current.add("idle");
+          const memComment =
+            memories.length > 0 && Math.random() < 0.4
+              ? buildMemoryIdleComment(memories, personaId, soft)
+              : null;
+          const msg = memComment
+            ? {
+                text: memComment,
+                expression: (isMommy && !soft ? "smirk" : "listening") as AvatarExpression,
+              }
+            : pickRandom(idleComments);
+          onSpeak(msg.text, msg.expression);
+        }
+      }, IDLE_COMMENT_DELAY);
+    }
 
     // 2 min idle → genuine concern
     concernTimerRef.current = setTimeout(() => {
@@ -205,7 +280,7 @@ export function useProactiveSpeech(
         }
       }, LATE_NIGHT_CHECK_DELAY);
     }
-  }, [enabled, onSpeak, clearAllTimers, memories, personaId]);
+  }, [enabled, onSpeak, clearAllTimers, memories, personaId, flags]);
 
   const stop = useCallback(() => {
     clearAllTimers();

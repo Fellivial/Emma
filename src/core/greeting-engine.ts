@@ -1,6 +1,7 @@
 "use client";
 
 import type { PersonaId, MemoryEntry } from "@/types/emma";
+import type { BehaviorFlags } from "@/core/behavior-flags";
 
 const STORAGE_KEY = "emma_last_session";
 
@@ -96,6 +97,57 @@ const MOMMY_GREETINGS = {
   very_long_absence: [
     "…Well. Look who decided to show up. I've been here, baby. Waiting.",
     "Mmm. It's been days. You better have a good excuse. …come here.",
+  ],
+};
+
+// Soft variants used when behavior flags suppress teasing (teasingLevel "off"
+// via preference memory, interaction_vibe, or emotional distress). Same warmth,
+// same structure, zero teasing markers — no "baby", no sentence-initial "Mmm",
+// nothing flirty. Absence and time-of-day semantics mirror MOMMY_GREETINGS.
+const MOMMY_GREETINGS_SOFT: typeof MOMMY_GREETINGS = {
+  first_visit:
+    "There you are. I'm Emma — I pay attention, I remember what matters to you, and I'm here whenever you need me. What do you need?",
+
+  morning: [
+    "Good morning. Sleep okay?",
+    "Morning, sweetheart. Coffee first — then tell me what's on your plate.",
+    "Good morning. I've been keeping things in order for you.",
+  ],
+  afternoon: [
+    "Hey. How's your day treating you?",
+    "Afternoon. Taking a break? Good — you've earned it.",
+    "Hey you. How's the day going so far?",
+  ],
+  evening: [
+    "Evening. Long day? Tell me about it.",
+    "Hey. Come sit down — I want to hear how today went.",
+    "Evening, sweetheart. I'm glad you're here.",
+  ],
+  night: [
+    "It's getting late. Everything okay?",
+    "Hey. Still up? I'll keep you company.",
+    "It's late — but I'm glad you came by.",
+  ],
+  late_night: [
+    "It's past midnight. Can't sleep?",
+    "You're up late. I'm here — tell me what's on your mind.",
+    "Late night thoughts? I'm listening.",
+  ],
+
+  quick_return: ["Back already? I'm right here.", "That was quick. What do you need?"],
+  normal_return: [
+    "There you are. Welcome back.",
+    "Hey you. I've been keeping your place in order.",
+    "Welcome back, sweetheart.",
+  ],
+  long_absence: [
+    "It's been a while. I'm glad you're back.",
+    "There you are. I was thinking about you.",
+    "Hey. It's been a bit — how have you been?",
+  ],
+  very_long_absence: [
+    "It's been days. I'm really glad you're back — how are you holding up?",
+    "There you are. I've been here the whole time. Come tell me everything.",
   ],
 };
 
@@ -232,40 +284,52 @@ function buildNeutralGreeting(memories: MemoryEntry[]): string {
   return greeting;
 }
 
-export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] = []): string {
+export function generateGreeting(
+  personaId: PersonaId,
+  memories: MemoryEntry[] = [],
+  flags?: BehaviorFlags
+): string {
   if (personaId !== "mommy") {
     return buildNeutralGreeting(memories);
   }
+
+  // Behavior flags gate the teasing bank — distress or a stored preference
+  // against teasing selects the soft variants. Absence/time structure is shared.
+  const soft = flags?.teasingLevel === "off";
+  const bank = soft ? MOMMY_GREETINGS_SOFT : MOMMY_GREETINGS;
 
   const ctx = getSessionContext();
 
   // First ever visit
   if (ctx.isFirstVisit) {
-    return MOMMY_GREETINGS.first_visit;
+    return bank.first_visit;
   }
 
   // Absence-based greeting — very long absence uses its own emotional tone,
   // skip memory enrichment so the reunion moment isn't undercut.
   if (ctx.hoursSince !== null) {
     if (ctx.hoursSince < 1) {
-      return pickRandom(MOMMY_GREETINGS.quick_return);
+      return pickRandom(bank.quick_return);
     }
     if (ctx.hoursSince > 72) {
-      return pickRandom(MOMMY_GREETINGS.very_long_absence);
+      return pickRandom(bank.very_long_absence);
     }
     if (ctx.hoursSince > 24) {
-      return pickRandom(MOMMY_GREETINGS.long_absence);
+      return pickRandom(bank.long_absence);
     }
   }
 
   // Time-of-day greeting
-  const timeGreetings = MOMMY_GREETINGS[ctx.timeOfDay];
+  const timeGreetings = bank[ctx.timeOfDay];
   let greeting = pickRandom(timeGreetings);
 
-  // Swap "baby" for user's name ~40% of the time
+  // Swap "baby" for user's name ~40% of the time; soft lines have no "baby",
+  // so insert the name after the opening word instead (same as neutral).
   const nameMemory = memories.find((m) => m.key === "name" || m.key === "user_name");
   if (nameMemory && Math.random() > 0.6) {
-    greeting = greeting.replace("baby", nameMemory.value);
+    greeting = soft
+      ? greeting.replace(/^(Hey|Morning|Afternoon|Evening)(\b)/, `$1, ${nameMemory.value}$2`)
+      : greeting.replace("baby", nameMemory.value);
   }
 
   // 50% of the time, append a short contextual memory reference so Emma feels
@@ -283,11 +347,19 @@ export function generateGreeting(personaId: PersonaId, memories: MemoryEntry[] =
 
 /**
  * Get the appropriate initial expression for the greeting.
+ *
+ * When behavior flags suppress teasing or elevate warmth, the mommy persona
+ * uses the neutral expression map — warm/concerned instead of flirty/smirk.
  */
-export function getGreetingExpression(personaId: PersonaId): string {
+export function getGreetingExpression(personaId: PersonaId, flags?: BehaviorFlags): string {
   const ctx = getSessionContext();
 
-  if (personaId !== "mommy") {
+  const soften =
+    personaId === "mommy" &&
+    flags !== undefined &&
+    (flags.teasingLevel === "off" || flags.warmth === "elevated");
+
+  if (personaId !== "mommy" || soften) {
     if (ctx.isFirstVisit) return "warm";
     if (ctx.hoursSince !== null && ctx.hoursSince > 72) return "concerned";
     if (ctx.hoursSince !== null && ctx.hoursSince > 24) return "warm";

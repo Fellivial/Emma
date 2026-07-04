@@ -83,7 +83,16 @@ persona baseline → custom persona settings → memory preferences → emotion/
 deriveBehaviorFlags()           ← src/core/behavior-flags.ts (pure, deterministic)
         │
         ├──► personas.ts        renders compact "## Behavior Directives" in the dynamic block
-        └──► response-validator confirms the reply honored the flags (log-only)
+        ├──► response-validator confirms the reply honored the flags (log-only)
+        │
+        │    Phase 4 consumers — the app shell derives the same flags client-side
+        │    (persona + memories + live emotion; no localHour in render):
+        ├──► greeting-engine    teasing off → soft mommy bank; warmth softens expression
+        ├──► proactive-speech   teasing off → soft banks; distress skips the playful idle nudge
+        ├──► voice-behavior     warmth softens ElevenLabs + WebSpeech delivery; lowered
+        │                       initiative calms pace (never raises energy)
+        └──► avatar-engine      body-tap escalation gated by teasingLevel; idle cadence
+                                stretches when initiative is lowered
 ```
 
 Five flags: `verbosity`, `emojiUsage`, `teasingLevel`, `warmth`, `initiative` — small closed enums, each mapping to a concrete directive and (where checkable) a validator rule.
@@ -202,15 +211,21 @@ See [Explanation: Security](explanation-security.md) for the full pattern list a
 
 ## Companion Presence Systems
 
-Several client-side engines make Emma feel present between messages. They predate Phase 3 but were previously undocumented:
+Several client-side engines make Emma feel present between messages. They predate Phase 3 but were previously undocumented; since Phase 4 they consume behavior flags:
 
-- **Greeting engine** (`src/core/greeting-engine.ts`) — on app load, picks a greeting from persona-specific banks keyed by time of day and absence length (`quick_return` < 1h, `long_absence` > 24h, `very_long_absence` > 72h, tracked via `localStorage`). ~40% of the time it swaps in the user's name from memory; ~50% of the time it appends a follow-up drawn from a high-confidence goal/relationship/habit memory ("How's Alex doing?").
+- **Greeting engine** (`src/core/greeting-engine.ts`) — on app load, picks a greeting from persona-specific banks keyed by time of day and absence length (`quick_return` < 1h, `long_absence` > 24h, `very_long_absence` > 72h, tracked via `localStorage`). ~40% of the time it swaps in the user's name from memory; ~50% of the time it appends a follow-up drawn from a high-confidence goal/relationship/habit memory ("How's Alex doing?"). When behavior flags suppress teasing, the mommy persona greets from a soft bank (same warmth and absence structure, zero teasing markers), and the greeting expression softens to warm/concerned instead of flirty/smirk.
 
-- **Proactive speech** (`src/core/proactive-speech.ts`) — timers reset on user activity trigger unprompted speech: a playful comment at 45s idle (occasionally personalized from memory), a genuine check-in at 2min, and a bedtime nudge after 5min during late-night hours. Wired in the app shell via `useProactiveSpeech`.
+- **Proactive speech** (`src/core/proactive-speech.ts`) — timers reset on user activity trigger unprompted speech: a playful comment at 45s idle (occasionally personalized from memory), a genuine check-in at 2min, and a bedtime nudge after 5min during late-night hours. Wired in the app shell via `useProactiveSpeech`. Bank selection goes through `selectProactiveBanks()` — teasing off picks soft mommy banks — and during distress (warmth elevated) the playful 45s comment is skipped so the 2-minute concern check-in carries presence instead.
 
-- **Pattern detector** (`src/core/pattern-detector.ts` + `/api/emma/patterns`) — a daily cron clusters the last 30 days of completed tasks, detects daily/weekly recurrences and repeated tool sequences, and generates an in-persona scheduling suggestion. The app shell surfaces the top unseen pattern as proactive speech ~4s after the greeting (quiet-hours aware, capped at 3/day).
+- **Pattern detector** (`src/core/pattern-detector.ts` + `/api/emma/patterns`) — a daily cron clusters the last 30 days of completed tasks, detects daily/weekly recurrences and repeated tool sequences, and generates a suggestion in Emma's companion voice — she noticed a rhythm and offers to carry it, never a productivity-tool automation pitch (see `docs/niche.md`). The app shell surfaces the top unseen pattern as proactive speech ~4s after the greeting (quiet-hours aware, capped at 3/day).
+
+- **Voice modulation** (`src/core/voice-behavior.ts`) — pure helpers layered on top of the expression/emotion voice presets: elevated warmth slows and softens delivery on both the ElevenLabs path (`/api/emma/tts` accepts optional `warmth`/`initiative`/`personaId` body hints) and the WebSpeech fallback; initiative lowered below the persona baseline calms the pace. Identity at baseline flags, clamped to each engine's safe ranges, never raises energy.
+
+- **Avatar modulation** (`src/core/avatar-engine.ts`) — the body-tap reaction goes through `resolveBodyTapReaction()` (playful → flirty escalation, light → amused, off → reserved, no escalation) and idle micro-movement cadence stretches via `idleDelayScale()` when initiative is lowered. Expression pipeline and Live2D runtime unchanged.
 
 - **Context manager** (`src/core/context-manager.ts`) — token-budget-aware summarization for long conversations: at 75% budget utilization, older messages are compressed into a `[SUMMARY]` message via `/api/emma/summarize`, always preserving the 10 most recent messages. Falls back to trimming when summarization fails.
+
+**Cross-session presence (deferred to Phase 4.x):** presence state is currently client-side only — `localStorage` holds the last-visit timestamp, and emotion state resets on reload. Server-side continuity (last session, last emotion snapshot, last proactive topic — enabling multi-device and long-absence emotional continuity) requires a new table and migration, so it was explicitly deferred rather than rushed into Phase 4.
 
 ---
 

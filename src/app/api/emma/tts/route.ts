@@ -4,6 +4,7 @@ import { decrypt } from "@/core/security/encryption";
 import { getUser } from "@/lib/supabase/server";
 import type { AvatarExpression } from "@/types/emma";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
+import { applyFlagsToElevenLabsSettings } from "@/core/voice-behavior";
 
 const ELEVENLABS_API = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { text, voiceId, expression } = await req.json();
+    const { text, voiceId, expression, warmth, initiative, personaId } = await req.json();
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -135,9 +136,15 @@ export async function POST(req: NextRequest) {
     // ── Call ElevenLabs ─────────────────────────────────────────────────
     // Priority: request voiceId → persona voice_id → integration default → Rachel
     const voice = voiceId || personaVoiceId || storedVoiceId || DEFAULT_VOICE_ID;
-    const voiceSettings =
+    // Expression preset first, then a light behavior-flag pass on top (warmth
+    // softens delivery, lowered initiative calms pace). The helper validates
+    // the untrusted body values — unknown ones are no-ops.
+    const voiceSettings = applyFlagsToElevenLabsSettings(
       EXPRESSION_VOICE_SETTINGS[(expression as AvatarExpression) ?? "neutral"] ??
-      EXPRESSION_VOICE_SETTINGS.neutral;
+        EXPRESSION_VOICE_SETTINGS.neutral,
+      personaId === "neutral" ? "neutral" : "mommy",
+      { warmth, initiative }
+    );
 
     const res = await fetch(`${ELEVENLABS_API}/text-to-speech/${voice}`, {
       method: "POST",
