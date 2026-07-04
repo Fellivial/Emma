@@ -18,6 +18,25 @@ vi.stubGlobal("window", { localStorage: mockLocalStorage });
 vi.stubGlobal("localStorage", mockLocalStorage);
 
 import type { MemoryEntry } from "@/types/emma";
+import type { BehaviorFlags } from "@/core/behavior-flags";
+
+function flags(overrides: Partial<BehaviorFlags> = {}): BehaviorFlags {
+  return {
+    verbosity: "normal",
+    emojiUsage: "minimal",
+    teasingLevel: "playful",
+    warmth: "standard",
+    initiative: "forward",
+    ...overrides,
+  };
+}
+
+// Mirrors the teasing markers the response validator checks for.
+const TEASING_PATTERNS = [/\bbaby\b/i, /(^|[.!?]\s+)mmm\b/i, /(^|[.!?]\s+)ahh\b/i, /😏|😘/u];
+
+function hasTeasing(text: string): boolean {
+  return TEASING_PATTERNS.some((p) => p.test(text));
+}
 
 function mem(
   category: MemoryEntry["category"],
@@ -149,5 +168,123 @@ describe("generateGreeting", () => {
 
     expect(result).toContain("Jordan");
     expect(result).not.toContain("baby");
+  });
+});
+
+describe("generateGreeting with behavior flags", () => {
+  beforeEach(() => {
+    mockLocalStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("teasing-off greeting has no teasing markers across hours and bank picks", async () => {
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const off = flags({ teasingLevel: "off" });
+
+    for (const hour of [8, 14, 19, 22, 2]) {
+      for (const rand of [0, 0.49, 0.99]) {
+        vi.restoreAllMocks();
+        vi.spyOn(Date.prototype, "getHours").mockReturnValue(hour);
+        vi.spyOn(Math, "random").mockReturnValue(rand);
+        // Re-seed a 3h-ago visit before each call — getSessionContext writes now.
+        mockLocalStorage.setItem("emma_last_session", String(Date.now() - 3 * 3600 * 1000));
+
+        const result = generateGreeting("mommy", [], off);
+        expect(result.length).toBeGreaterThan(0);
+        expect(hasTeasing(result), `hour=${hour} rand=${rand}: "${result}"`).toBe(false);
+      }
+    }
+  });
+
+  it("teasing-off first visit greeting is not flirty", async () => {
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("mommy", [], flags({ teasingLevel: "off" }));
+    expect(result).toContain("I'm Emma");
+    expect(result).not.toContain("turn me on");
+    expect(hasTeasing(result)).toBe(false);
+  });
+
+  it("teasing-off absence greetings stay warm without teasing", async () => {
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const off = flags({ teasingLevel: "off" });
+
+    for (const hoursAgo of [0.5, 30, 100]) {
+      for (const rand of [0, 0.99]) {
+        vi.restoreAllMocks();
+        vi.spyOn(Math, "random").mockReturnValue(rand);
+        mockLocalStorage.setItem("emma_last_session", String(Date.now() - hoursAgo * 3600 * 1000));
+
+        const result = generateGreeting("mommy", [], off);
+        expect(result.length).toBeGreaterThan(0);
+        expect(hasTeasing(result), `hoursAgo=${hoursAgo} rand=${rand}: "${result}"`).toBe(false);
+      }
+    }
+  });
+
+  it("playful flags keep the default teasing bank (absence structure intact)", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 100 * 3600 * 1000));
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("mommy", [], flags({ teasingLevel: "playful" }));
+    expect(result).toMatch(/show up|been days/);
+  });
+
+  it("memory follow-up still appends when teasing is off", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 3 * 3600 * 1000));
+    vi.spyOn(Math, "random").mockReturnValue(0.8);
+
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting(
+      "mommy",
+      [mem("goal", "job_search", "finding a new job")],
+      flags({ teasingLevel: "off" })
+    );
+
+    expect(result).toContain("finding a new job");
+    expect(hasTeasing(result)).toBe(false);
+  });
+
+  it("omitting flags preserves the original teasing greeting behavior", async () => {
+    const { generateGreeting } = await import("@/core/greeting-engine");
+    const result = generateGreeting("mommy", []);
+    expect(result).toContain("I'm Emma");
+    expect(result).toContain("baby");
+  });
+});
+
+describe("getGreetingExpression with behavior flags", () => {
+  beforeEach(() => {
+    mockLocalStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("first visit softens from flirty to warm when teasing is off", async () => {
+    const { getGreetingExpression } = await import("@/core/greeting-engine");
+    expect(getGreetingExpression("mommy", flags({ teasingLevel: "off" }))).toBe("warm");
+  });
+
+  it("first visit stays flirty with playful flags", async () => {
+    const { getGreetingExpression } = await import("@/core/greeting-engine");
+    expect(getGreetingExpression("mommy", flags({ teasingLevel: "playful" }))).toBe("flirty");
+  });
+
+  it("elevated warmth softens the expression even when teasing is allowed", async () => {
+    const { getGreetingExpression } = await import("@/core/greeting-engine");
+    const expr = getGreetingExpression("mommy", flags({ warmth: "elevated" }));
+    expect(expr).not.toBe("flirty");
+    expect(expr).not.toBe("smirk");
+  });
+
+  it("very long absence maps to concerned instead of skeptical when softened", async () => {
+    mockLocalStorage.setItem("emma_last_session", String(Date.now() - 100 * 3600 * 1000));
+    const { getGreetingExpression } = await import("@/core/greeting-engine");
+    expect(getGreetingExpression("mommy", flags({ teasingLevel: "off" }))).toBe("concerned");
   });
 });

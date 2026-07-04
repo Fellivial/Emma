@@ -32,6 +32,7 @@ import { useAvatar } from "@/core/avatar-engine";
 import { useContextManager } from "@/core/context-manager";
 import { generateGreeting, getGreetingExpression } from "@/core/greeting-engine";
 import { useProactiveSpeech } from "@/core/proactive-speech";
+import { deriveBehaviorFlags } from "@/core/behavior-flags";
 import {
   buildTierNotification,
   shouldAutoExecute,
@@ -107,6 +108,21 @@ export default function EmmaPage() {
   const avatar = useAvatar();
   const contextManager = useContextManager();
   const proactiveResetRef = useRef<() => void>(() => {});
+
+  // ── Behavior flags — client-side derivation for companion presence systems ──
+  // Same pure derivation the brain route uses server-side (ADR 0001). Greeting,
+  // proactive speech, voice, and avatar consume these; localHour is omitted on
+  // purpose (impure in render) — late-night behavior stays with each engine's
+  // own time checks, and the server prompt path still derives with the hour.
+  const behaviorFlags = useMemo(
+    () =>
+      deriveBehaviorFlags({
+        personaId: persona,
+        memories,
+        emotionState: emotion.currentEmotion ?? undefined,
+      }),
+    [persona, memories, emotion.currentEmotion]
+  );
 
   // ── Execute workflow routine ───────────────────────────────────────────────
   const executeRoutineById = useCallback(
@@ -260,8 +276,8 @@ export default function EmmaPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
 
-    const greeting = generateGreeting(persona, memories);
-    const greetingExpression = getGreetingExpression(persona);
+    const greeting = generateGreeting(persona, memories, behaviorFlags);
+    const greetingExpression = getGreetingExpression(persona, behaviorFlags);
 
     const greetingMsg: ChatMessageType = {
       id: uid(),
@@ -277,7 +293,7 @@ export default function EmmaPage() {
     setTimeout(() => {
       avatar.setExpression(greetingExpression as AvatarExpression);
     }, 500);
-  }, [initialized, vibeResolved, persona, memories, avatar]);
+  }, [initialized, vibeResolved, persona, memories, avatar, behaviorFlags]);
 
   // ── When history loads with messages, replace the greeting ───────────────────
   useEffect(() => {
@@ -993,7 +1009,13 @@ export default function EmmaPage() {
     [avatar, voice, ttsEnabled, timeline]
   );
 
-  const proactive = useProactiveSpeech(handleProactiveSpeak, true, memories, persona);
+  const proactive = useProactiveSpeech(
+    handleProactiveSpeak,
+    true,
+    memories,
+    persona,
+    behaviorFlags
+  );
   // eslint-disable-next-line react-hooks/refs
   proactiveResetRef.current = proactive.resetActivity;
 
