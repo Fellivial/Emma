@@ -1,8 +1,8 @@
 /**
  * client-config-defaults.test.ts
  *
- * Covers the gaps added in T-3 / T-15:
- *   - DEFAULT_CONFIG.autonomyTier === 3
+ * Covers the gaps added in T-3 / T-15 (default lowered to tier 2 in Phase 5):
+ *   - DEFAULT_CONFIG.autonomyTier === 2
  *   - DEFAULT_CONFIG.customRoutines === []
  *   - loadClientConfigOrNull maps custom_routines: null  → customRoutines: []
  *   - loadClientConfigOrNull maps custom_routines: [...]  → customRoutines: [...]
@@ -84,8 +84,8 @@ const CUSTOM_ROUTINE = {
 // ── DEFAULT_CONFIG shape (T-3 / T-15) ────────────────────────────────────────
 
 describe("DEFAULT_CONFIG", () => {
-  it("autonomyTier is 3 (execute) — T-3", () => {
-    expect(DEFAULT_CONFIG.autonomyTier).toBe(3);
+  it("autonomyTier is 2 (suggest & confirm) — safe default, P5", () => {
+    expect(DEFAULT_CONFIG.autonomyTier).toBe(2);
   });
 
   it("customRoutines is an empty array — T-15", () => {
@@ -105,7 +105,7 @@ describe("loadClientConfig — fallback", () => {
   it("returns DEFAULT_CONFIG when no slug supplied", async () => {
     const result = await loadClientConfig();
     expect(result.id).toBe("default");
-    expect(result.autonomyTier).toBe(3);
+    expect(result.autonomyTier).toBe(2);
   });
 
   it("returns DEFAULT_CONFIG when slug is 'default'", async () => {
@@ -117,10 +117,10 @@ describe("loadClientConfig — fallback", () => {
 // ── loadClientConfigForUser — customRoutines mapping (T-15) ──────────────────
 
 describe("loadClientConfigForUser — customRoutines", () => {
-  it("returns DEFAULT_CONFIG (autonomyTier 3) when no DB row found", async () => {
+  it("returns DEFAULT_CONFIG (autonomyTier 2) when no DB row found", async () => {
     mockSingle.mockResolvedValueOnce({ data: null, error: { code: "PGRST116" } });
     const result = await loadClientConfigForUser("user-orphan");
-    expect(result.autonomyTier).toBe(3);
+    expect(result.autonomyTier).toBe(2);
     expect(result.customRoutines).toEqual([]);
   });
 

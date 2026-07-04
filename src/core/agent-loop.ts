@@ -273,12 +273,13 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   }
 
   // Resolve the client's autonomy tier so moderate-tool gating works correctly.
-  // Default to 3 (execute) so behavior is unchanged when no client config is found.
-  let autonomyTier: AutonomyTier = 3;
+  // Default to 2 (suggest & confirm) — when no client config is found, moderate
+  // tools pause for approval rather than auto-executing.
+  let autonomyTier: AutonomyTier = 2;
   let clientPlanId = "free";
   {
     const clientCfg = await loadClientConfigForUser(task.userId);
-    autonomyTier = clientCfg.autonomyTier ?? 3;
+    autonomyTier = clientCfg.autonomyTier ?? 2;
     clientPlanId = clientCfg.planId;
   }
 
@@ -540,9 +541,11 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
           // Moderate tools: gate on autonomy_tier.
           // Tier 1 → skip execution.
           // Tier 2 → pause for approval (same flow as dangerous).
-          // Tier 3 → auto-execute.
+          // Tier 3 → auto-execute only after the pre-execution evaluator approves.
           if (toolDef.riskLevel === "moderate") {
-            if (supabase) {
+            // Tier 3 is logged after evaluation so the audit trail never claims
+            // "moderate_executed" for an action the evaluator rejected.
+            if (supabase && autonomyTier !== 3) {
               await supabase.from("action_log").insert({
                 task_id: task.id,
                 client_id: task.clientId ?? null,
@@ -550,19 +553,12 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 step_number: step,
                 action: toolName,
                 input: toolInput,
-                status:
-                  autonomyTier === 1
-                    ? "skipped_low_autonomy"
-                    : autonomyTier === 2
-                      ? "awaiting_approval"
-                      : "moderate_executed",
+                status: autonomyTier === 1 ? "skipped_low_autonomy" : "awaiting_approval",
                 risk_level: "moderate",
                 reason:
                   autonomyTier === 1
                     ? `Moderate tool "${toolName}" skipped — autonomy tier 1`
-                    : autonomyTier === 2
-                      ? `Moderate tool "${toolName}" queued for approval — autonomy tier 2`
-                      : `Moderate tool "${toolName}" auto-approved`,
+                    : `Moderate tool "${toolName}" queued for approval — autonomy tier 2`,
               });
             }
             if (autonomyTier === 1) {
@@ -641,7 +637,10 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
                 contextSnapshot: ctx,
               };
             }
-            // tier 3: run pre-execution evaluator, then fall through to execution below
+            // tier 3: run pre-execution evaluator, then fall through to execution below.
+            // Fail-closed: if the evaluator is unavailable or errors, the action
+            // is NOT executed — a moderate write must never run because its
+            // evaluation failed.
             const evaluation = await evaluateTool(
               task.goal,
               toolName,
@@ -670,6 +669,19 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
               steps.push(skippedResult);
               await logAction(supabase, task.id, skippedResult, task.clientId, task.userId);
               continue;
+            }
+            if (supabase) {
+              await supabase.from("action_log").insert({
+                task_id: task.id,
+                client_id: task.clientId ?? null,
+                user_id: task.userId ?? null,
+                step_number: step,
+                action: toolName,
+                input: toolInput,
+                status: "moderate_executed",
+                risk_level: "moderate",
+                reason: `Moderate tool "${toolName}" auto-approved — ${evaluation.reason}`,
+              });
             }
           }
 
@@ -1033,8 +1045,9 @@ async function logAction(
 // ─── Pre-Execution Evaluator ─────────────────────────────────────────────────
 
 // Lightweight LLM check before auto-executing a moderate tool at autonomy tier 3.
-// Fail-open: any error or timeout returns { proceed: true } so the agent is never
-// blocked by evaluator unavailability.
+// Fail-closed: any error, timeout, or unrecognized reply returns { proceed: false }.
+// A moderate-risk write must never execute because its evaluation failed — the
+// agent skips the action deterministically and the model is told to reconsider.
 async function evaluateTool(
   goal: string,
   toolName: string,
@@ -1097,7 +1110,12 @@ SKIP: <one-line reason why this action should be skipped>`;
       { maxRetries: 0, connectionTimeoutMs: 8_000 }
     );
 
-    if (!res.ok) return { proceed: true, reason: "evaluator unavailable" };
+    if (!res.ok) {
+      return {
+        proceed: false,
+        reason: "pre-execution evaluator unavailable — action not executed",
+      };
+    }
 
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -1108,13 +1126,17 @@ SKIP: <one-line reason why this action should be skipped>`;
     providerSucceeded = true;
     const text = (data.choices?.[0]?.message?.content ?? "").trim();
 
+    if (text.toUpperCase().startsWith("PROCEED")) {
+      return { proceed: true, reason: "evaluator approved" };
+    }
     if (text.toUpperCase().startsWith("SKIP")) {
       const reason = text.includes(":") ? text.split(":").slice(1).join(":").trim() : text;
       return { proceed: false, reason: reason || "evaluator rejected" };
     }
-    return { proceed: true, reason: "evaluator approved" };
+    // Anything else (empty or malformed reply) is not an approval.
+    return { proceed: false, reason: "evaluator reply unrecognized — action not executed" };
   } catch {
-    return { proceed: true, reason: "evaluator timed out — proceeding" };
+    return { proceed: false, reason: "pre-execution evaluation failed — action not executed" };
   } finally {
     await recordCostResult(cost, {
       inputTokens,

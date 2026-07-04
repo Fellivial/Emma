@@ -176,51 +176,17 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    id: "workflows",
-    label: "Workflows",
-    href: "/settings/workflows",
-    icon: (active: boolean) => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-        <rect
-          x="1.5"
-          y="1.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="9.5"
-          y="1.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="1.5"
-          y="9.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-        <rect
-          x="9.5"
-          y="9.5"
-          width="5"
-          height="5"
-          rx="1"
-          stroke={active ? "#e8a0bf" : "rgba(232,160,191,0.25)"}
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
+];
+
+// Information architecture: everyday companion settings first, power-user
+// surfaces (external services, autonomous tasks, audit) under "Advanced".
+// /settings/mcp stays unlinked — it is gated by the server-only
+// ENABLE_MCP_TOOLS flag, which the client cannot read.
+const ADVANCED_IDS = ["integrations", "tasks", "provenance"];
+
+const NAV_SECTIONS: { label: string; items: typeof NAV_ITEMS }[] = [
+  { label: "Companion", items: NAV_ITEMS.filter((item) => !ADVANCED_IDS.includes(item.id)) },
+  { label: "Advanced", items: NAV_ITEMS.filter((item) => ADVANCED_IDS.includes(item.id)) },
 ];
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -233,12 +199,13 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/settings/integrations": "Integrations",
   "/settings/notifications": "Notifications",
   "/settings/tasks": "Tasks",
-  "/settings/workflows": "Workflows",
   "/settings/provenance": "Audit Trail",
   "/settings/more": "More",
 };
 
-const MOBILE_NAV_IDS = ["profile", "usage", "billing", "privacy", "tasks"];
+// Mobile tab bar carries the core companion items; everything else (including
+// all Advanced surfaces) lives under More.
+const MOBILE_NAV_IDS = ["profile", "usage", "billing", "privacy"];
 const MOBILE_NAV = [
   ...NAV_ITEMS.filter((item) => MOBILE_NAV_IDS.includes(item.id)),
   {
@@ -300,30 +267,35 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar — hidden on mobile */}
         <aside className="hidden md:flex w-[190px] shrink-0 border-r border-surface-border bg-emma-950/60 flex-col py-6">
-          <div className="px-5 mb-5">
-            <span className="text-[9px] font-medium text-emma-200/20 uppercase tracking-[0.2em]">
-              Navigation
-            </span>
-          </div>
-
-          <nav className="flex flex-col gap-0.5 px-3 flex-1">
-            {NAV_ITEMS.map((item) => {
-              const active = isActive(item);
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                    active
-                      ? "bg-emma-300/10 border border-emma-300/15 text-emma-200/90"
-                      : "text-emma-200/35 hover:text-emma-200/55 hover:bg-surface border border-transparent"
-                  }`}
-                >
-                  {item.icon(active)}
-                  <span className="font-light">{item.label}</span>
-                </Link>
-              );
-            })}
+          <nav className="flex flex-col px-3 flex-1">
+            {NAV_SECTIONS.map((section, sectionIdx) => (
+              <div key={section.label} className={sectionIdx > 0 ? "mt-5" : ""}>
+                <div className="px-2 mb-2">
+                  <span className="text-[9px] font-medium text-emma-200/20 uppercase tracking-[0.2em]">
+                    {section.label}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {section.items.map((item) => {
+                    const active = isActive(item);
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                          active
+                            ? "bg-emma-300/10 border border-emma-300/15 text-emma-200/90"
+                            : "text-emma-200/35 hover:text-emma-200/55 hover:bg-surface border border-transparent"
+                        }`}
+                      >
+                        {item.icon(active)}
+                        <span className="font-light">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
           {/* Back to app */}
