@@ -4,6 +4,8 @@ import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
 import { parseEmmaResponse } from "@/core/command-parser";
+import { deriveBehaviorFlags } from "@/core/behavior-flags";
+import { validateResponseBehavior } from "@/core/response-validator";
 import { getRelevantMemoriesForUser, getLatestConversationSummary } from "@/core/memory-db";
 import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
@@ -312,6 +314,34 @@ export async function POST(req: NextRequest) {
       }
     })();
 
+    // Hour 0-23 in the user's timezone — feeds behavior derivation (late-night
+    // initiative damping). Falls back to UTC on a bad timezone string.
+    const localHour = (() => {
+      try {
+        return parseInt(
+          new Intl.DateTimeFormat("en-US", {
+            hour: "numeric",
+            hourCycle: "h23",
+            timeZone: userTimezone,
+          }).format(new Date()),
+          10
+        );
+      } catch {
+        return new Date().getUTCHours();
+      }
+    })();
+
+    // Behavior is decided BEFORE prompt generation (ADR 0001): one deterministic
+    // derivation from persona + memories + emotion + time, rendered as compact
+    // directives by the prompt builder and verified after the response arrives.
+    const behaviorFlags = deriveBehaviorFlags({
+      personaId: persona as "mommy" | "neutral",
+      memories,
+      emotionState,
+      customPersona,
+      localHour,
+    });
+
     const systemPromptText = buildSystemPrompt({
       personaId: persona as "mommy" | "neutral",
       deviceGraph,
@@ -324,6 +354,7 @@ export async function POST(req: NextRequest) {
       customPersona,
       documentContext,
       timeContext,
+      behaviorFlags,
     });
 
     // ── Sanitise user messages ─────────────────────────────────────────────
@@ -589,6 +620,17 @@ export async function POST(req: NextRequest) {
           // ── Final event with parsed response ─────────────────────────────
           const { text, commands, routineId, expression } = parseEmmaResponse(fullText);
 
+          // Confirm the response honored the behavior flags it was generated
+          // under (ADR 0001). Log-only observability — never rewrites.
+          const behaviorCheck = validateResponseBehavior(text, behaviorFlags);
+          if (!behaviorCheck.consistent) {
+            console.warn(
+              "[EMMA] Behavior violations:",
+              behaviorCheck.violations.join(", "),
+              `(flags: ${JSON.stringify(behaviorFlags)})`
+            );
+          }
+
           const doneEvent = JSON.stringify({
             type: "done",
             text,
@@ -598,6 +640,7 @@ export async function POST(req: NextRequest) {
             expression: expression || null,
             refused: finishReason === "content_filter",
             contextWindowExceeded: finishReason === "length",
+            behaviorViolations: behaviorCheck.violations,
             usage: { inputTokens, outputTokens, cacheReadTokens: 0, cacheCreationTokens: 0 },
             enforcement: enforcementResult
               ? {
