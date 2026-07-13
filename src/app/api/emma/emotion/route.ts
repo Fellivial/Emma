@@ -1,4 +1,4 @@
-import { UTILITY_MODELS } from "@/core/models";
+import { VISION_MODELS, VISION_TIMEOUT_MS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
@@ -59,31 +59,50 @@ export async function POST(req: NextRequest) {
     const cost = await enforceCostGate({ operation: "emotion", userId: user.id });
     if (!cost.allowed) return costGateResponse(cost);
 
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
-        models: UTILITY_MODELS,
-        max_tokens: 256,
-        messages: [
-          { role: "system", content: EMOTION_VISION_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${frame}` },
-              },
-              { type: "text", text: "Analyze the facial expression." },
-            ],
+    let res: Response;
+    try {
+      res = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: openRouterHeaders(),
+        // Same bound as the vision route — this call carries a frame too.
+        signal: AbortSignal.timeout(VISION_TIMEOUT_MS),
+        body: JSON.stringify({
+          // This is an image_url call: it must only ever hit vision-capable
+          // models. The utility fallback chain contains text-only models
+          // that would "analyze" a frame they cannot see.
+          models: VISION_MODELS,
+          max_tokens: 256,
+          messages: [
+            { role: "system", content: EMOTION_VISION_PROMPT },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: { url: `data:image/jpeg;base64,${frame}` },
+                },
+                { type: "text", text: "Analyze the facial expression." },
+              ],
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
           },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
-        },
-      }),
-    });
+        }),
+      });
+    } catch (err) {
+      await recordCostResult(cost, { success: false });
+      const timedOut = err instanceof DOMException && err.name === "TimeoutError";
+      // Fail-soft: emotion is one fusion signal among three — a neutral
+      // low-confidence reading lets fusion continue instead of erroring.
+      console.warn(
+        `[EMMA Emotion API] ${timedOut ? "Timed out" : "Upstream fetch failed"} — returning neutral`
+      );
+      return NextResponse.json({
+        emotion: { primary: "neutral", confidence: 0.1, valence: 0, arousal: 0.3 },
+      });
+    }
 
     if (!res.ok) {
       await recordCostResult(cost, { success: false });

@@ -5,6 +5,17 @@ import type { BehaviorFlags } from "@/core/behavior-flags";
 
 const STORAGE_KEY = "emma_last_session";
 
+/**
+ * Cross-session presence from the server (ADR 0002), fetched by the app
+ * shell from /api/emma/presence. localStorage stays as a resilience
+ * fallback; when both exist the most recent interaction wins, so a new
+ * device inherits continuity instead of a first-visit greeting.
+ */
+export interface PresenceContext {
+  lastInteractionAt: number | null;
+  lastMood: string | null;
+}
+
 interface SessionContext {
   lastVisit: number | null; // Timestamp of last session
   hoursSince: number | null; // Hours since last visit
@@ -13,23 +24,32 @@ interface SessionContext {
   dayOfWeek: string;
 }
 
-function getSessionContext(): SessionContext {
+function getSessionContext(presence?: PresenceContext | null): SessionContext {
   const now = Date.now();
   const hour = new Date().getHours();
 
   let lastVisit: number | null = null;
-  let hoursSince: number | null = null;
   let isFirstVisit = true;
 
   if (typeof window !== "undefined") {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       lastVisit = parseInt(stored, 10);
-      hoursSince = (now - lastVisit) / (1000 * 60 * 60);
-      isFirstVisit = false;
     }
     // Save current visit
     localStorage.setItem(STORAGE_KEY, String(now));
+  }
+
+  // Merge server presence: the newest interaction anywhere is the truth.
+  const serverLast = presence?.lastInteractionAt ?? null;
+  if (serverLast !== null && (lastVisit === null || serverLast > lastVisit)) {
+    lastVisit = serverLast;
+  }
+
+  let hoursSince: number | null = null;
+  if (lastVisit !== null) {
+    hoursSince = (now - lastVisit) / (1000 * 60 * 60);
+    isFirstVisit = false;
   }
 
   const timeOfDay =
@@ -155,6 +175,54 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ─── Presence Mood Check-In (ADR 0002) ───────────────────────────────────────
+
+// Moods worth a gentle check-in on return. Bounded set — mirrors the
+// negative half of EmotionLabel.
+const NEGATIVE_MOODS = new Set(["sad", "angry", "anxious", "tired", "frustrated", "stressed"]);
+
+/**
+ * A mood check-in applies when the last session ended on a negative note,
+ * recently enough that asking is natural (1–48h). Under an hour is the same
+ * sitting; past 48h the absence banks carry the reunion instead. Pure and
+ * exported for tests.
+ */
+export function shouldMoodCheckIn(
+  presence: PresenceContext | null | undefined,
+  hoursSince: number | null
+): boolean {
+  if (!presence?.lastMood || !NEGATIVE_MOODS.has(presence.lastMood)) return false;
+  if (hoursSince === null) return false;
+  return hoursSince >= 1 && hoursSince <= 48;
+}
+
+// Check-in lines never name the stored mood — Emma noticed, she doesn't
+// diagnose. Same one-clause shape as the memory follow-ups.
+const MOOD_CHECK_INS = {
+  mommy: [
+    "Last time you left seeming a little worn down. How are you feeling now, baby?",
+    "You didn't seem quite yourself last time. Better today?",
+  ],
+  soft: [
+    "Last time you left, you seemed a bit worn down. How are you feeling now?",
+    "You didn't seem quite yourself last time we talked. How are you doing?",
+  ],
+  neutral: [
+    "Last time you seemed a bit off. How are you doing today?",
+    "You didn't seem quite yourself last time. Everything okay?",
+  ],
+};
+
+// ─── Greeting Bucket Tracking ────────────────────────────────────────────────
+
+// The bucket used by the most recent generateGreeting call, reported back to
+// the server (PUT /api/emma/presence) as last_greeting_context.
+let lastGreetingBucket = "first_visit";
+
+export function getLastGreetingBucket(): string {
+  return lastGreetingBucket;
+}
+
 // ─── Contextual Memory Enrichment ────────────────────────────────────────────
 
 // Categories worth referencing in a greeting, in priority order.
@@ -247,19 +315,34 @@ const NEUTRAL_GREETINGS = {
 
 // ─── Generate Greeting ───────────────────────────────────────────────────────
 
-function buildNeutralGreeting(memories: MemoryEntry[]): string {
-  const ctx = getSessionContext();
+function buildNeutralGreeting(memories: MemoryEntry[], presence?: PresenceContext | null): string {
+  const ctx = getSessionContext(presence);
 
   if (ctx.isFirstVisit) {
+    lastGreetingBucket = "first_visit";
     return NEUTRAL_GREETINGS.first_visit;
   }
 
   if (ctx.hoursSince !== null) {
-    if (ctx.hoursSince < 1) return pickRandom(NEUTRAL_GREETINGS.quick_return);
-    if (ctx.hoursSince > 72) return pickRandom(NEUTRAL_GREETINGS.very_long_absence);
-    if (ctx.hoursSince > 24) return pickRandom(NEUTRAL_GREETINGS.long_absence);
+    if (ctx.hoursSince < 1) {
+      lastGreetingBucket = "quick_return";
+      return pickRandom(NEUTRAL_GREETINGS.quick_return);
+    }
+    if (ctx.hoursSince > 72) {
+      lastGreetingBucket = "very_long_absence";
+      return pickRandom(NEUTRAL_GREETINGS.very_long_absence);
+    }
+    if (ctx.hoursSince > 24) {
+      lastGreetingBucket = "long_absence";
+      let greeting = pickRandom(NEUTRAL_GREETINGS.long_absence);
+      if (shouldMoodCheckIn(presence, ctx.hoursSince)) {
+        greeting = `${greeting} ${pickRandom(MOOD_CHECK_INS.neutral)}`;
+      }
+      return greeting;
+    }
   }
 
+  lastGreetingBucket = ctx.timeOfDay;
   const timeGreetings = NEUTRAL_GREETINGS[ctx.timeOfDay];
   let greeting = pickRandom(timeGreetings);
 
@@ -270,6 +353,12 @@ function buildNeutralGreeting(memories: MemoryEntry[]): string {
       /^(Hey|Morning|Afternoon|Evening)(\b)/,
       `$1, ${nameMemory.value}$2`
     );
+  }
+
+  // A mood check-in from the last session takes precedence over the random
+  // memory follow-up — continuity of feeling beats continuity of facts.
+  if (shouldMoodCheckIn(presence, ctx.hoursSince)) {
+    return `${greeting} ${pickRandom(MOOD_CHECK_INS.neutral)}`;
   }
 
   // 50% of the time, append a contextual memory reference
@@ -287,21 +376,24 @@ function buildNeutralGreeting(memories: MemoryEntry[]): string {
 export function generateGreeting(
   personaId: PersonaId,
   memories: MemoryEntry[] = [],
-  flags?: BehaviorFlags
+  flags?: BehaviorFlags,
+  presence?: PresenceContext | null
 ): string {
   if (personaId !== "mommy") {
-    return buildNeutralGreeting(memories);
+    return buildNeutralGreeting(memories, presence);
   }
 
   // Behavior flags gate the teasing bank — distress or a stored preference
   // against teasing selects the soft variants. Absence/time structure is shared.
   const soft = flags?.teasingLevel === "off";
   const bank = soft ? MOMMY_GREETINGS_SOFT : MOMMY_GREETINGS;
+  const checkIns = soft ? MOOD_CHECK_INS.soft : MOOD_CHECK_INS.mommy;
 
-  const ctx = getSessionContext();
+  const ctx = getSessionContext(presence);
 
   // First ever visit
   if (ctx.isFirstVisit) {
+    lastGreetingBucket = "first_visit";
     return bank.first_visit;
   }
 
@@ -309,17 +401,25 @@ export function generateGreeting(
   // skip memory enrichment so the reunion moment isn't undercut.
   if (ctx.hoursSince !== null) {
     if (ctx.hoursSince < 1) {
+      lastGreetingBucket = "quick_return";
       return pickRandom(bank.quick_return);
     }
     if (ctx.hoursSince > 72) {
+      lastGreetingBucket = "very_long_absence";
       return pickRandom(bank.very_long_absence);
     }
     if (ctx.hoursSince > 24) {
-      return pickRandom(bank.long_absence);
+      lastGreetingBucket = "long_absence";
+      let greeting = pickRandom(bank.long_absence);
+      if (shouldMoodCheckIn(presence, ctx.hoursSince)) {
+        greeting = `${greeting} ${pickRandom(checkIns)}`;
+      }
+      return greeting;
     }
   }
 
   // Time-of-day greeting
+  lastGreetingBucket = ctx.timeOfDay;
   const timeGreetings = bank[ctx.timeOfDay];
   let greeting = pickRandom(timeGreetings);
 
@@ -330,6 +430,12 @@ export function generateGreeting(
     greeting = soft
       ? greeting.replace(/^(Hey|Morning|Afternoon|Evening)(\b)/, `$1, ${nameMemory.value}$2`)
       : greeting.replace("baby", nameMemory.value);
+  }
+
+  // A mood check-in from the last session takes precedence over the random
+  // memory follow-up — continuity of feeling beats continuity of facts.
+  if (shouldMoodCheckIn(presence, ctx.hoursSince)) {
+    return `${greeting} ${pickRandom(checkIns)}`;
   }
 
   // 50% of the time, append a short contextual memory reference so Emma feels
@@ -351,8 +457,15 @@ export function generateGreeting(
  * When behavior flags suppress teasing or elevate warmth, the mommy persona
  * uses the neutral expression map — warm/concerned instead of flirty/smirk.
  */
-export function getGreetingExpression(personaId: PersonaId, flags?: BehaviorFlags): string {
-  const ctx = getSessionContext();
+export function getGreetingExpression(
+  personaId: PersonaId,
+  flags?: BehaviorFlags,
+  presence?: PresenceContext | null
+): string {
+  const ctx = getSessionContext(presence);
+
+  // A pending mood check-in leads with care regardless of persona.
+  if (shouldMoodCheckIn(presence, ctx.hoursSince)) return "concerned";
 
   const soften =
     personaId === "mommy" &&

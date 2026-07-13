@@ -30,7 +30,12 @@ import { useMultiUser } from "@/core/multi-user-engine";
 import { useEmotion } from "@/core/emotion-engine";
 import { useAvatar } from "@/core/avatar-engine";
 import { useContextManager } from "@/core/context-manager";
-import { generateGreeting, getGreetingExpression } from "@/core/greeting-engine";
+import {
+  generateGreeting,
+  getGreetingExpression,
+  getLastGreetingBucket,
+  type PresenceContext,
+} from "@/core/greeting-engine";
 import { useProactiveSpeech } from "@/core/proactive-speech";
 import { deriveBehaviorFlags } from "@/core/behavior-flags";
 import {
@@ -70,6 +75,10 @@ export default function EmmaPage() {
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [historyReady, setHistoryReady] = useState<ChatMessageType[] | null>(null);
+  // Cross-session presence (ADR 0002) — fetched once; the greeting waits for
+  // it to settle (success or failure) but never longer than the fetch timeout.
+  const [presence, setPresence] = useState<PresenceContext | null>(null);
+  const [presenceResolved, setPresenceResolved] = useState(false);
   const [usageWarning, setUsageWarning] = useState<{
     message: string;
     window: string | null;
@@ -234,6 +243,26 @@ export default function EmmaPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMemories();
+    // Cross-session presence (ADR 0002) — fail-open with a hard timeout so a
+    // slow network can only delay the greeting by 2.5s, never block it.
+    fetch("/api/emma/presence", { signal: AbortSignal.timeout(2500) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          d: {
+            state?: { lastInteractionAt: number | null; lastMood: string | null } | null;
+          } | null
+        ) => {
+          if (d?.state) {
+            setPresence({
+              lastInteractionAt: d.state.lastInteractionAt,
+              lastMood: d.state.lastMood,
+            });
+          }
+        }
+      )
+      .catch(() => {})
+      .finally(() => setPresenceResolved(true));
     fetch("/api/emma/history")
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((d) => {
@@ -280,12 +309,21 @@ export default function EmmaPage() {
   // ── Eager greeting — fires after vibe is resolved so persona is correct ──────
   useEffect(() => {
     if (!vibeResolved) return;
+    if (!presenceResolved) return;
     if (initialized) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInitialized(true);
 
-    const greeting = generateGreeting(persona, memories, behaviorFlags);
-    const greetingExpression = getGreetingExpression(persona, behaviorFlags);
+    const greeting = generateGreeting(persona, memories, behaviorFlags, presence);
+    const greetingExpression = getGreetingExpression(persona, behaviorFlags, presence);
+
+    // Report the greeting bucket used so the next session (any device) knows
+    // (ADR 0002 — bounded enum, validated server-side). Fire-and-forget.
+    fetch("/api/emma/presence", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastGreetingContext: getLastGreetingBucket() }),
+    }).catch(() => {});
 
     const greetingMsg: ChatMessageType = {
       id: uid(),
@@ -301,7 +339,16 @@ export default function EmmaPage() {
     setTimeout(() => {
       avatar.setExpression(greetingExpression as AvatarExpression);
     }, 500);
-  }, [initialized, vibeResolved, persona, memories, avatar, behaviorFlags]);
+  }, [
+    initialized,
+    vibeResolved,
+    presenceResolved,
+    presence,
+    persona,
+    memories,
+    avatar,
+    behaviorFlags,
+  ]);
 
   // ── When history loads with messages, replace the greeting ───────────────────
   useEffect(() => {

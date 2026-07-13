@@ -51,6 +51,11 @@ const ENCRYPTED_COLUMNS: EncryptedColumnSpec[] = [
   { table: "chat_messages", idColumn: "id", columns: ["content", "display"] },
   { table: "conversations", idColumn: "id", columns: ["title", "summary"] },
   { table: "personas", idColumn: "id", columns: ["voice_id", "description"] },
+  {
+    table: "companion_state",
+    idColumn: "user_id",
+    columns: ["last_mood", "last_emotion", "last_proactive_topic", "presence_summary"],
+  },
 ];
 
 interface Stats {

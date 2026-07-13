@@ -1194,3 +1194,26 @@ alter table public.ingested_whatsapp enable row level security;
 create index if not exists idx_ingested_whatsapp_client   on public.ingested_whatsapp (client_id);
 create index if not exists idx_ingested_whatsapp_number   on public.ingested_whatsapp (from_number);
 create index if not exists idx_ingested_whatsapp_received on public.ingested_whatsapp (received_at desc);
+
+
+-- ─── Companion State (ADR 0002) ──────────────────────────────────────────────
+-- Cross-session presence: one row per user, overwritten in place. Encrypted
+-- fields (last_mood, last_emotion, last_proactive_topic, presence_summary)
+-- hold AES-256-GCM ciphertext written via src/core/security/encryption.ts.
+
+create table if not exists public.companion_state (
+  user_id               uuid        primary key references auth.users (id) on delete cascade,
+  last_interaction_at   timestamptz,
+  last_greeting_context text,
+  last_mood             text,
+  last_emotion          text,
+  last_proactive_topic  text,
+  presence_summary      text,
+  updated_at            timestamptz not null default now()
+);
+alter table public.companion_state enable row level security;
+drop policy if exists "Users own companion state" on public.companion_state;
+create policy "Users own companion state" on public.companion_state
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

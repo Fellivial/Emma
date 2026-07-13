@@ -1,0 +1,9 @@
+{
+  "Type": "Live2D Expression",
+  "Parameters": [
+    { "Id": "ParamEyeLSmile", "Value": 1, "Blend": "Add" },
+    { "Id": "ParamEyeRSmile", "Value": 1, "Blend": "Add" },
+    { "Id": "ParamMouthForm", "Value": 1, "Blend": "Add" },
+    { "Id": "ParamMouthOpenY", "Value": 0.25, "Blend": "Add" }
+  ]
+}

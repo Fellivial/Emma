@@ -225,13 +225,18 @@ Several client-side engines make Emma feel present between messages. They predat
 
 - **Context manager** (`src/core/context-manager.ts`) — token-budget-aware summarization for long conversations: at 75% budget utilization, older messages are compressed into a `[SUMMARY]` message via `/api/emma/summarize`, always preserving the 10 most recent messages. Falls back to trimming when summarization fails.
 
-**Cross-session presence (deferred to Phase 4.x):** presence state is currently client-side only — `localStorage` holds the last-visit timestamp, and emotion state resets on reload. Server-side continuity (last session, last emotion snapshot, last proactive topic — enabling multi-device and long-absence emotional continuity) requires a new table and migration, so it was explicitly deferred rather than rushed into Phase 4.
+- **Cross-session presence** (`src/core/companion-state.ts` + `/api/emma/presence`, Phase 6, [ADR 0002](adr/0002-companion-state-persistence.md)) — one `companion_state` row per user, overwritten in place: last interaction time, last greeting bucket, and encrypted mood/emotion-snapshot/proactive-topic/presence-summary fields. The brain route saves a fire-and-forget snapshot after each exchange; the app shell fetches state on load and the greeting engine merges the server timestamp with `localStorage` (newest wins — a new device inherits continuity) and appends a gentle mood check-in when the last session ended on a negative note 1–48h ago. State older than 30 days is treated as absent at read time. Everything fails open; this is presence, not memory — it never enters the `memories` table.
+
+- **Companion notifications** (`src/core/companion-notify.ts`, Phase 6) — pure, behavior-flag-aware push copy builders on top of the existing `pushToUser` infrastructure. Event-driven only: task completion (playful bank only when `teasingLevel: playful` and `warmth: standard`; soft otherwise, including when flags are unavailable) and the approval request (companion-voiced but deliberately fixed copy — a safety surface). Lock-screen discreet: no pet names, no emoji.
+
+**Companion rituals (Phase 6):** the built-in routines in `routines-engine.ts` are framed as shared moments rather than workflows — Morning Check-In, Inbox Triage, Focus Session, Evening Wind-Down, Meeting Prep, Weekly Reflection, Celebrate a Win. Descriptions feed the system prompt via `serializeRoutines()` and are written as what Emma does in the moment, in her voice. Ids stayed stable across the reframe; the `Routine` type, trigger matching, and custom-routine registry are unchanged.
 
 ---
 
 ## Related
 
 - [ADR 0001: Behavior Flags](adr/0001-behavior-flags.md)
+- [ADR 0002: Companion State Persistence](adr/0002-companion-state-persistence.md)
 - [Reference: API routes](reference-api.md)
 - [Reference: Plans and limits](reference-plans.md)
 - [Explanation: Security](explanation-security.md)
