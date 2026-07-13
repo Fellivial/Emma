@@ -83,17 +83,23 @@ describe("buildSystemPromptBlocks — built-in routines", () => {
   it("morning_standup is always in the output (no customRoutines)", () => {
     const blocks = buildSystemPromptBlocks(BASE_CTX);
     const text = blocks[0].text;
-    expect(text).toContain("Morning Standup");
+    expect(text).toContain("Morning Check-In");
   });
 
   it("focus_mode is always in the output", () => {
     const blocks = buildSystemPromptBlocks(BASE_CTX);
-    expect(blocks[0].text).toContain("Focus Mode");
+    expect(blocks[0].text).toContain("Focus Session");
   });
 
   it("end_of_day routine is present", () => {
     const blocks = buildSystemPromptBlocks(BASE_CTX);
-    expect(blocks[0].text).toContain("End of Day");
+    expect(blocks[0].text).toContain("Evening Wind-Down");
+  });
+
+  it("phase 6 companion rituals are present", () => {
+    const blocks = buildSystemPromptBlocks(BASE_CTX);
+    expect(blocks[0].text).toContain("Weekly Reflection");
+    expect(blocks[0].text).toContain("Celebrate a Win");
   });
 });
 
@@ -103,8 +109,8 @@ describe("buildSystemPromptBlocks — customRoutines merging (T-15)", () => {
   it("customRoutines: [] does not duplicate built-in routines", () => {
     const blocks = buildSystemPromptBlocks({ ...BASE_CTX, customRoutines: [] });
     const text = blocks[0].text;
-    // Morning Standup appears exactly once
-    const matches = text.match(/Morning Standup/g) ?? [];
+    // Morning Check-In appears exactly once
+    const matches = text.match(/Morning Check-In/g) ?? [];
     expect(matches.length).toBe(1);
   });
 
@@ -168,7 +174,7 @@ describe("buildSystemPromptBlocks — customRoutines merging (T-15)", () => {
     });
     const text = blocks[0].text;
     // Both built-in and custom present
-    expect(text).toContain("Morning Standup");
+    expect(text).toContain("Morning Check-In");
     expect(text).toContain("Daily Briefing");
   });
 });
@@ -196,7 +202,7 @@ describe("buildSystemPromptBlocks — neutral persona", () => {
     const text = blocks[0].text;
     // Neutral does not say "baby" or have the mommy tone marker
     expect(text).toContain("EMMA");
-    expect(text).toContain("Morning Standup"); // routines still present
+    expect(text).toContain("Morning Check-In"); // routines still present
   });
 
   it("neutral persona includes memory weaving instruction", () => {
