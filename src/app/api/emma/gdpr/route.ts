@@ -37,6 +37,7 @@ export const USER_OWNED_DELETE_ORDER: ReadonlyArray<{ table: string; column?: st
   { table: "tasks" },
   { table: "push_subscriptions" },
   { table: "proactive_daily" },
+  { table: "companion_state" },
   { table: "oauth_states" },
   { table: "usage_windows" },
   { table: "extra_packs" },
@@ -57,37 +58,170 @@ type ExportSpec = {
 };
 
 export const GDPR_EXPORT_TABLES: ReadonlyArray<ExportSpec> = [
-  { key: "legacyChatMigrationLedger", table: "legacy_chat_migration_ledger", select: "legacy_message_id,user_id,migrated_at" },
-  { key: "userMcpServers", table: "user_mcp_servers", select: "id,user_id,name,url,allowed_tools,blocked_tools,enabled,created_at" },
-  { key: "userFiles", table: "user_files", select: "id,user_id,file_id,name,media_type,size_bytes,created_at" },
-  { key: "messageFeedback", table: "message_feedback", select: "id,user_id,message_id,rating,created_at" },
-  { key: "messages", table: "messages", select: "id,conversation_id,user_id,role,content,display,expression,token_estimate,created_at" },
-  { key: "chatMessages", table: "chat_messages", select: "id,user_id,role,content,display,expression,created_at" },
-  { key: "conversations", table: "conversations", select: "id,user_id,title,summary,message_count,token_count,created_at,updated_at" },
-  { key: "documentChunks", table: "document_chunks", select: "id,user_id,doc_id,chunk_index,chunk_text,created_at" },
-  { key: "ingestedDocuments", table: "ingested_documents", select: "id,user_id,client_id,label,mime_type,character_count,chunk_count,extracted_text,created_at" },
-  { key: "emailSequences", table: "email_sequences", select: "id,trial_id,user_id,email,template_id,status,error_detail,scheduled_for,sent_at,created_at" },
-  { key: "trialEvents", table: "trial_events", select: "id,trial_id,user_id,event,metadata,created_at" },
-  { key: "trials", table: "trials", select: "id,user_id,client_id,plan_id,status,messages_used,messages_limit,started_at,expires_at,converted_at,cancelled_at,first_message_at,first_voice_at,first_memory_at,first_routine_at,source,referral_code,affiliate_code" },
-  { key: "referrals", table: "referrals", column: "referrer_id", select: "id,referrer_id,referrer_client_id,referral_code,referred_email,referred_user_id,status,reward_type,reward_applied,created_at,converted_at,rewarded_at" },
-  { key: "affiliates", table: "affiliates", select: "id,user_id,name,email,affiliate_code,commission_rate,commission_months,total_earned,total_referrals,status,created_at" },
-  { key: "approvals", table: "approvals", select: "id,client_id,action_log_id,task_id,user_id,action,risk_level,tool_name,reason,status,decided_by,decided_at,expires_at,created_at" },
-  { key: "actionLog", table: "action_log", select: "id,client_id,user_id,task_id,step_number,action,token_cost,status,risk_level,trigger_type,error,duration_ms,created_at,completed_at" },
-  { key: "agentTaskSummaries", table: "agent_task_summaries", select: "id,task_id,client_id,user_id,summary_text,tokens_used,created_at" },
-  { key: "provenanceChains", table: "provenance_chains", select: "id,chain_id,status,started_at,completed_at,user_id,client_id,created_at,updated_at" },
-  { key: "patternDetections", table: "pattern_detections", select: "id,client_id,user_id,pattern_type,workflow_id,tool_sequence,recurrence,status,suppressed_until,suggestion_text,created_at,updated_at" },
-  { key: "tasks", table: "tasks", select: "id,client_id,user_id,goal,context,status,trigger_type,trigger_source,steps_completed,max_steps,token_cost,result,summary,task_summary,steps_taken,created_at,completed_at,started_at" },
-  { key: "pushSubscriptions", table: "push_subscriptions", select: "id,user_id,user_agent,created_at" },
+  {
+    key: "legacyChatMigrationLedger",
+    table: "legacy_chat_migration_ledger",
+    select: "legacy_message_id,user_id,migrated_at",
+  },
+  {
+    key: "userMcpServers",
+    table: "user_mcp_servers",
+    select: "id,user_id,name,url,allowed_tools,blocked_tools,enabled,created_at",
+  },
+  {
+    key: "userFiles",
+    table: "user_files",
+    select: "id,user_id,file_id,name,media_type,size_bytes,created_at",
+  },
+  {
+    key: "messageFeedback",
+    table: "message_feedback",
+    select: "id,user_id,message_id,rating,created_at",
+  },
+  {
+    key: "messages",
+    table: "messages",
+    select: "id,conversation_id,user_id,role,content,display,expression,token_estimate,created_at",
+  },
+  {
+    key: "chatMessages",
+    table: "chat_messages",
+    select: "id,user_id,role,content,display,expression,created_at",
+  },
+  {
+    key: "conversations",
+    table: "conversations",
+    select: "id,user_id,title,summary,message_count,token_count,created_at,updated_at",
+  },
+  {
+    key: "documentChunks",
+    table: "document_chunks",
+    select: "id,user_id,doc_id,chunk_index,chunk_text,created_at",
+  },
+  {
+    key: "ingestedDocuments",
+    table: "ingested_documents",
+    select:
+      "id,user_id,client_id,label,mime_type,character_count,chunk_count,extracted_text,created_at",
+  },
+  {
+    key: "emailSequences",
+    table: "email_sequences",
+    select:
+      "id,trial_id,user_id,email,template_id,status,error_detail,scheduled_for,sent_at,created_at",
+  },
+  {
+    key: "trialEvents",
+    table: "trial_events",
+    select: "id,trial_id,user_id,event,metadata,created_at",
+  },
+  {
+    key: "trials",
+    table: "trials",
+    select:
+      "id,user_id,client_id,plan_id,status,messages_used,messages_limit,started_at,expires_at,converted_at,cancelled_at,first_message_at,first_voice_at,first_memory_at,first_routine_at,source,referral_code,affiliate_code",
+  },
+  {
+    key: "referrals",
+    table: "referrals",
+    column: "referrer_id",
+    select:
+      "id,referrer_id,referrer_client_id,referral_code,referred_email,referred_user_id,status,reward_type,reward_applied,created_at,converted_at,rewarded_at",
+  },
+  {
+    key: "affiliates",
+    table: "affiliates",
+    select:
+      "id,user_id,name,email,affiliate_code,commission_rate,commission_months,total_earned,total_referrals,status,created_at",
+  },
+  {
+    key: "approvals",
+    table: "approvals",
+    select:
+      "id,client_id,action_log_id,task_id,user_id,action,risk_level,tool_name,reason,status,decided_by,decided_at,expires_at,created_at",
+  },
+  {
+    key: "actionLog",
+    table: "action_log",
+    select:
+      "id,client_id,user_id,task_id,step_number,action,token_cost,status,risk_level,trigger_type,error,duration_ms,created_at,completed_at",
+  },
+  {
+    key: "agentTaskSummaries",
+    table: "agent_task_summaries",
+    select: "id,task_id,client_id,user_id,summary_text,tokens_used,created_at",
+  },
+  {
+    key: "provenanceChains",
+    table: "provenance_chains",
+    select: "id,chain_id,status,started_at,completed_at,user_id,client_id,created_at,updated_at",
+  },
+  {
+    key: "patternDetections",
+    table: "pattern_detections",
+    select:
+      "id,client_id,user_id,pattern_type,workflow_id,tool_sequence,recurrence,status,suppressed_until,suggestion_text,created_at,updated_at",
+  },
+  {
+    key: "tasks",
+    table: "tasks",
+    select:
+      "id,client_id,user_id,goal,context,status,trigger_type,trigger_source,steps_completed,max_steps,token_cost,result,summary,task_summary,steps_taken,created_at,completed_at,started_at",
+  },
+  {
+    key: "pushSubscriptions",
+    table: "push_subscriptions",
+    select: "id,user_id,user_agent,created_at",
+  },
   { key: "proactiveDaily", table: "proactive_daily", select: "user_id,day,count" },
-  { key: "oauthStates", table: "oauth_states", select: "id,user_id,client_id,service,created_at,expires_at" },
-  { key: "usageWindows", table: "usage_windows", select: "id,user_id,window_type,window_start,tokens_used,messages_used,warning_sent,updated_at" },
-  { key: "extraPacks", table: "extra_packs", select: "id,user_id,tokens_granted,tokens_remaining,valid_until,purchase_ref,created_at" },
-  { key: "personas", table: "personas", select: "id,user_id,name,base_persona_id,tone_adjectives,communication_style,verbosity,topics_emphasise,topics_avoid,language,voice_id,description,description_screened_at,created_at,updated_at" },
-  { key: "memories", table: "memories", select: "id,user_id,category,key,value,confidence,source,status,superseded_by,last_accessed,created_at,updated_at" },
+  {
+    key: "companionState",
+    table: "companion_state",
+    select:
+      "user_id,last_interaction_at,last_greeting_context,last_mood,last_emotion,last_proactive_topic,presence_summary,updated_at",
+  },
+  {
+    key: "oauthStates",
+    table: "oauth_states",
+    select: "id,user_id,client_id,service,created_at,expires_at",
+  },
+  {
+    key: "usageWindows",
+    table: "usage_windows",
+    select: "id,user_id,window_type,window_start,tokens_used,messages_used,warning_sent,updated_at",
+  },
+  {
+    key: "extraPacks",
+    table: "extra_packs",
+    select: "id,user_id,tokens_granted,tokens_remaining,valid_until,purchase_ref,created_at",
+  },
+  {
+    key: "personas",
+    table: "personas",
+    select:
+      "id,user_id,name,base_persona_id,tone_adjectives,communication_style,verbosity,topics_emphasise,topics_avoid,language,voice_id,description,description_screened_at,created_at,updated_at",
+  },
+  {
+    key: "memories",
+    table: "memories",
+    select:
+      "id,user_id,category,key,value,confidence,source,status,superseded_by,last_accessed,created_at,updated_at",
+  },
   { key: "usage", table: "usage", select: "id,user_id,date,message_count,token_count,api_calls" },
   { key: "clientMembers", table: "client_members", select: "client_id,user_id,role,joined_at" },
-  { key: "auditLog", table: "audit_log", select: "id,user_id,action,resource,resource_id,reason,created_at", limit: 500 },
-  { key: "profile", table: "profiles", column: "id", select: "id,name,avatar,role,tts_enabled,notifications_enabled,quiet_hours_start,quiet_hours_end,onboarded,created_at,updated_at" },
+  {
+    key: "auditLog",
+    table: "audit_log",
+    select: "id,user_id,action,resource,resource_id,reason,created_at",
+    limit: 500,
+  },
+  {
+    key: "profile",
+    table: "profiles",
+    column: "id",
+    select:
+      "id,name,avatar,role,tts_enabled,notifications_enabled,quiet_hours_start,quiet_hours_end,onboarded,created_at,updated_at",
+  },
 ];
 
 export async function deleteUserOwnedData(
@@ -137,7 +271,19 @@ function decryptExportValue(value: unknown): unknown {
 
 function decryptExportRow(row: Record<string, unknown>): Record<string, unknown> {
   const decrypted = { ...row };
-  for (const key of ["value", "title", "summary", "content", "display", "chunk_text", "extracted_text"]) {
+  for (const key of [
+    "value",
+    "title",
+    "summary",
+    "content",
+    "display",
+    "chunk_text",
+    "extracted_text",
+    "last_mood",
+    "last_emotion",
+    "last_proactive_topic",
+    "presence_summary",
+  ]) {
     if (key in decrypted) decrypted[key] = decryptExportValue(decrypted[key]);
   }
   return decrypted;
@@ -154,7 +300,7 @@ export async function exportUserOwnedData(
       const rows = ((data || []) as unknown as Array<Record<string, unknown>>).map(
         decryptExportRow
       );
-      return [key, key === "profile" ? rows[0] ?? null : rows] as const;
+      return [key, key === "profile" ? (rows[0] ?? null) : rows] as const;
     })
   );
 

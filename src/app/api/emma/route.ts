@@ -11,6 +11,7 @@ import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors"
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
 import { markWarningSent, type EnforcementResult } from "@/core/usage-enforcer";
+import { saveCompanionState, buildPresenceSummary } from "@/core/companion-state";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { resolveUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -666,6 +667,22 @@ export async function POST(req: NextRequest) {
                 chatCostDecision.identity.clientId ?? undefined
               ).catch(() => {});
             }
+
+            // Cross-session presence snapshot (ADR 0002) — fire-and-forget,
+            // fail-open. Captures how this exchange ended so the next
+            // greeting (any device) can pick up the thread.
+            saveCompanionState(userId, {
+              lastMood: emotionState?.primary ?? null,
+              lastEmotion: emotionState
+                ? {
+                    primary: emotionState.primary,
+                    valence: emotionState.valence,
+                    arousal: emotionState.arousal,
+                    confidence: emotionState.confidence,
+                  }
+                : null,
+              presenceSummary: buildPresenceSummary(localHour, emotionState?.primary ?? null),
+            }).catch(() => {});
           }
         } catch (err) {
           await accountOnce(false);
