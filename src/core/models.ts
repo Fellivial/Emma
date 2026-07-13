@@ -11,8 +11,7 @@
 export const MODEL_BRAIN = "openai/gpt-oss-120b:free";
 
 // Vision — scene analysis (needs strong multimodal / image_url support)
-// DEV: free tier (Google AI Studio — supports image_url). LAUNCH: google/gemini-2.5-flash
-export const MODEL_VISION = "google/gemma-4-31b-it:free";
+export const MODEL_VISION = "google/gemini-2.5-flash";
 
 // Utility — emotion detection, memory extraction, summarization, agent intermediate steps
 // DEV: free tier (same as brain — gpt-oss-20b doesn't support tool_calls). LAUNCH: google/gemini-2.5-flash
@@ -25,9 +24,16 @@ export const BRAIN_MODELS = [
   "meta-llama/llama-3.3-70b-instruct:free", // free fallback
 ];
 
+// Every entry here MUST support image_url input — text-only fallbacks would
+// silently answer without seeing the frame.
 export const VISION_MODELS = [
-  MODEL_VISION, // primary only — vision requires image_url support
+  MODEL_VISION,
+  "google/gemini-2.5-flash-lite", // cheaper vision-capable fallback
 ];
+
+// Vision calls carry a full screenshot payload; cap upstream latency so a
+// stalled provider can't hold the request open indefinitely.
+export const VISION_TIMEOUT_MS = 20_000;
 
 export const UTILITY_MODELS = [
   MODEL_UTILITY,
