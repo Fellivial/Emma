@@ -43,6 +43,9 @@ import {
 import { summarizeTask } from "@/core/task-summarizer";
 import { loadClientConfigForUser } from "@/core/client-config";
 import { pushToUser } from "@/lib/push-notify";
+import { buildTaskCompleteNotification, buildApprovalNotification } from "@/core/companion-notify";
+import { deriveBehaviorFlags } from "@/core/behavior-flags";
+import { getRelevantMemoriesForUser } from "@/core/memory-db";
 import type { AutonomyTier } from "@/types/emma";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
@@ -916,6 +919,23 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
   // Record this task run against the rate limit counter
   consumeRateLimit(rateLimitKey, 1, totalTokens).catch(() => {});
 
+  // Companion completion notification (Phase 6) — event-driven only: the
+  // user set this task in motion, so telling them it finished is presence,
+  // not a re-engagement ping. Copy respects behavior flags (ADR 0001);
+  // failures anywhere in the chain are swallowed (fail-open).
+  if (finalStatus === "completed") {
+    (async () => {
+      let flags = null;
+      try {
+        const memories = await getRelevantMemoriesForUser(task.userId, task.goal);
+        flags = deriveBehaviorFlags({ personaId: "mommy", memories });
+      } catch {
+        // No flag evidence — buildTaskCompleteNotification falls back soft.
+      }
+      await pushToUser(task.userId, buildTaskCompleteNotification(task.goal, flags));
+    })().catch(() => {});
+  }
+
   // Fire-and-forget: generate Haiku summary and persist to agent_task_summaries
   summarizeTask(
     task.id,
@@ -1004,12 +1024,9 @@ async function createApproval(
       })
       .catch(() => {});
 
-    // Push notification for closed-tab delivery — fire-and-forget
-    pushToUser(task.userId, {
-      title: "EMMA needs your approval",
-      body: `Emma wants to run "${toolName}" — tap to review`,
-      url: "/app",
-    }).catch(() => {});
+    // Push notification for closed-tab delivery — fire-and-forget.
+    // Companion-voiced but fixed copy: approval is a safety surface.
+    pushToUser(task.userId, buildApprovalNotification(toolName)).catch(() => {});
   }
 
   return approvalId;
