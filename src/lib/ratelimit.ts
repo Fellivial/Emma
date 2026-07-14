@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
+import { RateLimitUnavailableError } from "@/lib/errors";
 
 // Module-level cache — persists across warm-container requests
 const ephemeralCache = new Map<string, number>();
@@ -17,14 +18,18 @@ export interface DistributedRateLimitResult {
   resetAt: number;
 }
 
-export function interpretDistributedRateLimitResult(result: {
-  success: boolean;
-  reset: number;
-  reason?: string;
-}): DistributedRateLimitResult {
+export function interpretDistributedRateLimitResult(
+  result: {
+    success: boolean;
+    reset: number;
+    reason?: string;
+  },
+  namespace = "unknown"
+): DistributedRateLimitResult {
   // Upstash reports timeouts as success=true; paid work must fail closed.
   if (result.reason === "timeout") {
-    throw new Error("Distributed rate limit check timeout");
+    console.warn(JSON.stringify({ event: "distributed_rate_limit_timeout", namespace }));
+    throw new RateLimitUnavailableError("Distributed rate limit check timeout");
   }
   return { allowed: result.success, resetAt: result.reset };
 }
@@ -53,8 +58,20 @@ export async function checkDistributedRateLimit(
       });
       limiters.set(cacheKey, limiter);
     }
-    const result = await limiter.limit(input.key);
-    return interpretDistributedRateLimitResult(result);
+    let result;
+    try {
+      result = await limiter.limit(input.key);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: "distributed_rate_limit_redis_failure",
+          namespace: input.namespace,
+          message: err instanceof Error ? err.message : String(err),
+        })
+      );
+      throw new RateLimitUnavailableError("Distributed rate limit check failed");
+    }
+    return interpretDistributedRateLimitResult(result, input.namespace);
   }
 
   if (process.env.NODE_ENV === "production") {
