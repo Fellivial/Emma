@@ -7,11 +7,13 @@ const mockState = vi.hoisted(() => ({
   queryThrows: false,
   rpcError: null as { code?: string; message?: string } | null,
   rpcThrows: false,
+  rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
-    rpc: vi.fn(async () => {
+    rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      mockState.rpcCalls.push({ fn, args });
       if (mockState.rpcThrows) throw new Error("simulated RPC failure");
       return { data: null, error: mockState.rpcError };
     }),
@@ -72,6 +74,7 @@ beforeEach(() => {
   mockState.queryThrows = false;
   mockState.rpcError = null;
   mockState.rpcThrows = false;
+  mockState.rpcCalls = [];
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://fake.supabase.co");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fake-key");
   vi.stubEnv("NODE_ENV", "test");
@@ -143,6 +146,57 @@ describe("recordUsage — explicit persistence result", () => {
     const result = await recordUsage(TEST_USER, 10, 5, "enterprise", "UTC", 1, undefined, 1);
 
     expect(result).toEqual({ success: true });
+  });
+});
+
+describe("recordUsage — identity contract sent to increment_usage_window (P1 22P02 regression)", () => {
+  // Pins the exact p_user_id shape TS sends. This is the contract that
+  // supabase/migrations/20260714000001_fix_increment_usage_window_signature.sql
+  // makes the live DB accept — the TS side is intentionally unchanged.
+  it("sends the raw client-session identity verbatim as p_user_id (client:<uuid>)", async () => {
+    const result = await recordUsage(
+      null,
+      10,
+      5,
+      "free",
+      "UTC",
+      1,
+      "550e8400-e29b-41d4-a716-446655440000",
+      1
+    );
+
+    expect(result).toEqual({ success: true });
+    const call = mockState.rpcCalls.find((c) => c.fn === "increment_usage_window");
+    expect(call?.args).toMatchObject({
+      p_user_id: "client:550e8400-e29b-41d4-a716-446655440000",
+      p_window_type: "daily",
+    });
+  });
+
+  it("sends an empty-string identity when neither userId nor clientId is available", async () => {
+    // enterprise plan bypasses the extra-pack deduction path so this test
+    // isolates the increment_usage_window identity contract in question.
+    const result = await recordUsage(null, 10, 5, "enterprise", "UTC", 1, undefined, 1);
+
+    expect(result).toEqual({ success: true });
+    const call = mockState.rpcCalls.find((c) => c.fn === "increment_usage_window");
+    expect(call?.args).toMatchObject({ p_user_id: "" });
+  });
+
+  it("sends a plain user UUID verbatim for a non-client session", async () => {
+    const result = await recordUsage(TEST_USER, 10, 5, "enterprise", "UTC", 1, undefined, 1);
+
+    expect(result).toEqual({ success: true });
+    const call = mockState.rpcCalls.find((c) => c.fn === "increment_usage_window");
+    expect(call?.args).toMatchObject({ p_user_id: TEST_USER });
+  });
+
+  it("surfaces 22P02 as a typed rpc_error instead of throwing — the exact failure mode this migration fixes at the DB layer", async () => {
+    mockState.rpcError = { code: "22P02", message: "invalid input syntax for type uuid" };
+
+    const result = await recordUsage(null, 10, 5, "free", "UTC", 1, "some-client-id", 1);
+
+    expect(result).toEqual({ success: false, reason: "rpc_error" });
   });
 });
 
