@@ -30,6 +30,14 @@ export class RateLimitError extends EmmaError {
   }
 }
 
+// Distinct from RateLimitError: this means the limit itself could not be
+// verified (Redis timeout/failure), not that the caller exceeded it.
+export class RateLimitUnavailableError extends EmmaError {
+  constructor(message: string = "Rate limit check unavailable") {
+    super(message, "RATE_LIMIT_UNAVAILABLE", 503, true);
+  }
+}
+
 // ─── Retry Logic ─────────────────────────────────────────────────────────────
 
 interface RetryOptions {
@@ -67,7 +75,10 @@ export async function fetchWithRetry(
         timeoutId = setTimeout(() => abortController!.abort(), opts.connectionTimeoutMs);
       }
 
-      const res = await fetch(url, abortController ? { ...options, signal: abortController.signal } : options);
+      const res = await fetch(
+        url,
+        abortController ? { ...options, signal: abortController.signal } : options
+      );
 
       // Headers received — connection succeeded, clear the timeout
       if (timeoutId) clearTimeout(timeoutId);

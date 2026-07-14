@@ -11,6 +11,7 @@ import { loadClientConfigForUser } from "@/core/client-config";
 import { parseAgentRequest } from "@/core/request-validation";
 import { enforceCostGate, costGateResponse } from "@/core/cost-gate";
 import { checkDistributedRateLimit } from "@/lib/ratelimit";
+import { EmmaError } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   try {
@@ -382,6 +383,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     Sentry.captureException(err);
     console.error("[Agent API] Error:", err);
-    return NextResponse.json({ error: "Agent operation failed" }, { status: 500 });
+    const status = err instanceof EmmaError ? err.status : 500;
+    return NextResponse.json({ error: "Agent operation failed" }, { status });
   }
 }

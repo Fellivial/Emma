@@ -32,7 +32,7 @@ export function serializeMemories(entries: MemoryEntry[]): string {
 
 export const MEMORY_EXTRACTION_PROMPT = `You are a Personal Information Organizer for a companion AI. Your job is to extract persistent facts worth remembering about the user from the conversation turn provided.
 
-Return a JSON array of memory objects with fields:
+Return a single JSON object of the shape { "memories": [...] }, where each element of the array is a memory object with fields:
   category: one of preference | habit | personal | goal | relationship | context | constraint
   key:       snake_case identifier, <=5 words, no articles (e.g. favorite_music_genre)
   value:     the fact as a concise statement
@@ -57,23 +57,27 @@ Do NOT extract:
 <examples>
 User: "I usually wake up at 6am and hit the gym before work."
 Extract:
-  { "category": "habit", "key": "wake_up_time", "value": "6am", "confidence": 0.9 }
-  { "category": "habit", "key": "morning_routine", "value": "gym before work", "confidence": 0.85 }
+  { "memories": [
+    { "category": "habit", "key": "wake_up_time", "value": "6am", "confidence": 0.9 },
+    { "category": "habit", "key": "morning_routine", "value": "gym before work", "confidence": 0.85 }
+  ] }
 
 User: "Do you know any good Italian restaurants?"
-Extract: []  ← question about Emma, not a fact about the user
+Extract: { "memories": [] }  ← question about Emma, not a fact about the user
 
 User: "I have a presentation tomorrow, I'm really stressed."
-Extract: []  ← transient state and one-time context; even if a fact could be inferred, confidence would fall below 0.55
+Extract: { "memories": [] }  ← transient state and one-time context; even if a fact could be inferred, confidence would fall below 0.55
 
 User: "I'm vegetarian and my partner Alex is vegan."
 Extract:
-  { "category": "constraint", "key": "dietary_restriction", "value": "vegetarian", "confidence": 0.95 }
-  { "category": "relationship", "key": "partner_name", "value": "Alex", "confidence": 0.95 }
-  { "category": "relationship", "key": "partner_diet", "value": "Alex is vegan", "confidence": 0.9 }
+  { "memories": [
+    { "category": "constraint", "key": "dietary_restriction", "value": "vegetarian", "confidence": 0.95 },
+    { "category": "relationship", "key": "partner_name", "value": "Alex", "confidence": 0.95 },
+    { "category": "relationship", "key": "partner_diet", "value": "Alex is vegan", "confidence": 0.9 }
+  ] }
 
 User: "ok thanks!"
-Extract: []  ← filler
+Extract: { "memories": [] }  ← filler
 </examples>
 
-Now extract from the following conversation turn. Return only the JSON array.`;
+Now extract from the following conversation turn. Return only the JSON object — no other text.`;

@@ -21,7 +21,7 @@ export const MODEL_UTILITY = "openai/gpt-oss-120b:free";
 // OpenRouter accepts "models" (array) as an alternative to "model" (string).
 export const BRAIN_MODELS = [
   MODEL_BRAIN,
-  "meta-llama/llama-3.3-70b-instruct:free", // free fallback
+  "openai/gpt-oss-20b:free", // free fallback
 ];
 
 // Every entry here MUST support image_url input — text-only fallbacks would
@@ -37,7 +37,7 @@ export const VISION_TIMEOUT_MS = 20_000;
 
 export const UTILITY_MODELS = [
   MODEL_UTILITY,
-  "meta-llama/llama-3.3-70b-instruct:free", // free fallback
+  "openai/gpt-oss-20b:free", // free fallback
 ];
 
 // Convenience map for logging
