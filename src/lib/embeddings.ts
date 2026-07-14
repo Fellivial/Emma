@@ -1,23 +1,5 @@
 import { enforceCostGate, recordCostResult, type CostGateInput } from "@/core/cost-gate";
-
-const EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
-const EMBEDDING_MODEL = "openai/text-embedding-3-small";
-
-function headers() {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY not set");
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${key}`,
-    "HTTP-Referer": "https://emma.app",
-    "X-Title": "Emma",
-  };
-}
-
-type EmbeddingResponse = {
-  data: Array<{ embedding: number[]; index: number }>;
-  usage?: { prompt_tokens?: number; total_tokens?: number };
-};
+import { brainEmbed } from "@/core/brain/gateway";
 
 type EmbeddingCostContext = Pick<CostGateInput, "userId" | "clientId" | "planId">;
 
@@ -28,22 +10,16 @@ export async function embedBatch(
   if (texts.length === 0) return [];
   const cost = await enforceCostGate({ operation: "embeddings", ...context });
   if (!cost.allowed) throw new Error(cost.message);
-  const res = await fetch(EMBEDDINGS_URL, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ model: EMBEDDING_MODEL, input: texts }),
-  });
-  if (!res.ok) {
+  const result = await brainEmbed({ texts });
+  if (!result.ok) {
     await recordCostResult(cost, { success: false });
-    const body = await res.text().catch(() => "");
-    throw new Error(`Embeddings API ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Embeddings API ${result.error.status}: ${result.error.bodyPreview}`);
   }
-  const json = (await res.json()) as EmbeddingResponse;
   await recordCostResult(cost, {
-    inputTokens: json.usage?.prompt_tokens ?? json.usage?.total_tokens ?? texts.length,
+    inputTokens: result.usage.inputTokens ?? texts.length,
     success: true,
   });
-  return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
+  return result.embeddings;
 }
 
 export async function embedText(text: string, context: EmbeddingCostContext): Promise<number[]> {

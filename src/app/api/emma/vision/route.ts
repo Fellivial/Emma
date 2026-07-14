@@ -1,8 +1,9 @@
-import { VISION_MODELS, VISION_TIMEOUT_MS } from "@/core/models";
+import { VISION_TIMEOUT_MS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { VisionApiRequest, VisionApiResponse, VisionAnalysis } from "@/types/emma";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat, type BrainChatResult } from "@/core/brain/gateway";
+import { EmmaError } from "@/lib/errors";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const VISION_SYSTEM_PROMPT = `You are EMMA's vision subsystem. You analyze screenshots of the user's screen.
@@ -64,41 +65,37 @@ export async function POST(req: NextRequest) {
     const cost = await enforceCostGate({ operation: "vision", userId: user.id });
     if (!cost.allowed) return costGateResponse(cost);
 
-    let res: Response;
+    let result: BrainChatResult;
     try {
-      res = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: openRouterHeaders(),
+      result = await brainChat({
+        task: "vision",
+        maxTokens: 512,
         // Bounded upstream latency — a stalled vision provider must not hold
         // the request (and the client's staleness refresh) open indefinitely.
-        signal: AbortSignal.timeout(VISION_TIMEOUT_MS),
-        body: JSON.stringify({
-          models: VISION_MODELS,
-          max_tokens: 512,
-          messages: [
-            { role: "system", content: VISION_SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: `data:${mimeType};base64,${frame}` },
-                },
-                {
-                  type: "text",
-                  text: context
-                    ? `Analyze this scene. Additional context: ${context}`
-                    : "Analyze this scene.",
-                },
-              ],
-            },
-          ],
-          response_format: { type: "json_schema", json_schema: VISION_OUTPUT_SCHEMA },
-        }),
+        timeoutMs: VISION_TIMEOUT_MS,
+        messages: [
+          { role: "system", content: VISION_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${frame}` },
+              },
+              {
+                type: "text",
+                text: context
+                  ? `Analyze this scene. Additional context: ${context}`
+                  : "Analyze this scene.",
+              },
+            ],
+          },
+        ],
+        responseFormat: VISION_OUTPUT_SCHEMA,
       });
     } catch (err) {
       await recordCostResult(cost, { success: false });
-      const timedOut = err instanceof DOMException && err.name === "TimeoutError";
+      const timedOut = err instanceof EmmaError && err.code === "TIMEOUT";
       console.error(
         `[EMMA Vision API] ${timedOut ? `Timed out after ${VISION_TIMEOUT_MS}ms` : "Upstream fetch failed:"}`,
         timedOut ? "" : err
@@ -112,19 +109,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
-      const errText = await res.text();
-      console.error("[EMMA Vision API] OpenRouter error:", res.status, errText);
+      console.error(
+        "[EMMA Vision API] Provider error:",
+        result.error.status,
+        result.error.bodyPreview
+      );
       return NextResponse.json(
-        { analysis: null, error: `API ${res.status}` } as VisionApiResponse,
+        { analysis: null, error: `API ${result.error.status}` } as VisionApiResponse,
         { status: 502 }
       );
     }
 
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    const rawText = extractText(data);
+    await recordCostResult(cost, { ...result.usage, success: true });
+    const rawText = result.text;
 
     // An empty completion is a failure, not a scene with nothing in it —
     // surfacing it as an empty analysis would silently poison the prompt

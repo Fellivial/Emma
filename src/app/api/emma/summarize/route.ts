@@ -1,7 +1,6 @@
-import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a conversation summarizer for a smart home AI agent called Emma. Your job is to compress conversation history into a compact summary that preserves all important context.
@@ -34,32 +33,26 @@ export async function POST(req: NextRequest) {
     const cost = await enforceCostGate({ operation: "summarize", userId: user.id });
     if (!cost.allowed) return costGateResponse(cost);
 
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
-        models: UTILITY_MODELS,
-        max_tokens: 1024,
-        messages: [
-          { role: "system", content: SUMMARIZE_SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: `Summarize this conversation history:\n\n${text}`,
-          },
-        ],
-      }),
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 1024,
+      messages: [
+        { role: "system", content: SUMMARIZE_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Summarize this conversation history:\n\n${text}`,
+        },
+      ],
     });
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
-      const errText = await res.text();
-      console.error("[EMMA Summarize] API error:", res.status, errText);
-      return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
+      console.error("[EMMA Summarize] API error:", result.error.status, result.error.bodyPreview);
+      return NextResponse.json({ error: `API ${result.error.status}` }, { status: 502 });
     }
 
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    const summary = extractText(data);
+    await recordCostResult(cost, { ...result.usage, success: true });
+    const summary = result.text;
 
     return NextResponse.json({ summary: summary.trim() });
   } catch (err) {

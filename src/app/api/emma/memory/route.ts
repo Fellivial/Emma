@@ -1,4 +1,3 @@
-import { UTILITY_MODELS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import type { MemoryApiRequest, MemoryApiResponse, MemoryEntry } from "@/types/emma";
 import {
@@ -9,7 +8,7 @@ import {
 } from "@/core/memory-db";
 import { MEMORY_EXTRACTION_PROMPT } from "@/core/memory-shared";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 export async function POST(req: NextRequest) {
@@ -97,34 +96,26 @@ export async function POST(req: NextRequest) {
           additionalProperties: false,
         };
 
-        const res = await fetch(OPENROUTER_URL, {
-          method: "POST",
-          headers: openRouterHeaders(),
-          body: JSON.stringify({
-            models: UTILITY_MODELS,
-            max_tokens: 512,
-            messages: [
-              { role: "system", content: MEMORY_EXTRACTION_PROMPT },
-              {
-                role: "user",
-                content: body.conversationText,
-              },
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: { name: "memory_extraction", schema: memorySchema },
+        const result = await brainChat({
+          task: "utility",
+          maxTokens: 512,
+          messages: [
+            { role: "system", content: MEMORY_EXTRACTION_PROMPT },
+            {
+              role: "user",
+              content: body.conversationText,
             },
-          }),
+          ],
+          responseFormat: { name: "memory_extraction", schema: memorySchema },
         });
 
-        if (!res.ok) {
+        if (!result.ok) {
           await recordCostResult(cost, { success: false });
-          return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
+          return NextResponse.json({ error: `API ${result.error.status}` }, { status: 502 });
         }
 
-        const data = await res.json();
-        await recordCostResult(cost, { ...extractUsage(data), success: true });
-        const rawText = extractText(data) || '{"memories":[]}';
+        await recordCostResult(cost, { ...result.usage, success: true });
+        const rawText = result.text || '{"memories":[]}';
 
         // Structured output guarantees valid JSON — no cleanup needed.
         let parsed: Array<{ category: string; key: string; value: string; confidence: number }>;

@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/nextjs";
-import { BRAIN_MODELS } from "@/core/models";
 import { NextRequest } from "next/server";
 import type { EmmaApiRequest, ApiMessage, ApiMessageContent } from "@/types/emma";
 import { buildSystemPrompt } from "@/core/personas";
@@ -7,7 +6,7 @@ import { parseEmmaResponse } from "@/core/command-parser";
 import { deriveBehaviorFlags } from "@/core/behavior-flags";
 import { validateResponseBehavior } from "@/core/response-validator";
 import { getRelevantMemoriesForUser, getLatestConversationSummary } from "@/core/memory-db";
-import { fetchWithRetry, getPersonaErrorMessage, EmmaError } from "@/lib/errors";
+import { getPersonaErrorMessage, EmmaError } from "@/lib/errors";
 import { sanitiseInput, getInjectionRejectionMessage } from "@/core/security/sanitise";
 import { audit } from "@/core/security/audit";
 import { markWarningSent, type EnforcementResult } from "@/core/usage-enforcer";
@@ -21,7 +20,7 @@ import {
 } from "@/core/env-validation";
 import { decrypt } from "@/core/security/encryption";
 import { getPlan } from "@/core/pricing";
-import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { brainChatStream } from "@/core/brain/gateway";
 import type { CustomPersona, ToneAdjective, TopicTag } from "@/types/persona";
 import { embedText } from "@/lib/embeddings";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
@@ -494,54 +493,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Streaming request to OpenRouter ──────────────────────────────────────
-    const anthropicRes = await fetchWithRetry(
-      OPENROUTER_URL,
-      {
-        method: "POST",
-        headers: openRouterHeaders(),
-        body: JSON.stringify({
-          models: BRAIN_MODELS,
-          max_tokens: detectMaxTokens(messages, hasDocuments),
-          stream: true,
-          messages: [{ role: "system", content: systemPromptText }, ...apiMessages],
-        }),
-      },
-      { maxRetries: 2, connectionTimeoutMs: 30_000 }
-    );
+    // ── Streaming request through the Brain Gateway ──────────────────────────
+    const streamResult = await brainChatStream({
+      task: "brain",
+      maxTokens: detectMaxTokens(messages, hasDocuments),
+      maxRetries: 2,
+      timeoutMs: 30_000,
+      messages: [{ role: "system", content: systemPromptText }, ...apiMessages],
+    });
 
-    if (!anthropicRes.ok) {
+    if (!streamResult.ok) {
       await recordCostResult(chatCostDecision, { success: false });
-      const status = anthropicRes.status;
-      const upstreamBody = await anthropicRes.text().catch(() => "");
-      console.error(`[EMMA] OpenRouter API error ${status}:`, upstreamBody.slice(0, 500));
-      Sentry.captureMessage(`OpenRouter error ${status}`, {
+      const { status, code, bodyPreview } = streamResult.error;
+      console.error(`[EMMA] Brain provider error ${status}:`, bodyPreview);
+      Sentry.captureMessage(`Brain provider error ${status}`, {
         level: status >= 500 ? "error" : "warning",
-        extra: { status, body: upstreamBody.slice(0, 200) },
+        extra: { status, body: bodyPreview.slice(0, 200) },
       });
       const errMsg = getPersonaErrorMessage(status);
-      const code =
-        status === 400
-          ? "BAD_REQUEST"
-          : status === 401
-            ? "AUTH_ERROR"
-            : status === 429
-              ? "RATE_LIMIT"
-              : status === 529
-                ? "OVERLOADED"
-                : status === 504
-                  ? "TIMEOUT"
-                  : "UPSTREAM_ERROR";
       return new Response(JSON.stringify({ error: errMsg, status, code }), {
         status: 502,
         headers: { "Content-Type": "application/json" },
       });
     }
+    const brainStream = streamResult.stream;
 
     // ── Stream SSE to client ─────────────────────────────────────────────────
 
     const encoder = new TextEncoder();
-    let providerReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let observedInputTokens = 0;
     let observedOutputTokens = 0;
     let accountingPromise: ReturnType<typeof recordCostResult> | null = null;
@@ -555,66 +534,35 @@ export async function POST(req: NextRequest) {
     };
     const readable = new ReadableStream({
       async start(controller) {
-        const reader = anthropicRes.body?.getReader();
-        providerReader = reader;
-        if (!reader) {
-          await accountOnce(false);
-          controller.close();
-          return;
-        }
-
-        const decoder = new TextDecoder();
         let fullText = "";
-        let buffer = "";
         let inputTokens = 0;
         let outputTokens = 0;
         let finishReason: string | null = null;
 
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+          for await (const event of brainStream.events()) {
+            if (event.type === "done") {
+              // Normalized completion event — usage + finish reason
+              inputTokens = event.usage.inputTokens;
+              outputTokens = event.usage.outputTokens;
+              observedInputTokens = inputTokens;
+              observedOutputTokens = outputTokens;
+              if (event.finishReason) finishReason = event.finishReason;
+              continue;
+            }
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
+            // Stream text delta to client
+            const delta = event.text;
+            fullText += delta;
 
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const raw = line.slice(6).trim();
-              if (raw === "[DONE]") continue;
-
-              try {
-                const chunk = JSON.parse(raw);
-
-                // Capture usage and finish_reason from the last chunk
-                if (chunk.usage) {
-                  inputTokens = chunk.usage.prompt_tokens || 0;
-                  outputTokens = chunk.usage.completion_tokens || 0;
-                  observedInputTokens = inputTokens;
-                  observedOutputTokens = outputTokens;
-                }
-                const fr = chunk.choices?.[0]?.finish_reason;
-                if (fr) finishReason = fr;
-
-                // Stream text delta to client
-                const delta = chunk.choices?.[0]?.delta?.content;
-                if (typeof delta === "string" && delta) {
-                  fullText += delta;
-
-                  // Don't stream internal tags
-                  if (
-                    !delta.includes("[EMMA_CMD]") &&
-                    !delta.includes("[EMMA_ROUTINE]") &&
-                    !delta.includes("[emotion:")
-                  ) {
-                    const sseData = JSON.stringify({ type: "delta", text: delta });
-                    controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-                  }
-                }
-              } catch {
-                // Skip malformed JSON
-              }
+            // Don't stream internal tags
+            if (
+              !delta.includes("[EMMA_CMD]") &&
+              !delta.includes("[EMMA_ROUTINE]") &&
+              !delta.includes("[emotion:")
+            ) {
+              const sseData = JSON.stringify({ type: "delta", text: delta });
+              controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
             }
           }
 
@@ -697,8 +645,12 @@ export async function POST(req: NextRequest) {
         }
       },
       async cancel() {
+        // Client disconnected mid-stream — account whatever usage the
+        // provider reported before the cut, then release the upstream stream.
+        observedInputTokens = brainStream.usage.inputTokens;
+        observedOutputTokens = brainStream.usage.outputTokens;
         await accountOnce(false);
-        await providerReader?.cancel().catch(() => {});
+        await brainStream.cancel();
       },
     });
 

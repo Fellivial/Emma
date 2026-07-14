@@ -11,10 +11,8 @@
  * in Emma's voice, then upserts to pattern_detections.
  */
 
-import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
-import { fetchWithRetry } from "@/lib/errors";
-import { OPENROUTER_URL, openRouterHeaders, extractUsage } from "@/lib/openrouter";
+import { brainChat, isBrainConfigured } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabase() {
@@ -58,37 +56,25 @@ async function generateSuggestion(
   try {
     const cost = await enforceCostGate({ operation: "background", userId });
     if (!cost.allowed) return "";
-    const res = await fetchWithRetry(
-      OPENROUTER_URL,
-      {
-        method: "POST",
-        headers: openRouterHeaders(),
-        body: JSON.stringify({
-          models: UTILITY_MODELS,
-          max_tokens: 80,
-          messages: [
-            { role: "system", content: SUGGESTION_SYSTEM },
-            {
-              role: "user",
-              content: `Pattern type: ${patternType}\nDescription: ${description}\nExample tasks: ${exampleGoals.slice(0, 3).join("; ")}`,
-            },
-          ],
-        }),
-      },
-      { maxRetries: 1 }
-    );
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 80,
+      maxRetries: 1,
+      messages: [
+        { role: "system", content: SUGGESTION_SYSTEM },
+        {
+          role: "user",
+          content: `Pattern type: ${patternType}\nDescription: ${description}\nExample tasks: ${exampleGoals.slice(0, 3).join("; ")}`,
+        },
+      ],
+    });
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
       return `I've noticed you keep coming back to "${description}". Want me to take that off your plate?`;
     }
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    return (
-      (
-        data as { choices?: Array<{ message?: { content?: string } }> }
-      ).choices?.[0]?.message?.content?.trim() ?? ""
-    );
+    await recordCostResult(cost, { ...result.usage, success: true });
+    return result.text.trim();
   } catch {
     return `I've noticed you keep coming back to "${description}". Want me to take that off your plate?`;
   }
@@ -172,7 +158,7 @@ export async function generateSuggestionsViaBatch(
     userId?: string;
   }>
 ): Promise<Map<string, string>> {
-  if (!process.env.OPENROUTER_API_KEY) return new Map();
+  if (!isBrainConfigured()) return new Map();
 
   const out = new Map<string, string>();
   const CONCURRENCY = 5;

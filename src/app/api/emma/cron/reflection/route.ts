@@ -11,8 +11,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { decrypt } from "@/core/security/encryption";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
@@ -98,27 +97,22 @@ export async function GET(req: NextRequest) {
           const cost = await enforceCostGate({ operation: "memory_reflection", userId });
           if (!cost.allowed) continue;
 
-          const llmRes = await fetch(OPENROUTER_URL, {
-            method: "POST",
-            headers: openRouterHeaders(),
-            body: JSON.stringify({
-              models: UTILITY_MODELS,
-              max_tokens: 60,
-              messages: [
-                { role: "system", content: REFLECTION_SYSTEM },
-                { role: "user", content: memoryText },
-              ],
-            }),
+          const llmResult = await brainChat({
+            task: "utility",
+            maxTokens: 60,
+            messages: [
+              { role: "system", content: REFLECTION_SYSTEM },
+              { role: "user", content: memoryText },
+            ],
           });
 
-          if (!llmRes.ok) {
+          if (!llmResult.ok) {
             await recordCostResult(cost, { success: false });
             continue;
           }
 
-          const data = await llmRes.json();
-          await recordCostResult(cost, { ...extractUsage(data), success: true });
-          const suggestion = extractText(data).trim();
+          await recordCostResult(cost, { ...llmResult.usage, success: true });
+          const suggestion = llmResult.text.trim();
           if (!suggestion || suggestion === "NONE" || suggestion.length < 5) continue;
 
           await supabase.from("pattern_detections").insert({

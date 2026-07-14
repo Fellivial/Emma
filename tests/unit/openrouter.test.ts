@@ -1,7 +1,10 @@
 /**
  * openrouter.test.ts
  *
- * Covers every code path in src/lib/openrouter.ts:
+ * Covers the OpenRouter provider's header/extraction paths
+ * (src/core/brain/providers/openrouter.ts — relocated from the retired
+ * src/lib/openrouter.ts during Phase 7B; assertions unchanged to prove
+ * behavioral equivalence):
  *   - openRouterHeaders() throws when OPENROUTER_API_KEY is not set
  *   - openRouterHeaders() returns correct headers when key is present
  *   - extractText() returns content from a well-formed response
@@ -11,7 +14,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { openRouterHeaders, extractText, extractUsage } from "@/core/brain/providers/openrouter";
 
 describe("openRouterHeaders", () => {
   const ORIGINAL_KEY = process.env.OPENROUTER_API_KEY;

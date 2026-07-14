@@ -1,7 +1,7 @@
-import { VISION_MODELS, VISION_TIMEOUT_MS } from "@/core/models";
+import { VISION_TIMEOUT_MS } from "@/core/models";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/server";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat, type BrainChatResult } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
 
 const EMOTION_VISION_PROMPT = `Analyze the facial expression of any person visible in the provided frame (a screen capture, which may include a webcam feed or video call) for an emotion detection system.
@@ -59,59 +59,51 @@ export async function POST(req: NextRequest) {
     const cost = await enforceCostGate({ operation: "emotion", userId: user.id });
     if (!cost.allowed) return costGateResponse(cost);
 
-    let res: Response;
+    let result: BrainChatResult;
     try {
-      res = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: openRouterHeaders(),
+      result = await brainChat({
+        // This is an image_url call: the vision task tier must only ever hit
+        // vision-capable models. The utility fallback chain contains text-only
+        // models that would "analyze" a frame they cannot see.
+        task: "vision",
+        maxTokens: 256,
         // Same bound as the vision route — this call carries a frame too.
-        signal: AbortSignal.timeout(VISION_TIMEOUT_MS),
-        body: JSON.stringify({
-          // This is an image_url call: it must only ever hit vision-capable
-          // models. The utility fallback chain contains text-only models
-          // that would "analyze" a frame they cannot see.
-          models: VISION_MODELS,
-          max_tokens: 256,
-          messages: [
-            { role: "system", content: EMOTION_VISION_PROMPT },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: `data:image/jpeg;base64,${frame}` },
-                },
-                { type: "text", text: "Analyze the facial expression." },
-              ],
-            },
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: { name: "emotion_analysis", schema: EMOTION_OUTPUT_SCHEMA },
+        timeoutMs: VISION_TIMEOUT_MS,
+        messages: [
+          { role: "system", content: EMOTION_VISION_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${frame}` },
+              },
+              { type: "text", text: "Analyze the facial expression." },
+            ],
           },
-        }),
+        ],
+        responseFormat: {
+          name: "emotion_analysis",
+          schema: EMOTION_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+        },
       });
-    } catch (err) {
+    } catch {
       await recordCostResult(cost, { success: false });
-      const timedOut = err instanceof DOMException && err.name === "TimeoutError";
       // Fail-soft: emotion is one fusion signal among three — a neutral
       // low-confidence reading lets fusion continue instead of erroring.
-      console.warn(
-        `[EMMA Emotion API] ${timedOut ? "Timed out" : "Upstream fetch failed"} — returning neutral`
-      );
+      console.warn("[EMMA Emotion API] Upstream call failed — returning neutral");
       return NextResponse.json({
         emotion: { primary: "neutral", confidence: 0.1, valence: 0, arousal: 0.3 },
       });
     }
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
-      return NextResponse.json({ error: `API ${res.status}` }, { status: 502 });
+      return NextResponse.json({ error: `API ${result.error.status}` }, { status: 502 });
     }
 
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    const rawText = extractText(data);
+    await recordCostResult(cost, { ...result.usage, success: true });
+    const rawText = result.text;
 
     try {
       // With structured outputs the response is guaranteed-valid JSON — no cleanup needed.
