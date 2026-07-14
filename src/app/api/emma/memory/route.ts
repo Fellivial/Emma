@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { MemoryApiRequest, MemoryApiResponse, MemoryEntry } from "@/types/emma";
+import type { MemoryApiRequest, MemoryApiResponse } from "@/types/emma";
 import {
   getMemoriesForUser,
   addMemoryForUser,
@@ -7,6 +7,7 @@ import {
   deleteMemoryForUser,
 } from "@/core/memory-db";
 import { MEMORY_EXTRACTION_PROMPT } from "@/core/memory-shared";
+import { parseMemoryExtraction } from "@/core/memory-extraction-parser";
 import { getUser } from "@/lib/supabase/server";
 import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult, costGateResponse } from "@/core/cost-gate";
@@ -117,18 +118,12 @@ export async function POST(req: NextRequest) {
         await recordCostResult(cost, { ...result.usage, success: true });
         const rawText = result.text || '{"memories":[]}';
 
-        // Structured output guarantees valid JSON — no cleanup needed.
-        let parsed: Array<{ category: string; key: string; value: string; confidence: number }>;
-        try {
-          parsed = (JSON.parse(rawText) as { memories: typeof parsed }).memories;
-        } catch {
-          parsed = [];
-        }
+        const parsed = parseMemoryExtraction(rawText);
 
         const toStore = parsed
           .filter((p) => p.confidence >= 0.55)
           .map((p) => ({
-            category: p.category as MemoryEntry["category"],
+            category: p.category,
             key: p.key,
             value: p.value,
             confidence: p.confidence,
