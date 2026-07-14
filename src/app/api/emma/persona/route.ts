@@ -7,8 +7,7 @@ import { getUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { encrypt, decrypt } from "@/core/security/encryption";
 import { getPlan } from "@/core/pricing";
-import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { costGateResponse, enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import {
   TONE_ADJECTIVE_ALLOWLIST,
@@ -47,24 +46,17 @@ async function classifyDescription(text: string, userId: string): Promise<boolea
   const cost = await enforceCostGate({ operation: "persona_screen", userId });
   if (!cost.allowed) return costGateResponse(cost);
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
-        models: UTILITY_MODELS,
-        max_tokens: 5,
-        messages: [{ role: "user", content: `${CLASSIFIER_PROMPT}"${text}"` }],
-      }),
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 5,
+      messages: [{ role: "user", content: `${CLASSIFIER_PROMPT}"${text}"` }],
     });
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
       return false;
     }
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    const answer = extractText(data)
-      .trim()
-      .toUpperCase();
+    await recordCostResult(cost, { ...result.usage, success: true });
+    const answer = result.text.trim().toUpperCase();
     return answer.startsWith("YES");
   } catch {
     return false;

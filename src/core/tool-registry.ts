@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabaseAdmin() {
@@ -159,29 +158,24 @@ registerTool({
     });
     if (!cost.allowed) return { success: false, output: cost.message };
 
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
-        models: UTILITY_MODELS,
-        max_tokens: 512,
-        messages: [
-          {
-            role: "user",
-            content: `Summarize the following topic: ${input.topic}\n\n${styleGuide}`,
-          },
-        ],
-      }),
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 512,
+      messages: [
+        {
+          role: "user",
+          content: `Summarize the following topic: ${input.topic}\n\n${styleGuide}`,
+        },
+      ],
     });
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
-      return { success: false, output: `Summary API error: ${res.status}` };
+      return { success: false, output: `Summary API error: ${result.error.status}` };
     }
 
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    return { success: true, output: extractText(data), data: { topic: input.topic } };
+    await recordCostResult(cost, { ...result.usage, success: true });
+    return { success: true, output: result.text, data: { topic: input.topic } };
   },
 });
 

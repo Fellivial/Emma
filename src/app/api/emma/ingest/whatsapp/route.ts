@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { WhatsAppAdapter } from "@/core/integrations/whatsapp";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat, type BrainMessage } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import { sanitiseInput } from "@/core/security/sanitise";
 import { checkDistributedRateLimit } from "@/lib/ratelimit";
@@ -159,14 +158,14 @@ async function replyToWhatsApp(
     .order("received_at", { ascending: false })
     .limit(15);
 
-  const messages: Array<{ role: string; content: string }> = (
-    (history as Array<{ direction: string; body: string }>) || []
-  )
+  const messages: BrainMessage[] = ((history as Array<{ direction: string; body: string }>) || [])
     .reverse()
-    .map((row) => ({
-      role: row.direction === "outbound" ? "assistant" : "user",
-      content: row.body || "",
-    }))
+    .map(
+      (row): BrainMessage => ({
+        role: row.direction === "outbound" ? "assistant" : "user",
+        content: row.body || "",
+      })
+    )
     .filter((m) => m.content);
 
   // Guarantee the current inbound is the last user turn
@@ -178,22 +177,17 @@ async function replyToWhatsApp(
   try {
     const cost = await enforceCostGate({ operation: "whatsapp_ingest", clientId });
     if (!cost.allowed) return;
-    const llmRes = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders(),
-      body: JSON.stringify({
-        models: UTILITY_MODELS,
-        max_tokens: 400,
-        messages: [{ role: "system", content: WA_SYSTEM_PROMPT }, ...messages],
-      }),
+    const llmResult = await brainChat({
+      task: "utility",
+      maxTokens: 400,
+      messages: [{ role: "system", content: WA_SYSTEM_PROMPT }, ...messages],
     });
-    if (llmRes.ok) {
-      const data = await llmRes.json();
-      await recordCostResult(cost, { ...extractUsage(data), success: true });
-      replyText = extractText(data).trim();
+    if (llmResult.ok) {
+      await recordCostResult(cost, { ...llmResult.usage, success: true });
+      replyText = llmResult.text.trim();
     } else {
       await recordCostResult(cost, { success: false });
-      console.error("[WhatsApp reply] LLM error:", llmRes.status);
+      console.error("[WhatsApp reply] LLM error:", llmResult.error.status);
     }
   } catch (err) {
     console.error("[WhatsApp reply] LLM fetch error:", err);

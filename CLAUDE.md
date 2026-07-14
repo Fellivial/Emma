@@ -30,7 +30,7 @@ Every user message goes through:
 
 1. `sanitiseInput()` (`src/core/security/sanitise.ts`) — injection detection, length limits
 2. `checkUsage()` (`src/core/usage-enforcer.ts`) — 5-hour rolling window metering
-3. `POST /api/emma` (`src/app/api/emma/route.ts`) — streaming SSE brain route via OpenRouter
+3. `POST /api/emma` (`src/app/api/emma/route.ts`) — streaming SSE brain route; inference flows through the Brain Gateway (`src/core/brain/`, ADR 0003)
 4. `parseEmmaResponse()` (`src/core/command-parser.ts`) — extracts text, `[emotion:]` tag, `[EMMA_ROUTINE]` tag
 
 The brain route streams SSE deltas to the client. After the full response is collected, it appends a `{"type":"done", ...}` event with the parsed expression and routineId. Client-side streaming is handled by `src/lib/stream-client.ts`.
@@ -42,7 +42,8 @@ All engines are React hooks or plain modules in `src/core/`:
 | Engine                    | Purpose                                                                                                                                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `personas.ts`             | Builds the full system prompt: persona + memories + vision context + emotion state + routines + behavior directives                                                                         |
-| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision)                                                                                                                      |
+| `brain/gateway.ts`        | Brain Gateway (ADR 0003): the single provider-independent inference boundary — `brainChat`/`brainChatStream`/`brainEmbed`; providers live in `brain/providers/` (OpenRouter only today)     |
+| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision); consumed only by the Brain Gateway's OpenRouter provider                                                            |
 | `memory-db.ts`            | In-memory store + Supabase persistence with AES-256-GCM field encryption                                                                                                                    |
 | `client-config.ts`        | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`                                                                                                      |
 | `usage-enforcer.ts`       | 5-hour single-window token/message metering; must fail-open (never block on DB errors)                                                                                                      |
@@ -69,8 +70,8 @@ All routes are under `src/app/api/`:
 
 - `emma/route.ts` — Brain (streaming SSE)
 - `emma/memory/route.ts` — Memory CRUD + extraction
-- `emma/vision/route.ts` — Scene analysis via OpenRouter (vision model)
-- `emma/emotion/route.ts` — Emotion extraction from frames via OpenRouter (vision models — frames need image_url support)
+- `emma/vision/route.ts` — Scene analysis via the Brain Gateway (vision task tier)
+- `emma/emotion/route.ts` — Emotion extraction from frames via the Brain Gateway (vision task tier — frames need image_url support)
 - `emma/presence/route.ts` — Companion presence state (GET decrypted state / PUT greeting-bucket+topic write-back)
 - `emma/tts/route.ts` — ElevenLabs TTS
 - `emma/settings/route.ts` — User settings (GET/PUT)

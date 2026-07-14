@@ -26,9 +26,10 @@ checkUsage()             ← src/core/usage-enforcer.ts
        ▼
 POST /api/emma            ← src/app/api/emma/route.ts
   - build system prompt blocks (stable + dynamic)
-  - call OpenRouter chat completions API (streaming)
-  - attach tools: web_search, web_fetch, integration tools, MCP tools
-  - stream SSE deltas to client
+  - request a streamed completion from the Brain Gateway
+    (src/core/brain/gateway.ts — ADR 0003). No tools are attached on the
+    chat path — tool-calling lives in the agent loop (explanation-agent.md)
+  - re-emit the gateway's normalized delta events as Emma's own SSE envelope
        │
        ▼
 parseEmmaResponse()      ← src/core/command-parser.ts
@@ -46,9 +47,33 @@ Client handles done event
 
 ---
 
+## The Brain Gateway: One Inference Boundary
+
+Since Phase 7B, every request that needs a language model — chat (streaming or not), structured/JSON-schema generation, vision analysis, embeddings — goes through the **Brain Gateway** (`src/core/brain/gateway.ts`, [ADR 0003](adr/ADR-0003-brain-gateway-architecture.md)). Application code never constructs a provider request, holds a provider URL or API key, or parses a provider-shaped response.
+
+```
+Application Layer                 src/app/api/**, src/core/agent-loop.ts, src/lib/embeddings.ts
+  brainChat() / brainChatStream() / brainEmbed()
+       │  normalized requests: task tier ("brain" | "vision" | "utility"),
+       │  messages, maxTokens, responseFormat (JSON schema), tools, timeout/retry
+       ▼
+Brain Gateway                     src/core/brain/gateway.ts + types.ts
+  request/response/stream/error normalization · provider selection
+       │  provider wire format (internal)
+       ▼
+Provider Layer                    src/core/brain/providers/openrouter.ts
+  OpenRouter today — URLs, headers, `models: [...]` fallback arrays,
+  SSE chunk parsing, 529 status vocabulary. Model IDs still live in
+  src/core/models.ts, now consumed only by the provider.
+```
+
+Division of labor: the gateway owns _how_ a request reaches a provider (invocation, retry/timeout, normalization); call sites keep owning _why_ (cost gating via `cost-gate.ts`, prompt content, memory ranking, behavior flags, Sentry policy, Emma's client-facing SSE envelope). Fallback across models is a provider capability — callers ask for a task tier, never a model list. Adding a provider (Ollama, vLLM, a future Emma-owned model) means implementing the `BrainProvider` interface behind the gateway; no caller changes. Multi-provider routing and a capability registry are explicitly deferred until a second provider exists.
+
+---
+
 ## The System Prompt: Two Parts
 
-Emma's system prompt is assembled in `buildSystemPromptBlocks()` as two logical parts, then concatenated into a flat string before being sent to OpenRouter:
+Emma's system prompt is assembled in `buildSystemPromptBlocks()` as two logical parts, then concatenated into a flat string before being sent through the Brain Gateway:
 
 **Part 1 — Stable**  
 Contains: persona, response length rules, routine instructions, avatar expression rules, available tools, memories, active user profile.
@@ -66,7 +91,7 @@ buildSystemPromptBlocks()        ← src/core/personas.ts
     { type: "text", text: stablePrompt },
     { type: "text", text: dynamicContext }  // omitted if empty
   ]
-// Joined into a flat string before the OpenRouter call
+// Joined into a flat string before the Brain Gateway call
 buildSystemPrompt()  →  stablePrompt + "\n\n" + dynamicContext
 ```
 
@@ -189,7 +214,7 @@ Why SSE instead of WebSockets:
 - Simpler reconnection logic than WebSockets
 - Vercel's Edge Runtime supports SSE natively
 
-The `stream-client.ts` client handles the SSE stream, collects partial deltas into full text, and fires the `done` callback when the stream ends.
+Two SSE layers exist and must not be confused: the **provider's** stream (OpenRouter's `data: {...}` chunk format) is parsed entirely inside the Brain Gateway's provider implementation and surfaces to the route as normalized `delta`/`done` events; the **client-facing** stream is Emma's own envelope (`type: "delta" | "done" | "error"`) emitted by the chat route. `stream-client.ts` only ever sees Emma's envelope — it collects partial deltas into full text and fires the `done` callback when the stream ends. A provider swap changes neither layer's contract.
 
 ---
 
@@ -237,6 +262,7 @@ Several client-side engines make Emma feel present between messages. They predat
 
 - [ADR 0001: Behavior Flags](adr/0001-behavior-flags.md)
 - [ADR 0002: Companion State Persistence](adr/0002-companion-state-persistence.md)
+- [ADR 0003: Brain Gateway Architecture](adr/ADR-0003-brain-gateway-architecture.md)
 - [Reference: API routes](reference-api.md)
 - [Reference: Plans and limits](reference-plans.md)
 - [Explanation: Security](explanation-security.md)

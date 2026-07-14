@@ -186,12 +186,12 @@ describe("HIGH-08: WhatsApp sender rate limit ordering", () => {
     expect(waSrc).toContain('createHash("sha256").update(fromNumber)');
   });
 
-  it("checks sender rate before history loading, cost gate, and LLM fetch", () => {
+  it("checks sender rate before history loading, cost gate, and LLM call", () => {
     const replyFnBody = waSrc.slice(waSrc.indexOf("async function replyToWhatsApp"));
     const senderLimitIdx = replyFnBody.indexOf("checkWhatsAppSenderRateLimit");
     const historyIdx = replyFnBody.indexOf('.from("ingested_whatsapp")');
     const costIdx = replyFnBody.indexOf("enforceCostGate");
-    const fetchIdx = replyFnBody.indexOf("fetch(OPENROUTER_URL");
+    const fetchIdx = replyFnBody.indexOf("brainChat(");
     expect(senderLimitIdx).toBeGreaterThan(-1);
     expect(historyIdx).toBeGreaterThan(-1);
     expect(costIdx).toBeGreaterThan(-1);

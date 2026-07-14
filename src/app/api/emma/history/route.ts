@@ -9,8 +9,7 @@ import {
   updateConversationSummary,
   updateConversationTitle,
 } from "@/core/memory-db";
-import { UTILITY_MODELS } from "@/core/models";
-import { OPENROUTER_URL, openRouterHeaders, extractText, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 import { parseHistoryMessages } from "@/core/request-validation";
 
@@ -115,24 +114,17 @@ export async function POST(req: NextRequest) {
           if (!titleCost.allowed) return;
           const recentMsgs = await getConversationMessages(convo.id, 4);
           const excerpt = recentMsgs.map((m) => `${m.role}: ${m.content}`).join("\n");
-          const res = await fetch(OPENROUTER_URL, {
-            method: "POST",
-            headers: openRouterHeaders(),
-            body: JSON.stringify({
-              models: UTILITY_MODELS,
-              max_tokens: 20,
-              messages: [
-                { role: "system", content: TITLE_PROMPT },
-                { role: "user", content: excerpt },
-              ],
-            }),
+          const result = await brainChat({
+            task: "utility",
+            maxTokens: 20,
+            messages: [
+              { role: "system", content: TITLE_PROMPT },
+              { role: "user", content: excerpt },
+            ],
           });
-          if (res.ok) {
-            const data = await res.json();
-            await recordCostResult(titleCost, { ...extractUsage(data), success: true });
-            const title = extractText(data)
-              .trim()
-              .replace(/^["']|["']$/g, "");
+          if (result.ok) {
+            await recordCostResult(titleCost, { ...result.usage, success: true });
+            const title = result.text.trim().replace(/^["']|["']$/g, "");
             if (title) await updateConversationTitle(convo.id, title);
           }
         }
@@ -147,22 +139,17 @@ export async function POST(req: NextRequest) {
           const allMsgs = await getConversationMessages(convo.id, 35);
           const text = allMsgs.map((m) => `${m.role}: ${m.content}`).join("\n");
           const prevSummary = convo.summary ? `Previous summary:\n${convo.summary}\n\n` : "";
-          const res = await fetch(OPENROUTER_URL, {
-            method: "POST",
-            headers: openRouterHeaders(),
-            body: JSON.stringify({
-              models: UTILITY_MODELS,
-              max_tokens: 600,
-              messages: [
-                { role: "system", content: SUMMARIZE_PROMPT },
-                { role: "user", content: `${prevSummary}New messages:\n${text}` },
-              ],
-            }),
+          const result = await brainChat({
+            task: "utility",
+            maxTokens: 600,
+            messages: [
+              { role: "system", content: SUMMARIZE_PROMPT },
+              { role: "user", content: `${prevSummary}New messages:\n${text}` },
+            ],
           });
-          if (res.ok) {
-            const data = await res.json();
-            await recordCostResult(summaryCost, { ...extractUsage(data), success: true });
-            const summary = extractText(data).trim();
+          if (result.ok) {
+            await recordCostResult(summaryCost, { ...result.usage, success: true });
+            const summary = result.text.trim();
             if (summary) await updateConversationSummary(convo.id, summary);
           }
         }

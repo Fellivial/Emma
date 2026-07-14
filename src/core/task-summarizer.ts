@@ -3,11 +3,9 @@
  * task using Haiku, then stores it in agent_task_summaries.
  */
 
-import { UTILITY_MODELS } from "@/core/models";
 import { createClient } from "@supabase/supabase-js";
 import type { TaskContext } from "@/core/task-context";
-import { fetchWithRetry } from "@/lib/errors";
-import { OPENROUTER_URL, openRouterHeaders, extractUsage } from "@/lib/openrouter";
+import { brainChat } from "@/core/brain/gateway";
 import { enforceCostGate, recordCostResult } from "@/core/cost-gate";
 
 function getSupabase() {
@@ -58,34 +56,23 @@ export async function summarizeTask(
       .filter(Boolean)
       .join("\n");
 
-    const res = await fetchWithRetry(
-      OPENROUTER_URL,
-      {
-        method: "POST",
-        headers: openRouterHeaders(),
-        body: JSON.stringify({
-          models: UTILITY_MODELS,
-          max_tokens: 256,
-          messages: [
-            { role: "system", content: SUMMARIZER_SYSTEM },
-            { role: "user", content: prompt },
-          ],
-        }),
-      },
-      { maxRetries: 1 }
-    );
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 256,
+      maxRetries: 1,
+      messages: [
+        { role: "system", content: SUMMARIZER_SYSTEM },
+        { role: "user", content: prompt },
+      ],
+    });
 
-    if (!res.ok) {
+    if (!result.ok) {
       await recordCostResult(cost, { success: false });
       return "";
     }
 
-    const data = await res.json();
-    await recordCostResult(cost, { ...extractUsage(data), success: true });
-    const summary: string =
-      (
-        data as { choices?: Array<{ message?: { content?: string } }> }
-      ).choices?.[0]?.message?.content?.trim() ?? "";
+    await recordCostResult(cost, { ...result.usage, success: true });
+    const summary: string = result.text.trim();
 
     if (summary) {
       await persistSummary(taskId, summary, ctx);

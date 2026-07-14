@@ -13,11 +13,9 @@
 
 import * as Sentry from "@sentry/nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BRAIN_MODELS, UTILITY_MODELS } from "@/core/models";
 import { getTool, getToolsForClaude, type ToolContext, type RiskLevel } from "@/core/tool-registry";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { fetchWithRetry } from "@/lib/errors";
-import { OPENROUTER_URL, openRouterHeaders } from "@/lib/openrouter";
+import { brainChat, type BrainMessage, type BrainToolDefinition } from "@/core/brain/gateway";
 import { checkRateLimit, consumeRateLimit } from "@/core/rate-limiter";
 import { decrypt } from "@/core/security/encryption";
 import { sanitiseInput } from "@/core/security/sanitise";
@@ -356,31 +354,29 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         });
         break;
       }
-      // ── Call OpenRouter with tools ───────────────────────────────────
-      const res = await fetchWithRetry(
-        OPENROUTER_URL,
-        {
-          method: "POST",
-          headers: openRouterHeaders(),
-          body: JSON.stringify({
-            models: BRAIN_MODELS,
-            max_tokens: step < task.maxSteps ? 512 : 1024,
-            messages: [{ role: "system", content: AGENT_SYSTEM }, ...messages],
-            tools,
-          }),
-        },
-        { maxRetries: 2 }
-      );
+      // ── Call the Brain Gateway with tools ────────────────────────────
+      const result = await brainChat({
+        task: "brain",
+        maxTokens: step < task.maxSteps ? 512 : 1024,
+        maxRetries: 2,
+        messages: [
+          { role: "system", content: AGENT_SYSTEM },
+          ...messages,
+        ] as unknown as BrainMessage[],
+        tools: tools as BrainToolDefinition[],
+      });
 
-      if (!res.ok) {
+      if (!result.ok) {
         await recordCostResult(cost, { success: false });
-        const errBody = await res.text().catch(() => "");
-        console.error(`[EMMA Agent] API error ${res.status}:`, errBody.slice(0, 200));
+        console.error(
+          `[EMMA Agent] API error ${result.error.status}:`,
+          result.error.bodyPreview.slice(0, 200)
+        );
         steps.push({
           step,
           toolName: "error",
           input: {},
-          output: `API error: ${res.status}`,
+          output: `API error: ${result.error.status}`,
           riskLevel: "safe",
           status: "failed",
           tokenCost: 0,
@@ -389,38 +385,21 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
         break;
       }
 
-      type OpenRouterData = {
-        choices: Array<{
-          message: {
-            content?: string | null;
-            tool_calls?: Array<{
-              id: string;
-              type: "function";
-              function: { name: string; arguments: string };
-            }>;
-          };
-          finish_reason: string;
-        }>;
-        usage?: { prompt_tokens: number; completion_tokens: number };
-      };
-      const data = (await res.json()) as OpenRouterData;
-      const inputTokens = data.usage?.prompt_tokens || 0;
-      const outputTokens = data.usage?.completion_tokens || 0;
+      const inputTokens = result.usage.inputTokens;
+      const outputTokens = result.usage.outputTokens;
       await recordCostResult(cost, { inputTokens, outputTokens, success: true });
       totalTokens += inputTokens + outputTokens;
 
-      const choice = data.choices?.[0];
-      const assistantMessage = choice?.message;
-      const toolCalls = assistantMessage?.tool_calls ?? [];
-      const finishReason = choice?.finish_reason;
+      const toolCalls = result.toolCalls;
+      const finishReason = result.finishReason;
       let hasToolUse = false;
 
-      // Push the assistant turn once — OpenRouter requires exactly one assistant
-      // message per group of tool results, not one per tool call.
+      // Push the assistant turn once — the provider expects exactly one
+      // assistant message per group of tool results, not one per tool call.
       if (toolCalls.length > 0) {
         messages.push({
           role: "assistant",
-          content: assistantMessage?.content ?? null,
+          content: result.text || null,
           tool_calls: toolCalls,
         });
       }
@@ -873,7 +852,7 @@ export async function runAgentLoop(task: AgentTask): Promise<AgentResult> {
       // If model returned only text (no tool calls), it's done thinking
       if (!hasToolUse && finishReason === "stop") {
         taskCompleted = true;
-        taskSummary = assistantMessage?.content || "Task completed (no tool calls needed)";
+        taskSummary = result.text || "Task completed (no tool calls needed)";
       }
     } catch (err) {
       Sentry.captureException(err, { extra: { taskId: task.id, step } });
@@ -1105,43 +1084,33 @@ SKIP: <one-line reason why this action should be skipped>`;
   let outputTokens = 0;
   let providerSucceeded = false;
   try {
-    const res = await fetchWithRetry(
-      OPENROUTER_URL,
-      {
-        method: "POST",
-        headers: openRouterHeaders(),
-        body: JSON.stringify({
-          models: UTILITY_MODELS,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a pre-execution safety evaluator for an autonomous agent. Be permissive — only reject actions that are clearly wrong or harmful given the goal. Most actions should PROCEED.",
-            },
-            { role: "user", content: userContent },
-          ],
-          max_tokens: 80,
-          temperature: 0,
-        }),
-      },
-      { maxRetries: 0, connectionTimeoutMs: 8_000 }
-    );
+    const result = await brainChat({
+      task: "utility",
+      maxTokens: 80,
+      temperature: 0,
+      maxRetries: 0,
+      timeoutMs: 8_000,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a pre-execution safety evaluator for an autonomous agent. Be permissive — only reject actions that are clearly wrong or harmful given the goal. Most actions should PROCEED.",
+        },
+        { role: "user", content: userContent },
+      ],
+    });
 
-    if (!res.ok) {
+    if (!result.ok) {
       return {
         proceed: false,
         reason: "pre-execution evaluator unavailable — action not executed",
       };
     }
 
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    inputTokens = data.usage?.prompt_tokens ?? 0;
-    outputTokens = data.usage?.completion_tokens ?? 0;
+    inputTokens = result.usage.inputTokens;
+    outputTokens = result.usage.outputTokens;
     providerSucceeded = true;
-    const text = (data.choices?.[0]?.message?.content ?? "").trim();
+    const text = result.text.trim();
 
     if (text.toUpperCase().startsWith("PROCEED")) {
       return { proceed: true, reason: "evaluator approved" };
