@@ -1217,3 +1217,44 @@ create policy "Users own companion state" on public.companion_state
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+
+-- ─── Deletion Requests (ADR-000X, Phase 1: Foundation) ───────────────────────
+-- Persistence model for the durable account-deletion workflow. status
+-- enumerates the granular state machine; checkpoint is a structured jsonb
+-- array scoped to Deletion Resource Registry resourceIds, enabling resume
+-- from the exact point of interruption. workflow_version freezes which
+-- Registry snapshot + state-machine shape an in-flight request executes
+-- against. See src/core/account-deletion/registry.ts and the Technical
+-- Design Document. Writes are service-role only; no client policy exists.
+
+create table if not exists public.deletion_requests (
+  id                    uuid        primary key default gen_random_uuid(),
+  user_id               uuid        references auth.users (id) on delete cascade not null,
+  status                text        not null default 'requested',
+  workflow_version      integer     not null default 1,
+  checkpoint            jsonb       not null default '[]'::jsonb,
+  grace_period_ends_at  timestamptz,
+  requested_at          timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  completed_at          timestamptz,
+  cancelled_at          timestamptz,
+  retry_count           integer     not null default 0,
+  constraint deletion_requests_status_check check (
+    status in (
+      'requested', 'validating', 'waiting_grace_period', 'locked',
+      'deleting_database', 'deleting_storage', 'deleting_oauth', 'deleting_background_jobs',
+      'verify_database', 'verify_storage', 'verify_external',
+      'completed', 'retry_pending', 'failed', 'cancelled'
+    )
+  )
+);
+alter table public.deletion_requests enable row level security;
+drop policy if exists "Users read own deletion requests" on public.deletion_requests;
+create policy "Users read own deletion requests" on public.deletion_requests
+  for select
+  using (auth.uid() = user_id);
+create unique index if not exists deletion_requests_one_active_per_user
+  on public.deletion_requests (user_id)
+  where status not in ('completed', 'cancelled');
+create index if not exists idx_deletion_requests_status on public.deletion_requests (status);
