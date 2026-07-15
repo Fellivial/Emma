@@ -39,30 +39,32 @@ The brain route streams SSE deltas to the client. After the full response is col
 
 All engines are React hooks or plain modules in `src/core/`:
 
-| Engine                    | Purpose                                                                                                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `personas.ts`             | Builds the full system prompt: persona + memories + vision context + emotion state + routines + behavior directives                                                                         |
-| `brain/gateway.ts`        | Brain Gateway (ADR 0003): the single provider-independent inference boundary — `brainChat`/`brainChatStream`/`brainEmbed`; providers live in `brain/providers/` (OpenRouter only today)     |
-| `models.ts`               | Single source of truth for OpenRouter model IDs (brain/utility/vision); consumed only by the Brain Gateway's OpenRouter provider                                                            |
-| `memory-db.ts`            | In-memory store + Supabase persistence with AES-256-GCM field encryption                                                                                                                    |
-| `client-config.ts`        | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`                                                                                                      |
-| `usage-enforcer.ts`       | 5-hour single-window token/message metering; must fail-open (never block on DB errors)                                                                                                      |
-| `avatar-engine.ts`        | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip); body-tap escalation gated by teasingLevel, idle cadence follows initiative (behavior flags)                 |
-| `emotion-engine.ts`       | Detects user emotional state from voice/vision/text (confidence-weighted fusion); feeds behavior flags + system prompt                                                                      |
-| `behavior-flags.ts`       | Deterministic behavioral layer (ADR 0001): derives verbosity/emoji/teasing/warmth/initiative from persona + memories + emotion + time; single source of truth for behavioral decisions      |
-| `response-validator.ts`   | Confirms responses honored their behavior flags (emoji/length/teasing heuristics); log-only, never rewrites                                                                                 |
-| `greeting-engine.ts`      | Session-aware greetings: time of day, absence length (quick return → very long absence), memory-enriched follow-ups; soft non-teasing bank when behavior flags suppress teasing             |
-| `proactive-speech.ts`     | Unprompted speech on idle (45s comment, 2min concern, late-night nudge), memory-personalized; behavior-flag-aware bank selection, distress skips the playful idle nudge                     |
-| `pattern-detector.ts`     | Daily cron: detects recurring task patterns, generates suggestions in Emma's companion voice (never automation pitch — docs/niche.md)                                                       |
-| `voice-behavior.ts`       | Behavior-flag voice modulation: warmth softens ElevenLabs/WebSpeech delivery, lowered initiative calms pace; pure, identity at baseline, never raises energy                                |
-| `context-manager.ts`      | Token-budget-aware conversation summarization/trimming for long chats                                                                                                                       |
-| `autonomy-engine.ts`      | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                                                                                                                       |
-| `routines-engine.ts`      | Companion rituals — built-in (morning check-in, focus session, evening wind-down, weekly reflection, celebrate a win…) and user-defined; descriptions feed the prompt via serializeRoutines |
-| `companion-state.ts`      | Cross-session presence (ADR 0002): one encrypted `companion_state` row per user (last interaction/mood/emotion snapshot), 30-day staleness, fail-open; consumed by greeting engine          |
-| `companion-notify.ts`     | Behavior-flag-aware push notification copy (task completion, approval); event-driven only, lock-screen discreet, soft fallback when flags unavailable                                       |
-| `integrations/adapter.ts` | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot                                                                                                    |
-| `security/sanitise.ts`    | Prompt injection detection and input cleaning                                                                                                                                               |
-| `security/encryption.ts`  | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                                                                                                                           |
+| Engine                         | Purpose                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `personas.ts`                  | Builds the full system prompt: persona + memories + vision context + emotion state + routines + behavior directives                                                                         |
+| `brain/gateway.ts`             | Brain Gateway (ADR 0003): the single provider-independent inference boundary — `brainChat`/`brainChatStream`/`brainEmbed`; providers live in `brain/providers/` (OpenRouter only today)     |
+| `models.ts`                    | Single source of truth for OpenRouter model IDs (brain/utility/vision); consumed only by the Brain Gateway's OpenRouter provider                                                            |
+| `memory-db.ts`                 | In-memory store + Supabase persistence with AES-256-GCM field encryption                                                                                                                    |
+| `client-config.ts`             | Per-client config loaded from Supabase `clients` table; falls back to `DEFAULT_CONFIG`                                                                                                      |
+| `usage-enforcer.ts`            | 5-hour single-window token/message metering; must fail-open (never block on DB errors)                                                                                                      |
+| `avatar-engine.ts`             | Live2D controller; 10 expressions, lip sync, 3 layout modes (side/overlay/pip); body-tap escalation gated by teasingLevel, idle cadence follows initiative (behavior flags)                 |
+| `emotion-engine.ts`            | Detects user emotional state from voice/vision/text (confidence-weighted fusion); feeds behavior flags + system prompt                                                                      |
+| `behavior-flags.ts`            | Deterministic behavioral layer (ADR 0001): derives verbosity/emoji/teasing/warmth/initiative from persona + memories + emotion + time; single source of truth for behavioral decisions      |
+| `response-validator.ts`        | Confirms responses honored their behavior flags (emoji/length/teasing heuristics); log-only, never rewrites                                                                                 |
+| `greeting-engine.ts`           | Session-aware greetings: time of day, absence length (quick return → very long absence), memory-enriched follow-ups; soft non-teasing bank when behavior flags suppress teasing             |
+| `proactive-speech.ts`          | Unprompted speech on idle (45s comment, 2min concern, late-night nudge), memory-personalized; behavior-flag-aware bank selection, distress skips the playful idle nudge                     |
+| `pattern-detector.ts`          | Daily cron: detects recurring task patterns, generates suggestions in Emma's companion voice (never automation pitch — docs/niche.md)                                                       |
+| `voice-behavior.ts`            | Behavior-flag voice modulation: warmth softens ElevenLabs/WebSpeech delivery, lowered initiative calms pace; pure, identity at baseline, never raises energy                                |
+| `context-manager.ts`           | Token-budget-aware conversation summarization/trimming for long chats                                                                                                                       |
+| `autonomy-engine.ts`           | Autonomy tier system (1=notify, 2=suggest, 3=execute)                                                                                                                                       |
+| `routines-engine.ts`           | Companion rituals — built-in (morning check-in, focus session, evening wind-down, weekly reflection, celebrate a win…) and user-defined; descriptions feed the prompt via serializeRoutines |
+| `companion-state.ts`           | Cross-session presence (ADR 0002): one encrypted `companion_state` row per user (last interaction/mood/emotion snapshot), 30-day staleness, fail-open; consumed by greeting engine          |
+| `companion-notify.ts`          | Behavior-flag-aware push notification copy (task completion, approval); event-driven only, lock-screen discreet, soft fallback when flags unavailable                                       |
+| `integrations/adapter.ts`      | OAuth token store + adapter interface for Gmail, Google Calendar, Slack, Notion, HubSpot                                                                                                    |
+| `security/sanitise.ts`         | Prompt injection detection and input cleaning                                                                                                                                               |
+| `security/encryption.ts`       | AES-256-GCM field encryption (key: `EMMA_ENCRYPTION_KEY` env var)                                                                                                                           |
+| `account-deletion/registry.ts` | Deletion Resource Registry (ADR 0004): single inventory of every user-owned/tenant-owned/out-of-scope resource; `gdpr/route.ts` derives its delete-order and export-table arrays from it    |
+| `account-deletion/adapter.ts`  | Shared `prepare`/`delete`/`verify`/`cleanup` lifecycle for non-database deletion adapters; Storage implemented, OAuth/background-jobs not yet (`deletionAdapter: null` in the Registry)     |
 
 ### API Routes
 
@@ -78,6 +80,7 @@ All routes are under `src/app/api/`:
 - `emma/usage/route.ts` — Usage stats
 - `emma/tasks/route.ts` — Autonomous tasks CRUD
 - `emma/agent/route.ts` — Agentic loop execution
+- `emma/gdpr/route.ts` — GDPR export/delete; delete path is registry-driven and transactional (ADR 0004)
 - `lemon/webhook/route.ts` — LemonSqueezy subscription webhooks
 - `integrations/[service]/oauth/` — OAuth start + callback
 

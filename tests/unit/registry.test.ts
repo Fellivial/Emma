@@ -61,6 +61,18 @@ describe("Deletion Resource Registry", () => {
     expect(byId.get("background.document_process")?.phase).toBe("deleting_background_jobs");
   });
 
+  it("gives both Storage resources the Phase 2 real adapter, not the Phase 1 placeholder", () => {
+    const byId = new Map(DELETION_RESOURCE_REGISTRY.map((entry) => [entry.resourceId, entry]));
+    expect(byId.get("storage.document-ingestion")?.deletionAdapter).toBe("storage-bucket-delete");
+    expect(byId.get("storage.task-documents")?.deletionAdapter).toBe("storage-bucket-delete");
+  });
+
+  it("leaves OAuth and background-job resources as null adapters (out of Phase 2 scope)", () => {
+    const byId = new Map(DELETION_RESOURCE_REGISTRY.map((entry) => [entry.resourceId, entry]));
+    expect(byId.get("oauth.client_integrations")?.deletionAdapter).toBeNull();
+    expect(byId.get("background.document_process")?.deletionAdapter).toBeNull();
+  });
+
   it("toUserOwnedDeleteOrder() mirrors getDatabaseResources() table/column, in order", () => {
     const order = toUserOwnedDeleteOrder();
     const resources = getDatabaseResources();
@@ -97,5 +109,35 @@ describe("Deletion Resource Registry", () => {
   it("caps the audit_log export at 500 rows", () => {
     const auditLog = toGdprExportTables().find(({ table }) => table === "audit_log");
     expect(auditLog?.limit).toBe(500);
+  });
+
+  it("db.affiliates has no column override — the SQL cascade assumes it resolves to user_id", () => {
+    // The transactional function's affiliate_referrals cascade dynamically
+    // reads whatever column this entry resolves to (v_column), so it's safe
+    // against a future override — but if this entry ever *did* override its
+    // column, the cascade's own ownership lookup would follow it too. This
+    // test documents and locks in today's actual assumption: no override.
+    const affiliates = getDatabaseResources().find((entry) => entry.table === "affiliates");
+    expect(affiliates?.column).toBe("user_id");
+  });
+
+  it("has no registry entry for affiliate_referrals — it's cascade-deleted inline, not column-filtered", () => {
+    const ids = DELETION_RESOURCE_REGISTRY.map((entry) => entry.resourceId);
+    const tables = getDatabaseResources().map((entry) => entry.table);
+    expect(ids).not.toContain("db.affiliate_referrals");
+    expect(tables).not.toContain("affiliate_referrals");
+  });
+
+  it("every database resource's table/column would pass the SQL function's own identifier check", () => {
+    // Defense-in-depth consistency: the transactional function validates
+    // table/column against ^[a-zA-Z_][a-zA-Z0-9_]*$ before using them in
+    // dynamic SQL. Every Registry-sourced value should already satisfy that
+    // pattern — this test fails loudly in CI, not at RPC-call time in
+    // production, if a future entry ever wouldn't.
+    const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+    for (const { table, column } of toUserOwnedDeleteOrder()) {
+      expect(table).toMatch(identifierPattern);
+      expect(column).toMatch(identifierPattern);
+    }
   });
 });

@@ -7,35 +7,27 @@ import {
 } from "@/app/api/emma/gdpr/route";
 
 describe("GDPR deletion coverage", () => {
-  it("deletes legacy and encrypted history plus direct user-owned agent data", async () => {
-    const deleted: Array<{ table: string; column: string }> = [];
-    const supabase = {
-      from: vi.fn((table: string) => {
-        const deletion = {
-          eq: vi.fn(async (column: string) => {
-            deleted.push({ table, column });
-            return { count: 1, error: null };
-          }),
-          in: vi.fn(async (column: string) => {
-            deleted.push({ table, column });
-            return { count: 1, error: null };
-          }),
-        };
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({
-              data: table === "affiliates" ? [{ id: "affiliate-1" }] : [],
-              error: null,
-            }),
-          })),
-          delete: vi.fn(() => deletion),
-        };
-      }),
-    };
+  it("passes the full ordered table list to the atomic delete RPC in one call", async () => {
+    const rpc = vi.fn(async (fn: string, args: { p_user_id: string; p_tables: unknown }) => {
+      const tables = args.p_tables as Array<{ table: string; column: string }>;
+      return {
+        data: tables.map(({ table }) => ({ table_name: table, deleted_count: 1 })),
+        error: null,
+      };
+    });
+    const supabase = { rpc };
 
-    await deleteUserOwnedData(supabase as never, "11111111-1111-4111-8111-111111111111");
+    const summary = await deleteUserOwnedData(
+      supabase as never,
+      "11111111-1111-4111-8111-111111111111"
+    );
 
-    const tableNames = deleted.map(({ table }) => table);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [fnName, args] = rpc.mock.calls[0];
+    expect(fnName).toBe("delete_user_owned_data_ordered");
+    expect(args.p_user_id).toBe("11111111-1111-4111-8111-111111111111");
+
+    const tableNames = (args.p_tables as Array<{ table: string }>).map(({ table }) => table);
     expect(tableNames).toEqual(
       expect.arrayContaining([
         "legacy_chat_migration_ledger",
@@ -53,52 +45,72 @@ describe("GDPR deletion coverage", () => {
         "email_sequences",
         "trial_events",
         "trials",
-        "affiliate_referrals",
         "affiliates",
         "referrals",
       ])
     );
-    expect(deleted).toContainEqual({ table: "affiliate_referrals", column: "affiliate_id" });
-    expect(deleted).toContainEqual({ table: "referrals", column: "referrer_id" });
+    // affiliate_referrals is not a registry entry — it's cascade-deleted
+    // inside the RPC's affiliates special case (see the migration), not
+    // passed as a separate table here.
+    expect(tableNames).not.toContain("affiliate_referrals");
+    expect(args.p_tables).toContainEqual({ table: "referrals", column: "referrer_id" });
     expect(tableNames.indexOf("email_sequences")).toBeLessThan(tableNames.indexOf("trials"));
     expect(tableNames.indexOf("trial_events")).toBeLessThan(tableNames.indexOf("trials"));
-    expect(tableNames.indexOf("affiliate_referrals")).toBeLessThan(
-      tableNames.indexOf("affiliates")
-    );
     expect(tableNames).not.toContain("client_integrations");
+
+    expect(summary).toContain("legacy_chat_migration_ledger: 1");
+    expect(summary).toContain("affiliates: 1");
   });
 
-  it("fails the deletion when a required table cannot be cleared", async () => {
-    const supabase = {
-      from: vi.fn((table: string) => ({
-        select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [], error: null }) })),
-        delete: vi.fn(() => ({
-          eq: vi.fn().mockResolvedValue({
-            count: 0,
-            error: table === "messages" ? { message: "database failure" } : null,
-          }),
-          in: vi.fn().mockResolvedValue({ count: 0, error: null }),
-        })),
-      })),
-    };
+  it("every p_tables entry has an explicit, non-empty table and column string", async () => {
+    // The SQL function falls back to 'user_id' via COALESCE when column is
+    // absent, but the TS layer should never actually rely on that fallback —
+    // USER_OWNED_DELETE_ORDER always resolves column itself. This guards
+    // against a future regression where the mapping silently omits column.
+    let sentTables: Array<{ table?: string; column?: string }> = [];
+    const rpc = vi.fn(async (_fn: string, args: { p_tables: typeof sentTables }) => {
+      sentTables = args.p_tables;
+      return { data: [], error: null };
+    });
+
+    await deleteUserOwnedData({ rpc } as never, "user-1");
+
+    expect(sentTables.length).toBeGreaterThan(0);
+    for (const entry of sentTables) {
+      expect(typeof entry.table).toBe("string");
+      expect(entry.table).not.toBe("");
+      expect(typeof entry.column).toBe("string");
+      expect(entry.column).not.toBe("");
+    }
+  });
+
+  it("fails the deletion when the RPC reports an error, without a second round trip", async () => {
+    const rpc = vi.fn(async () => ({
+      data: null,
+      error: { message: "messages: database failure" },
+    }));
+    const supabase = { rpc };
 
     await expect(deleteUserOwnedData(supabase as never, "user-1")).rejects.toThrow(
       "messages: database failure"
     );
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("GDPR export coverage", () => {
   it("mirrors the direct user-owned deletion order and excludes secret fields", () => {
-    const exportTables = GDPR_EXPORT_TABLES.map(({ table, column }) => `${table}:${column ?? "user_id"}`);
+    const exportTables = GDPR_EXPORT_TABLES.map(
+      ({ table, column }) => `${table}:${column ?? "user_id"}`
+    );
     const deleteTables = USER_OWNED_DELETE_ORDER.map(
       ({ table, column }) => `${table}:${column ?? "user_id"}`
     );
 
     expect(exportTables).toEqual(deleteTables);
-    expect(GDPR_EXPORT_TABLES.find(({ table }) => table === "user_mcp_servers")?.select).not.toContain(
-      "auth_token"
-    );
+    expect(
+      GDPR_EXPORT_TABLES.find(({ table }) => table === "user_mcp_servers")?.select
+    ).not.toContain("auth_token");
     expect(GDPR_EXPORT_TABLES.find(({ table }) => table === "oauth_states")?.select).not.toContain(
       "state"
     );
@@ -108,9 +120,9 @@ describe("GDPR export coverage", () => {
     expect(GDPR_EXPORT_TABLES.find(({ table }) => table === "audit_log")?.select).not.toContain(
       "ip_address"
     );
-    expect(GDPR_EXPORT_TABLES.find(({ table }) => table === "push_subscriptions")?.select).not.toContain(
-      "subscription"
-    );
+    expect(
+      GDPR_EXPORT_TABLES.find(({ table }) => table === "push_subscriptions")?.select
+    ).not.toContain("subscription");
   });
 
   it("exports all allowlisted user-owned tables and affiliate child rows", async () => {
