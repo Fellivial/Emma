@@ -1258,3 +1258,149 @@ create unique index if not exists deletion_requests_one_active_per_user
   on public.deletion_requests (user_id)
   where status not in ('completed', 'cancelled');
 create index if not exists idx_deletion_requests_status on public.deletion_requests (status);
+
+-- Phase 2: atomic, ordered, multi-table user-data delete. Table/column list
+-- and order come from the caller (Deletion Resource Registry); this function
+-- only adds transactional guarantees and the affiliate_referrals cascade.
+-- See src/app/api/emma/gdpr/route.ts and
+-- supabase/migrations/20260716000001_transactional_deletion.sql.
+--
+-- Not every ownership column is uuid: user_files.user_id and
+-- user_mcp_servers.user_id (and a couple of others) are text, predating
+-- this table's uuid standardization. p_user_id is cast to match each
+-- column's actual type (looked up from the catalog) rather than casting the
+-- column itself, so an index on the ownership column stays usable.
+create or replace function public.delete_user_owned_data_ordered(
+  p_user_id uuid,
+  p_tables jsonb
+) returns table(table_name text, deleted_count integer)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_entry jsonb;
+  v_table text;
+  v_column text;
+  v_column_type text;
+  v_count integer;
+  v_affiliate_ids uuid[];
+  v_referral_count integer;
+begin
+  if p_user_id is null then
+    raise exception 'p_user_id is required';
+  end if;
+
+  for v_entry in select * from jsonb_array_elements(p_tables)
+  loop
+    v_table := v_entry->>'table';
+    v_column := coalesce(v_entry->>'column', 'user_id');
+
+    if v_table !~ '^[a-zA-Z_][a-zA-Z0-9_]*$' then
+      raise exception 'invalid table identifier: %', v_table;
+    end if;
+    if v_column !~ '^[a-zA-Z_][a-zA-Z0-9_]*$' then
+      raise exception 'invalid column identifier: %', v_column;
+    end if;
+
+    -- Qualified as "c.table_name" deliberately: this function's own returns
+    -- table(table_name text, ...) makes "table_name" a plpgsql variable in
+    -- scope here too, so a bare reference to information_schema.columns'
+    -- table_name column is ambiguous without the alias.
+    select c.data_type into v_column_type
+    from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = v_table and c.column_name = v_column;
+
+    if v_column_type is null then
+      raise exception 'unknown column: %.%', v_table, v_column;
+    end if;
+
+    if v_table = 'affiliates' then
+      begin
+        if v_column_type = 'uuid' then
+          execute format('select array_agg(id) from public.affiliates where %I = $1', v_column)
+            into v_affiliate_ids
+            using p_user_id;
+        else
+          execute format('select array_agg(id) from public.affiliates where %I = $1', v_column)
+            into v_affiliate_ids
+            using p_user_id::text;
+        end if;
+
+        if v_affiliate_ids is not null and array_length(v_affiliate_ids, 1) > 0 then
+          delete from public.affiliate_referrals where affiliate_id = any(v_affiliate_ids);
+          get diagnostics v_referral_count = row_count;
+        else
+          v_referral_count := 0;
+        end if;
+      exception when others then
+        raise exception 'affiliate_referrals: %', sqlerrm;
+      end;
+
+      table_name := 'affiliate_referrals';
+      deleted_count := v_referral_count;
+      return next;
+    end if;
+
+    begin
+      if v_column_type = 'uuid' then
+        execute format('delete from public.%I where %I = $1', v_table, v_column) using p_user_id;
+      else
+        execute format('delete from public.%I where %I = $1', v_table, v_column)
+          using p_user_id::text;
+      end if;
+      get diagnostics v_count = row_count;
+    exception when others then
+      raise exception '%: %', v_table, sqlerrm;
+    end;
+
+    table_name := v_table;
+    deleted_count := v_count;
+    return next;
+  end loop;
+
+  return;
+end;
+$$;
+
+revoke all on function public.delete_user_owned_data_ordered(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.delete_user_owned_data_ordered(uuid, jsonb) to service_role;
+
+-- ─── user_files / user_mcp_servers (documentation sync, Phase 2.1) ──────────
+-- Both tables have existed since migrations/20260522000001_user_files.sql and
+-- migrations/20260522000002_user_mcp_servers.sql, and are already part of the
+-- Deletion Resource Registry's user-owned table list — but their definitions
+-- were never folded into this consolidated schema.sql, discovered as a real
+-- gap during Phase 2.1's live-database validation (the tables exist in
+-- production/staging via their own migrations; this file just didn't
+-- document them). user_id is text on both, not uuid — predates this
+-- codebase's uuid standardization; see the Phase 2.1 Technical Design
+-- Document's note on delete_user_owned_data_ordered's column-type handling.
+
+create table if not exists user_files (
+  id         uuid        primary key default gen_random_uuid(),
+  user_id    text        not null,
+  file_id    text        not null,
+  name       text        not null,
+  media_type text        not null,
+  size_bytes bigint      not null default 0,
+  created_at timestamptz not null default now(),
+  unique (user_id, file_id)
+);
+create index if not exists idx_user_files_user_id on user_files (user_id);
+alter table user_files enable row level security;
+
+create table if not exists user_mcp_servers (
+  id            uuid        primary key default gen_random_uuid(),
+  user_id       text        not null,
+  name          text        not null,
+  url           text        not null,
+  auth_token    text,
+  allowed_tools text[]      not null default '{}',
+  blocked_tools text[]      not null default '{}',
+  enabled       boolean     not null default true,
+  created_at    timestamptz not null default now(),
+  unique (user_id, url)
+);
+create index if not exists user_mcp_servers_user_id_idx on user_mcp_servers (user_id);
+alter table user_mcp_servers enable row level security;

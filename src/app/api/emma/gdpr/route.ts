@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
 import { decrypt } from "@/core/security/encryption";
 import { toUserOwnedDeleteOrder, toGdprExportTables } from "@/core/account-deletion/registry";
+import { getStorageDeletionAdapters } from "@/core/account-deletion/adapters/registry-adapters";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -22,40 +23,33 @@ export const USER_OWNED_DELETE_ORDER: ReadonlyArray<{ table: string; column?: st
 
 export const GDPR_EXPORT_TABLES = toGdprExportTables();
 
+interface DeleteUserOwnedDataRow {
+  table_name: string;
+  deleted_count: number;
+}
+
+/**
+ * Deletes every table in USER_OWNED_DELETE_ORDER for one user inside a
+ * single Postgres transaction (delete_user_owned_data_ordered — Phase 2).
+ * Table/column list and order still come entirely from the Registry; the
+ * database function only adds atomicity and the affiliates special case
+ * (see supabase/migrations/20260716000001_transactional_deletion.sql).
+ * A failure partway through now rolls back everything instead of leaving
+ * the user's data half-deleted.
+ */
 export async function deleteUserOwnedData(
-  supabase: Pick<SupabaseClient, "from">,
+  supabase: Pick<SupabaseClient, "rpc">,
   userId: string
 ): Promise<string[]> {
-  const summary: string[] = [];
-  for (const { table, column = "user_id" } of USER_OWNED_DELETE_ORDER) {
-    if (table === "affiliates") {
-      const { data: affiliates, error: affiliateReadError } = await supabase
-        .from("affiliates")
-        .select("id")
-        .eq("user_id", userId);
-      if (affiliateReadError) throw new Error(`affiliates: ${affiliateReadError.message}`);
+  const { data, error } = await supabase.rpc("delete_user_owned_data_ordered", {
+    p_user_id: userId,
+    p_tables: USER_OWNED_DELETE_ORDER.map(({ table, column = "user_id" }) => ({ table, column })),
+  });
+  if (error) throw new Error(error.message);
 
-      const affiliateIds = (affiliates || []).map((row) => row.id as string);
-      if (affiliateIds.length > 0) {
-        const { count, error } = await supabase
-          .from("affiliate_referrals")
-          .delete({ count: "exact" })
-          .in("affiliate_id", affiliateIds);
-        if (error) throw new Error(`affiliate_referrals: ${error.message}`);
-        summary.push(`affiliate_referrals: ${count ?? 0}`);
-      } else {
-        summary.push("affiliate_referrals: 0");
-      }
-    }
-
-    const { count, error } = await supabase
-      .from(table)
-      .delete({ count: "exact" })
-      .eq(column, userId);
-    if (error) throw new Error(`${table}: ${error.message}`);
-    summary.push(`${table}: ${count ?? 0}`);
-  }
-  return summary;
+  return ((data ?? []) as DeleteUserOwnedDataRow[]).map(
+    ({ table_name, deleted_count }) => `${table_name}: ${deleted_count}`
+  );
 }
 
 function decryptExportValue(value: unknown): unknown {
@@ -191,6 +185,33 @@ export async function POST(req: NextRequest) {
       });
 
       const deletionLog = await deleteUserOwnedData(supabase, user.id);
+
+      // Storage objects the database transaction above can't reach — real
+      // Phase 2 adapters replacing the Phase 1 placeholder (deletionAdapter:
+      // null). Best-effort: a storage failure is logged but doesn't fail the
+      // request or roll back the DB erasure above, which already succeeded.
+      for (const adapter of getStorageDeletionAdapters()) {
+        const ctx = { userId: user.id, resourceId: adapter.resourceId };
+        try {
+          await adapter.prepare(ctx);
+          const result = await adapter.delete(ctx);
+          deletionLog.push(
+            result.success
+              ? `${adapter.resourceId}: ${result.itemsProcessed}`
+              : `${adapter.resourceId}: error - ${result.error}`
+          );
+          if (!result.success) {
+            console.error("[GDPR] Storage adapter failed", {
+              resourceId: adapter.resourceId,
+              error: result.error,
+            });
+          }
+          await adapter.cleanup(ctx);
+        } catch (err) {
+          console.error("[GDPR] Storage adapter threw", { resourceId: adapter.resourceId, err });
+          deletionLog.push(`${adapter.resourceId}: error - ${(err as Error).message}`);
+        }
+      }
 
       // Note: We do NOT delete the auth.users entry here.
       // The user can still log in but will have an empty account.

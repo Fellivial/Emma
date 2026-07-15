@@ -1,5 +1,5 @@
 /**
- * Deletion Resource Registry (ADR-000X, Phase 1: Foundation)
+ * Deletion Resource Registry (ADR 0004, Phase 1: Foundation)
  *
  * The single canonical inventory of every resource that may need to be
  * deleted, verified, or reported on when a user's account is erased. Every
@@ -75,10 +75,13 @@ function db(
 /**
  * The 32 directly user-owned tables currently deleted/exported by
  * gdpr/route.ts, in the exact order deletion must happen (children before
- * parents). deletionAdapter "legacy-table-delete" names today's existing
- * behavior (a single filtered `.delete().eq(column, userId)`) rather than
- * inventing a new adapter contract in Phase 1 — the standard adapter
- * lifecycle is a later-phase concept per the Technical Design Document.
+ * parents). deletionAdapter "legacy-table-delete" is a label, not a literal
+ * DeletionAdapter instance — as of Phase 2 the standard adapter lifecycle
+ * (src/core/account-deletion/adapter.ts) exists and Storage resources use
+ * it, but database resources deliberately don't: they're deleted together,
+ * atomically, by one transactional SQL function
+ * (delete_user_owned_data_ordered), not per-table adapter calls. See ADR
+ * 0004's "Why database resources don't use the DeletionAdapter interface."
  */
 const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
   db({
@@ -503,11 +506,11 @@ const OTHER_RESOURCES: OtherResourceEntry[] = [
     phase: "deleting_storage",
     criticality: "high",
     enumerable: true,
-    deletionAdapter: null,
+    deletionAdapter: "storage-bucket-delete",
     verificationAdapter: null,
     introducedInWorkflowVersion: 1,
     notes:
-      "Objects are normally removed by documentProcess's own cleanup step after a successful ingest. Objects from failed/interrupted uploads are not covered by GDPR deletion today.",
+      "Objects are normally removed by documentProcess's own cleanup step after a successful ingest. Phase 2 adds a real deletion adapter (src/core/account-deletion/adapters/storage-bucket-adapter.ts) so objects from failed/interrupted uploads are covered too, wired into the existing GDPR delete endpoint.",
   },
   {
     resourceId: "storage.task-documents",
@@ -516,11 +519,11 @@ const OTHER_RESOURCES: OtherResourceEntry[] = [
     phase: "deleting_storage",
     criticality: "high",
     enumerable: true,
-    deletionAdapter: null,
+    deletionAdapter: "storage-bucket-delete",
     verificationAdapter: null,
     introducedInWorkflowVersion: 1,
     notes:
-      "Generated DOCX/PDF exports. No delete code exists anywhere in the repo for this bucket.",
+      "Generated DOCX/PDF exports. Phase 2 adds a real deletion adapter for this bucket (see storage.document-ingestion above) — previously no delete code existed anywhere in the repo for it.",
   },
   {
     resourceId: "oauth.client_integrations",
