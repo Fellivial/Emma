@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { audit } from "@/core/security/audit";
 import { decrypt } from "@/core/security/encryption";
 import { toUserOwnedDeleteOrder, toGdprExportTables } from "@/core/account-deletion/registry";
-import { getStorageDeletionAdapters } from "@/core/account-deletion/adapters/registry-adapters";
+import { runDeletionWorkflow } from "@/core/account-deletion/workflow";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -136,12 +136,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { action, confirmEmail } = await req.json();
+
+    // Safety: require email confirmation before touching the DB at all for
+    // a delete request (checked here, ahead of getSupabase(), so a rejected
+    // request never has to instantiate a Supabase client).
+    if (action === "delete" && confirmEmail !== user.email) {
+      return NextResponse.json(
+        {
+          error: "Email confirmation required. Send { confirmEmail: 'your@email.com' } to proceed.",
+        },
+        { status: 400 }
+      );
+    }
+
     const supabase = getSupabase();
     if (!supabase) {
       return NextResponse.json({ error: "DB not configured" }, { status: 501 });
     }
-
-    const { action, confirmEmail } = await req.json();
 
     // ── Data Export ──────────────────────────────────────────────────────
     if (action === "export") {
@@ -163,19 +175,9 @@ export async function POST(req: NextRequest) {
 
     // ── Data Deletion ────────────────────────────────────────────────────
     if (action === "delete") {
-      // Safety: require email confirmation
-      if (confirmEmail !== user.email) {
-        return NextResponse.json(
-          {
-            error:
-              "Email confirmation required. Send { confirmEmail: 'your@email.com' } to proceed.",
-          },
-          { status: 400 }
-        );
-      }
-
       // Audit the request before deletion; the user-owned audit row is then
-      // removed with the rest of the user's direct data below.
+      // removed with the rest of the user's direct data by the workflow's
+      // deleting_database step below.
       await audit({
         userId: user.id,
         action: "delete",
@@ -184,43 +186,18 @@ export async function POST(req: NextRequest) {
         metadata: { email: user.email, timestamp: new Date().toISOString() },
       });
 
-      const deletionLog = await deleteUserOwnedData(supabase, user.id);
-
-      // Storage objects the database transaction above can't reach — real
-      // Phase 2 adapters replacing the Phase 1 placeholder (deletionAdapter:
-      // null). Best-effort: a storage failure is logged but doesn't fail the
-      // request or roll back the DB erasure above, which already succeeded.
-      for (const adapter of getStorageDeletionAdapters()) {
-        const ctx = { userId: user.id, resourceId: adapter.resourceId };
-        try {
-          await adapter.prepare(ctx);
-          const result = await adapter.delete(ctx);
-          deletionLog.push(
-            result.success
-              ? `${adapter.resourceId}: ${result.itemsProcessed}`
-              : `${adapter.resourceId}: error - ${result.error}`
-          );
-          if (!result.success) {
-            console.error("[GDPR] Storage adapter failed", {
-              resourceId: adapter.resourceId,
-              error: result.error,
-            });
-          }
-          await adapter.cleanup(ctx);
-        } catch (err) {
-          console.error("[GDPR] Storage adapter threw", { resourceId: adapter.resourceId, err });
-          deletionLog.push(`${adapter.resourceId}: error - ${(err as Error).message}`);
-        }
-      }
-
-      // Note: We do NOT delete the auth.users entry here.
-      // The user can still log in but will have an empty account.
-      // Full auth deletion should be done via Supabase dashboard or a separate admin action.
+      // Phase 3 (ADR 0004's "future orchestrator" boundary): creates or
+      // resumes a deletion_requests row and drives the Registry-driven
+      // state machine, instead of deleting inline. Storage stays
+      // best-effort per the ADR — a Storage failure is recorded in the
+      // summary but never blocks the workflow from completing.
+      const result = await runDeletionWorkflow(supabase, user.id);
 
       return NextResponse.json({
-        success: true,
-        deletedAt: new Date().toISOString(),
-        summary: deletionLog,
+        success: result.status === "completed",
+        status: result.status,
+        deletedAt: result.status === "completed" ? new Date().toISOString() : null,
+        summary: result.summary,
         note: "Auth account preserved. Contact support to fully delete your login credentials.",
       });
     }
