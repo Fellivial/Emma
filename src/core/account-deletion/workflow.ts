@@ -12,6 +12,7 @@
  * instead of restarting or silently losing track.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { deleteUserOwnedData } from "@/app/api/emma/gdpr/route";
 import { getStorageDeletionAdapters } from "./adapters/registry-adapters";
 import type { DeletionPhase } from "./registry";
@@ -25,17 +26,7 @@ import type {
 
 const WORKFLOW_VERSION = 1;
 
-export interface WorkflowSupabase {
-  from: (table: string) => {
-    select: (columns?: string) => unknown;
-    insert: (values: Record<string, unknown>) => unknown;
-    update: (patch: Record<string, unknown>) => unknown;
-  };
-  rpc: (
-    fn: string,
-    args: Record<string, unknown>
-  ) => Promise<{ data: unknown; error: { message: string } | null }>;
-}
+export type WorkflowSupabase = Pick<SupabaseClient, "from" | "rpc">;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -75,7 +66,7 @@ export async function findActiveDeletionRequest(
   supabase: WorkflowSupabase,
   userId: string
 ): Promise<DeletionRequestRow | null> {
-  const query = supabase.from("deletion_requests").select("*") as {
+  const query = supabase.from("deletion_requests").select("*") as unknown as {
     eq: (
       col: string,
       value: string
@@ -117,7 +108,7 @@ export async function createDeletionRequest(
     user_id: userId,
     status: "requested",
     workflow_version: WORKFLOW_VERSION,
-  }) as {
+  }) as unknown as {
     select: (columns: string) => {
       single: () => Promise<{ data: DeletionRequestRow | null; error: { message: string } | null }>;
     };
@@ -149,7 +140,9 @@ export async function persist(
     completed_at: next.completed_at,
     cancelled_at: next.cancelled_at,
     updated_at: next.updated_at,
-  }) as { eq: (col: string, value: string) => Promise<{ error: { message: string } | null }> };
+  }) as unknown as {
+    eq: (col: string, value: string) => Promise<{ error: { message: string } | null }>;
+  };
   const { error } = await updater.eq("id", row.id);
   if (error) throw new Error(`persist: ${error.message}`);
   return next;
@@ -206,7 +199,7 @@ async function stepDeletingDatabase(
     ];
   }
   try {
-    const summary = await deleteUserOwnedData(supabase as never, row.user_id);
+    const summary = await deleteUserOwnedData(supabase, row.user_id);
     return [
       checkpointEntry("deleting_database", "db.batch", "completed", { detail: summary.join("; ") }),
     ];
@@ -232,7 +225,6 @@ async function stepDeletingStorage(row: DeletionRequestRow): Promise<CheckpointE
     try {
       await adapter.prepare(ctx);
       const result = await adapter.delete(ctx);
-      await adapter.cleanup(ctx);
       entries.push(
         result.success
           ? checkpointEntry("deleting_storage", adapter.resourceId, "completed", {
@@ -248,6 +240,8 @@ async function stepDeletingStorage(row: DeletionRequestRow): Promise<CheckpointE
           error: (err as Error).message,
         })
       );
+    } finally {
+      await adapter.cleanup(ctx);
     }
   }
   return entries;
