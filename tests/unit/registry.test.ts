@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DELETION_RESOURCE_REGISTRY,
   getDatabaseResources,
+  getResourcesByPhase,
   toGdprExportTables,
   toUserOwnedDeleteOrder,
   type ResourceOwnership,
@@ -139,5 +140,21 @@ describe("Deletion Resource Registry", () => {
       expect(table).toMatch(identifierPattern);
       expect(column).toMatch(identifierPattern);
     }
+  });
+
+  it("getResourcesByPhase() filters by phase without hardcoding resourceIds", () => {
+    const oauthEntries = getResourcesByPhase("deleting_oauth");
+    expect(oauthEntries.map((e) => e.resourceId)).toEqual(["oauth.client_integrations"]);
+
+    const backgroundEntries = getResourcesByPhase("deleting_background_jobs");
+    expect(backgroundEntries.map((e) => e.resourceId)).toEqual(["background.document_process"]);
+
+    const storageEntries = getResourcesByPhase("deleting_storage");
+    expect(storageEntries.map((e) => e.resourceId).sort()).toEqual(
+      ["storage.document-ingestion", "storage.task-documents"].sort()
+    );
+
+    const dbEntries = getResourcesByPhase("deleting_database");
+    expect(dbEntries).toHaveLength(32);
   });
 });

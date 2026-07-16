@@ -55,10 +55,25 @@ export default function PrivacySettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Deletion request failed");
-      setStatus({
-        type: "success",
-        message: "Your Emma data was deleted. Login credentials are preserved for account access.",
-      });
+
+      if (data.success) {
+        setStatus({
+          type: "success",
+          message:
+            "Your Emma data was deleted. Login credentials are preserved for account access.",
+        });
+      } else if (data.status === "retry_pending") {
+        setStatus({
+          type: "error",
+          message:
+            "Deletion is in progress and will retry automatically. Please check back shortly.",
+        });
+      } else {
+        setStatus({
+          type: "error",
+          message: "Deletion could not be completed. Please contact support.",
+        });
+      }
     } catch (err) {
       setStatus({
         type: "error",
