@@ -12,7 +12,10 @@
  * instead of restarting or silently losing track.
  */
 
+import { deleteUserOwnedData } from "@/app/api/emma/gdpr/route";
+import { getStorageDeletionAdapters } from "./adapters/registry-adapters";
 import type { DeletionPhase } from "./registry";
+import { getResourcesByPhase } from "./registry";
 import type {
   CheckpointEntry,
   CheckpointResourceStatus,
@@ -159,5 +162,147 @@ export function isPhaseCompleted(
 ): boolean {
   return row.checkpoint.some(
     (e) => e.phase === phase && e.resourceId === resourceId && e.resourceStatus !== "failed"
+  );
+}
+
+export class PermanentStepError extends Error {}
+
+async function stepValidating(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
+  if (!row.user_id || typeof row.user_id !== "string" || row.user_id.trim() === "") {
+    throw new PermanentStepError(`invalid user_id: ${JSON.stringify(row.user_id)}`);
+  }
+  return [checkpointEntry("validating", "workflow.validation", "completed")];
+}
+
+async function stepGracePeriod(row: DeletionRequestRow): Promise<CheckpointEntry[] | null> {
+  if (row.grace_period_ends_at && new Date(row.grace_period_ends_at).getTime() > Date.now()) {
+    // Halts progression until grace_period_ends_at passes. Nothing sets
+    // this column today and no scheduler wakes a halted workflow
+    // automatically (out of scope for Phase 3, see plan header) —
+    // resumption relies on the next re-invocation of runDeletionWorkflow.
+    return null;
+  }
+  return [
+    checkpointEntry("waiting_grace_period", "workflow.grace_period", "skipped", {
+      detail: row.grace_period_ends_at ? "grace period elapsed" : "no grace period configured",
+    }),
+  ];
+}
+
+async function stepLocked(): Promise<CheckpointEntry[]> {
+  // Exclusivity comes from the deletion_requests_one_active_per_user unique
+  // index (supabase/migrations/20260715000001_deletion_requests.sql), not a
+  // separate lock record — there is nothing else to acquire here.
+  return [checkpointEntry("locked", "workflow.lock", "completed")];
+}
+
+async function stepDeletingDatabase(
+  supabase: WorkflowSupabase,
+  row: DeletionRequestRow
+): Promise<CheckpointEntry[]> {
+  if (isPhaseCompleted(row, "deleting_database", "db.batch")) {
+    return [
+      checkpointEntry("deleting_database", "db.batch", "skipped", { detail: "already completed" }),
+    ];
+  }
+  try {
+    const summary = await deleteUserOwnedData(supabase as never, row.user_id);
+    return [
+      checkpointEntry("deleting_database", "db.batch", "completed", { detail: summary.join("; ") }),
+    ];
+  } catch (err) {
+    return [
+      checkpointEntry("deleting_database", "db.batch", "failed", { error: (err as Error).message }),
+    ];
+  }
+}
+
+async function stepDeletingStorage(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
+  const entries: CheckpointEntry[] = [];
+  for (const adapter of getStorageDeletionAdapters()) {
+    if (isPhaseCompleted(row, "deleting_storage", adapter.resourceId)) {
+      entries.push(
+        checkpointEntry("deleting_storage", adapter.resourceId, "skipped", {
+          detail: "already completed",
+        })
+      );
+      continue;
+    }
+    const ctx = { userId: row.user_id, resourceId: adapter.resourceId };
+    try {
+      await adapter.prepare(ctx);
+      const result = await adapter.delete(ctx);
+      await adapter.cleanup(ctx);
+      entries.push(
+        result.success
+          ? checkpointEntry("deleting_storage", adapter.resourceId, "completed", {
+              detail: `${result.itemsProcessed} items`,
+            })
+          : checkpointEntry("deleting_storage", adapter.resourceId, "failed", {
+              error: result.error,
+            })
+      );
+    } catch (err) {
+      entries.push(
+        checkpointEntry("deleting_storage", adapter.resourceId, "failed", {
+          error: (err as Error).message,
+        })
+      );
+    }
+  }
+  return entries;
+}
+
+function skippedNoAdapterEntries(phase: DeletionPhase & DeletionWorkflowStatus): CheckpointEntry[] {
+  return getResourcesByPhase(phase).map((entry) =>
+    checkpointEntry(phase, entry.resourceId, "skipped", {
+      detail: "no deletionAdapter implemented for this resource yet (Registry-driven, deferred)",
+    })
+  );
+}
+
+async function stepVerifyDatabase(): Promise<CheckpointEntry[]> {
+  // Every database resource's verificationAdapter is null in the Registry
+  // today — real per-table verification is deferred until a future phase
+  // populates it, per ADR 0004. Recorded explicitly, not silently skipped.
+  return getResourcesByPhase("deleting_database").map((entry) =>
+    checkpointEntry("verify_database", entry.resourceId, "skipped", {
+      detail: "no verificationAdapter configured in the Registry",
+    })
+  );
+}
+
+async function stepVerifyStorage(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
+  const entries: CheckpointEntry[] = [];
+  for (const adapter of getStorageDeletionAdapters()) {
+    const ctx = { userId: row.user_id, resourceId: adapter.resourceId };
+    try {
+      const result = await adapter.verify(ctx);
+      entries.push(
+        result.success
+          ? checkpointEntry("verify_storage", adapter.resourceId, "completed", {
+              detail: result.detail,
+            })
+          : checkpointEntry("verify_storage", adapter.resourceId, "failed", { error: result.error })
+      );
+    } catch (err) {
+      entries.push(
+        checkpointEntry("verify_storage", adapter.resourceId, "failed", {
+          error: (err as Error).message,
+        })
+      );
+    }
+  }
+  return entries;
+}
+
+async function stepVerifyExternal(): Promise<CheckpointEntry[]> {
+  return [
+    ...getResourcesByPhase("deleting_oauth"),
+    ...getResourcesByPhase("deleting_background_jobs"),
+  ].map((entry) =>
+    checkpointEntry("verify_external", entry.resourceId, "skipped", {
+      detail: "no verificationAdapter configured in the Registry",
+    })
   );
 }

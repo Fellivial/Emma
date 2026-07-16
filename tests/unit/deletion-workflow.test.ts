@@ -163,3 +163,27 @@ describe("deletion workflow persistence layer", () => {
     expect(isPhaseCompleted(row, "deleting_storage", "storage.unrelated")).toBe(false);
   });
 });
+
+describe("deletion adapter verify() — real implementation", () => {
+  it("storage adapter verify() succeeds when the user's folder is empty", async () => {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role");
+    const listMock = vi.fn(async () => ({ data: [], error: null }));
+    vi.doMock("@supabase/supabase-js", () => ({
+      createClient: () => ({ storage: { from: () => ({ list: listMock }) } }),
+    }));
+
+    const { createStorageBucketAdapter } =
+      await import("@/core/account-deletion/adapters/storage-bucket-adapter");
+    const adapter = createStorageBucketAdapter("document-ingestion", "storage.document-ingestion");
+    const result = await adapter.verify({
+      userId: "user-1",
+      resourceId: "storage.document-ingestion",
+    });
+
+    expect(result).toEqual({ success: true, itemsProcessed: 0, detail: "folder empty" });
+    vi.doUnmock("@supabase/supabase-js");
+    vi.unstubAllEnvs();
+  });
+});
