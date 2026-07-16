@@ -109,18 +109,22 @@ describe("deletion workflow persistence layer", () => {
     expect(found?.id).toBe("req-existing");
   });
 
-  it("persist() patches and stamps updated_at without dropping other fields", async () => {
+  it("persist() patches and stamps a fresh updated_at without dropping other fields", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     const { createDeletionRequest, persist } = await import("@/core/account-deletion/workflow");
     const supabase = makeFakeSupabase();
     const row = await createDeletionRequest(supabase as never, "user-1");
+    const originalUpdatedAt = row.updated_at;
 
+    vi.setSystemTime(new Date("2026-01-01T00:05:00.000Z"));
     const updated = await persist(supabase as never, row, { status: "validating" });
 
     expect(updated.status).toBe("validating");
     expect(updated.user_id).toBe("user-1");
-    expect(updated.updated_at).not.toBe(
-      row.updated_at === updated.updated_at ? "" : row.updated_at
-    );
+    expect(updated.updated_at).toBe("2026-01-01T00:05:00.000Z");
+    expect(updated.updated_at).not.toBe(originalUpdatedAt);
+    vi.useRealTimers();
   });
 
   it("isPhaseCompleted() is true only for a matching, non-failed checkpoint entry", async () => {

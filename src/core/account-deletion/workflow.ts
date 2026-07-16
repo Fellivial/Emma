@@ -12,7 +12,7 @@
  * instead of restarting or silently losing track.
  */
 
-import { DELETION_RESOURCE_REGISTRY, type DeletionPhase } from "./registry";
+import type { DeletionPhase } from "./registry";
 import type {
   CheckpointEntry,
   CheckpointResourceStatus,
@@ -43,7 +43,7 @@ export function log(
   row: Pick<DeletionRequestRow, "id" | "user_id" | "status">,
   extra?: Record<string, unknown>
 ): void {
-  console.log(`[DeletionWorkflow] ${event}`, {
+  console.warn(`[DeletionWorkflow] ${event}`, {
     requestId: row.id,
     userId: row.user_id,
     status: row.status,
@@ -141,8 +141,10 @@ export async function persist(
   const updater = supabase.from("deletion_requests").update({
     status: next.status,
     checkpoint: next.checkpoint,
+    grace_period_ends_at: next.grace_period_ends_at,
     retry_count: next.retry_count,
     completed_at: next.completed_at,
+    cancelled_at: next.cancelled_at,
     updated_at: next.updated_at,
   }) as { eq: (col: string, value: string) => Promise<{ error: { message: string } | null }> };
   const { error } = await updater.eq("id", row.id);
