@@ -339,6 +339,43 @@ describe("runDeletionWorkflow", () => {
     expect(result.status).toBe("completed");
   });
 
+  it("does not silently restart a permanently-failed workflow", async () => {
+    const { runDeletionWorkflow } = await import("@/core/account-deletion/workflow");
+    const failedRow: DeletionRequestRow = {
+      id: "req-failed",
+      user_id: "user-1",
+      status: "failed",
+      workflow_version: 1,
+      checkpoint: [
+        {
+          phase: "deleting_database",
+          resourceId: "db.batch",
+          subResourceMarker: null,
+          resourceStatus: "failed",
+          error: "persistent failure",
+          recordedAt: new Date().toISOString(),
+        },
+      ],
+      grace_period_ends_at: null,
+      requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: null,
+      cancelled_at: null,
+      retry_count: 4,
+    };
+    const rpc = vi.fn(async () => ({
+      data: [{ table_name: "messages", deleted_count: 1 }],
+      error: null,
+    }));
+    const supabase = { ...makeFakeSupabase({ rows: [failedRow] }), rpc };
+
+    const result = await runDeletionWorkflow(supabase as never, "user-1");
+
+    expect(result.status).toBe("failed");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(supabase.rows).toHaveLength(1);
+  });
+
   it("is idempotent — invoking twice after completion does not re-run or duplicate anything", async () => {
     const { runDeletionWorkflow } = await import("@/core/account-deletion/workflow");
     const rpc = vi.fn(async () => ({

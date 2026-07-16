@@ -376,6 +376,25 @@ export async function runDeletionWorkflow(
   let row = existing ?? (await createDeletionRequest(supabase, userId));
   log(resumed ? "resumed" : "started", row);
 
+  if (row.status === "failed") {
+    // Permanent failure is terminal at this layer — deletion_requests_one_active_per_user
+    // deliberately does not exclude 'failed' (see the migration's own comment: it "stays
+    // counted so a stalled/reconciling workflow blocks a second concurrent request until it
+    // truly finishes"), so a later call for this user will keep finding this row. Silently
+    // restarting the whole workflow from validating would be worse than doing nothing: it
+    // would re-attempt a database delete that already permanently failed, with no signal to
+    // the caller that this is a resurrection rather than a normal resume. Recovering a failed
+    // workflow is out of scope for Phase 3 (no retry/cancel endpoint exists) — surface it as
+    // still-failed and let the caller decide.
+    log("already_failed", row);
+    return {
+      requestId: row.id,
+      status: row.status,
+      summary: ["workflow previously failed permanently; not auto-restarting"],
+      resumed: true,
+    };
+  }
+
   const summary: string[] = [];
   let cursor = STATE_ORDER.indexOf(resumeStartStatus(row));
   if (cursor === -1) cursor = 0;
