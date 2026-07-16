@@ -13,7 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { deleteUserOwnedData } from "@/app/api/emma/gdpr/route";
+import { deleteUserOwnedData } from "@/core/account-deletion/gdpr-data";
 import { getStorageDeletionAdapters } from "./adapters/registry-adapters";
 import type { DeletionPhase } from "./registry";
 import { getResourcesByPhase } from "./registry";
