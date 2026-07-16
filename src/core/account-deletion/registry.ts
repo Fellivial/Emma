@@ -598,3 +598,17 @@ export function toGdprExportTables(): ReadonlyArray<ExportSpec> {
     limit: exportLimit,
   }));
 }
+
+/**
+ * Filters the Registry to entries belonging to one deletion phase. Phase 3's
+ * workflow orchestrator uses this so it never hardcodes which resourceIds
+ * belong to deleting_storage/deleting_oauth/deleting_background_jobs — the
+ * Registry stays the only place that answer lives, exactly as it already is
+ * for toUserOwnedDeleteOrder()/toGdprExportTables(). Database resources
+ * (phase "deleting_database") are included for completeness (e.g. Phase 3's
+ * verify_database step reads them) even though deletion itself processes
+ * them as one atomic batch, not by iterating this list.
+ */
+export function getResourcesByPhase(phase: DeletionPhase): ReadonlyArray<DeletionResourceEntry> {
+  return DELETION_RESOURCE_REGISTRY.filter((entry) => entry.phase === phase);
+}
