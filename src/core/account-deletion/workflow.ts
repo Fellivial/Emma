@@ -304,3 +304,147 @@ async function stepVerifyExternal(): Promise<CheckpointEntry[]> {
     })
   );
 }
+
+const MAX_RETRY_COUNT = 3;
+
+// Only the atomic database step is retry/fail-critical for the overall
+// workflow. Storage stays best-effort per ADR 0004 ("a Storage failure is
+// logged and reported... but never fails the request") — that trade-off
+// was already accepted for the synchronous path; this orchestrator carries
+// it forward rather than tightening it unilaterally.
+const CRITICAL_STEPS: DeletionWorkflowStatus[] = ["deleting_database"];
+
+const STATE_ORDER: DeletionWorkflowStatus[] = [
+  "validating",
+  "waiting_grace_period",
+  "locked",
+  "deleting_database",
+  "deleting_storage",
+  "deleting_oauth",
+  "deleting_background_jobs",
+  "verify_database",
+  "verify_storage",
+  "verify_external",
+  "completed",
+];
+
+async function runStep(
+  supabase: WorkflowSupabase,
+  row: DeletionRequestRow,
+  status: DeletionWorkflowStatus
+): Promise<CheckpointEntry[] | null> {
+  switch (status) {
+    case "validating":
+      return stepValidating(row);
+    case "waiting_grace_period":
+      return stepGracePeriod(row);
+    case "locked":
+      return stepLocked();
+    case "deleting_database":
+      return stepDeletingDatabase(supabase, row);
+    case "deleting_storage":
+      return stepDeletingStorage(row);
+    case "deleting_oauth":
+      return skippedNoAdapterEntries("deleting_oauth");
+    case "deleting_background_jobs":
+      return skippedNoAdapterEntries("deleting_background_jobs");
+    case "verify_database":
+      return stepVerifyDatabase();
+    case "verify_storage":
+      return stepVerifyStorage(row);
+    case "verify_external":
+      return stepVerifyExternal();
+    default:
+      return [];
+  }
+}
+
+function resumeStartStatus(row: DeletionRequestRow): DeletionWorkflowStatus {
+  if (row.status === "retry_pending" && row.checkpoint.length > 0) {
+    return row.checkpoint[row.checkpoint.length - 1].phase;
+  }
+  if (row.status === "requested") return "validating";
+  return row.status;
+}
+
+export async function runDeletionWorkflow(
+  supabase: WorkflowSupabase,
+  userId: string
+): Promise<import("./workflow-types").DeletionWorkflowResult> {
+  const existing = await findActiveDeletionRequest(supabase, userId);
+  const resumed = existing !== null;
+  let row = existing ?? (await createDeletionRequest(supabase, userId));
+  log(resumed ? "resumed" : "started", row);
+
+  const summary: string[] = [];
+  let cursor = STATE_ORDER.indexOf(resumeStartStatus(row));
+  if (cursor === -1) cursor = 0;
+
+  for (; cursor < STATE_ORDER.length; cursor++) {
+    const status = STATE_ORDER[cursor];
+
+    if (status === "completed") {
+      row = await persist(supabase, row, { status: "completed", completed_at: nowIso() });
+      log("completed", row);
+      return { requestId: row.id, status: row.status, summary, resumed };
+    }
+
+    row = await persist(supabase, row, { status });
+
+    let entries: CheckpointEntry[] | null;
+    try {
+      entries = await runStep(supabase, row, status);
+    } catch (err) {
+      if (err instanceof PermanentStepError) {
+        row = await persist(supabase, row, {
+          status: "failed",
+          checkpoint: [
+            ...row.checkpoint,
+            checkpointEntry(status, "workflow.step", "failed", { error: err.message }),
+          ],
+        });
+        log("failed", row, { at: status, error: err.message });
+        summary.push(`failed at ${status}: ${err.message}`);
+        return { requestId: row.id, status: row.status, summary, resumed };
+      }
+      throw err;
+    }
+
+    if (entries === null) {
+      log("halted", row, { at: status });
+      return { requestId: row.id, status: row.status, summary, resumed };
+    }
+
+    const nextCheckpoint = [...row.checkpoint, ...entries];
+    summary.push(
+      ...entries.map(
+        (e) => `${e.phase}/${e.resourceId}: ${e.resourceStatus}${e.error ? ` (${e.error})` : ""}`
+      )
+    );
+    const failed = entries.filter((e) => e.resourceStatus === "failed");
+
+    if (failed.length > 0 && CRITICAL_STEPS.includes(status)) {
+      const retryCount = row.retry_count + 1;
+      const nextStatus: DeletionWorkflowStatus =
+        retryCount > MAX_RETRY_COUNT ? "failed" : "retry_pending";
+      row = await persist(supabase, row, {
+        status: nextStatus,
+        checkpoint: nextCheckpoint,
+        retry_count: retryCount,
+      });
+      log(nextStatus === "failed" ? "failed" : "retry", row, { at: status, retryCount });
+      return { requestId: row.id, status: row.status, summary, resumed };
+    }
+
+    if (failed.length > 0) {
+      log("best_effort_step_failed", row, {
+        at: status,
+        resources: failed.map((f) => f.resourceId),
+      });
+    }
+    row = await persist(supabase, row, { checkpoint: nextCheckpoint });
+    log("step_completed", row, { status });
+  }
+
+  return { requestId: row.id, status: row.status, summary, resumed };
+}
