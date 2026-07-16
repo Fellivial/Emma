@@ -241,7 +241,11 @@ async function stepDeletingStorage(row: DeletionRequestRow): Promise<CheckpointE
         })
       );
     } finally {
-      await adapter.cleanup(ctx);
+      try {
+        await adapter.cleanup(ctx);
+      } catch (cleanupErr) {
+        console.warn(`[DeletionWorkflow] cleanup() failed for ${adapter.resourceId}`, cleanupErr);
+      }
     }
   }
   return entries;
