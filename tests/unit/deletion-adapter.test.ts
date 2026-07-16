@@ -138,7 +138,10 @@ describe("storage bucket deletion adapter", () => {
     expect(result).toEqual({ success: false, itemsProcessed: 0, error: "storage not configured" });
   });
 
-  it("verify() is a stub deferring to Phase 3 and never touches storage", async () => {
+  it("verify() reports success when the user's folder is empty", async () => {
+    const bucketClient = { list: vi.fn(async () => ({ data: [], error: null })) };
+    db.createClient.mockReturnValue({ storage: { from: vi.fn(() => bucketClient) } });
+
     const { createStorageBucketAdapter } =
       await import("@/core/account-deletion/adapters/storage-bucket-adapter");
     const adapter = createStorageBucketAdapter("document-ingestion", "storage.document-ingestion");
@@ -148,9 +151,47 @@ describe("storage bucket deletion adapter", () => {
       resourceId: "storage.document-ingestion",
     });
 
-    expect(result.success).toBe(true);
-    expect(result.itemsProcessed).toBe(0);
-    expect(db.createClient).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true, itemsProcessed: 0, detail: "folder empty" });
+  });
+
+  it("verify() reports failure when objects remain under the user's folder", async () => {
+    const bucketClient = {
+      list: vi.fn(async () => ({ data: [{ name: "leftover" }], error: null })),
+    };
+    db.createClient.mockReturnValue({ storage: { from: vi.fn(() => bucketClient) } });
+
+    const { createStorageBucketAdapter } =
+      await import("@/core/account-deletion/adapters/storage-bucket-adapter");
+    const adapter = createStorageBucketAdapter("document-ingestion", "storage.document-ingestion");
+
+    const result = await adapter.verify({
+      userId: "user-1",
+      resourceId: "storage.document-ingestion",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      itemsProcessed: 1,
+      error: "objects remain under user folder",
+    });
+  });
+
+  it("verify() reports a failed list() without throwing", async () => {
+    const bucketClient = {
+      list: vi.fn(async () => ({ data: null, error: { message: "list failed" } })),
+    };
+    db.createClient.mockReturnValue({ storage: { from: vi.fn(() => bucketClient) } });
+
+    const { createStorageBucketAdapter } =
+      await import("@/core/account-deletion/adapters/storage-bucket-adapter");
+    const adapter = createStorageBucketAdapter("document-ingestion", "storage.document-ingestion");
+
+    const result = await adapter.verify({
+      userId: "user-1",
+      resourceId: "storage.document-ingestion",
+    });
+
+    expect(result).toEqual({ success: false, itemsProcessed: 0, error: "list failed" });
   });
 });
 
