@@ -140,7 +140,12 @@ export async function POST(req: NextRequest) {
 
     // Safety: require email confirmation before touching the DB at all for
     // a delete request (checked here, ahead of getSupabase(), so a rejected
-    // request never has to instantiate a Supabase client).
+    // request never has to instantiate a Supabase client). Deliberate
+    // precedence consequence: this 400 wins over the 501 "DB not
+    // configured" check below even when Supabase happens to be
+    // unconfigured — a mismatched confirmEmail is rejected before we ever
+    // look at DB config, since the caller's own encoded intent to delete
+    // must match their email before anything else is checked.
     if (action === "delete" && confirmEmail !== user.email) {
       return NextResponse.json(
         {

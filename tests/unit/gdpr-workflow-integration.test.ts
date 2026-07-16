@@ -117,4 +117,17 @@ describe("POST /api/emma/gdpr delete — Phase 3 workflow wiring", () => {
     expect(response.status).toBe(400);
     expect(routeMocks.createClient).not.toHaveBeenCalled();
   });
+
+  it("still returns 501 when Supabase is unconfigured and confirmEmail is correct (precedence: confirmEmail checked first, but DB-config check still fires when the email matches)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    routeMocks.getUser.mockResolvedValue({ id: "user-1", email: "a@b.com" });
+
+    const response = await POST(jsonRequest({ action: "delete", confirmEmail: "a@b.com" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(501);
+    expect(body.error).toBe("DB not configured");
+    expect(routeMocks.createClient).not.toHaveBeenCalled();
+  });
 });
