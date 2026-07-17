@@ -61,11 +61,18 @@ function makeFakeSupabase(
         }),
       }),
       update: (patch: Partial<DeletionRequestRow>) => ({
-        eq: async (_col: string, id: string) => {
-          const row = rows.find((r) => r.id === id);
-          if (row) Object.assign(row, patch);
-          return { data: null, error: null };
-        },
+        eq: (_col1: string, id: string) => ({
+          eq: (_col2: string, updatedAt: string) => ({
+            select: async (_cols: string) => {
+              const row = rows.find((r) => r.id === id);
+              if (!row || row.updated_at !== updatedAt) {
+                return { data: [], error: null };
+              }
+              Object.assign(row, patch);
+              return { data: [{ id: row.id }], error: null };
+            },
+          }),
+        }),
       }),
     };
   }
@@ -398,4 +405,126 @@ describe("runDeletionWorkflow", () => {
     expect(second.resumed).toBe(false);
     expect(supabase.rows).toHaveLength(2);
   });
+});
+
+describe("runDeletionWorkflow — concurrent execution safety", () => {
+  function jitter(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, Math.random() * 8));
+  }
+
+  function makeJitteredFakeSupabase() {
+    const rows: DeletionRequestRow[] = [];
+    let idCounter = 0;
+
+    const rpc = vi.fn(async () => {
+      await jitter();
+      return { data: [{ table_name: "messages", deleted_count: 1 }], error: null };
+    });
+
+    function from(table: string) {
+      if (table !== "deletion_requests") throw new Error(`unexpected table ${table}`);
+      return {
+        select: () => ({
+          eq: (_col: string, userId: string) => ({
+            not: () => ({
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: async () => {
+                    await jitter();
+                    const match = rows.find(
+                      (r) =>
+                        r.user_id === userId && r.status !== "completed" && r.status !== "cancelled"
+                    );
+                    return {
+                      data: match ? { ...match, checkpoint: [...match.checkpoint] } : null,
+                      error: null,
+                    };
+                  },
+                }),
+              }),
+            }),
+          }),
+        }),
+        insert: (values: Partial<DeletionRequestRow>) => ({
+          select: () => ({
+            single: async () => {
+              await jitter();
+              const alreadyActive = rows.find(
+                (r) =>
+                  r.user_id === values.user_id &&
+                  r.status !== "completed" &&
+                  r.status !== "cancelled"
+              );
+              if (alreadyActive) {
+                return {
+                  data: null,
+                  error: {
+                    message:
+                      'duplicate key value violates unique constraint "deletion_requests_one_active_per_user"',
+                  },
+                };
+              }
+              idCounter += 1;
+              const row: DeletionRequestRow = {
+                id: `req-${idCounter}`,
+                user_id: values.user_id as string,
+                status: "requested",
+                workflow_version: 1,
+                checkpoint: [],
+                grace_period_ends_at: null,
+                requested_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                completed_at: null,
+                cancelled_at: null,
+                retry_count: 0,
+              };
+              rows.push(row);
+              return { data: { ...row, checkpoint: [...row.checkpoint] }, error: null };
+            },
+          }),
+        }),
+        update: (patch: Partial<DeletionRequestRow>) => ({
+          eq: (_col1: string, id: string) => ({
+            eq: (_col2: string, updatedAt: string) => ({
+              select: async (_cols: string) => {
+                await jitter();
+                const row = rows.find((r) => r.id === id);
+                // Real conditional UPDATE ... WHERE id = $1 AND updated_at = $2:
+                // zero affected rows if someone else already wrote since we read.
+                if (!row || row.updated_at !== updatedAt) {
+                  return { data: [], error: null };
+                }
+                Object.assign(row, patch);
+                return { data: [{ id: row.id }], error: null };
+              },
+            }),
+          }),
+        }),
+      };
+    }
+
+    return { from, rpc, rows };
+  }
+
+  it("never invokes the atomic delete RPC more than once when two calls race on the same user", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { runDeletionWorkflow } = await import("@/core/account-deletion/workflow");
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const supabase = makeJitteredFakeSupabase();
+
+      const results = await Promise.all([
+        runDeletionWorkflow(supabase as never, "user-1"),
+        runDeletionWorkflow(supabase as never, "user-1"),
+      ]);
+
+      expect(supabase.rpc.mock.calls.length).toBe(1);
+      expect(supabase.rows.length).toBe(1);
+      // Both calls must resolve (not throw) even though one of them lost
+      // the race partway through.
+      for (const r of results) {
+        expect(typeof r.status).toBe("string");
+      }
+    }
+  }, 20000);
 });

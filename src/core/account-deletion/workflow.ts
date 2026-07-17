@@ -141,10 +141,31 @@ export async function persist(
     cancelled_at: next.cancelled_at,
     updated_at: next.updated_at,
   }) as unknown as {
-    eq: (col: string, value: string) => Promise<{ error: { message: string } | null }>;
+    eq: (
+      col: string,
+      value: string
+    ) => {
+      eq: (
+        col: string,
+        value: string
+      ) => {
+        select: (
+          columns: string
+        ) => Promise<{ data: Array<{ id: string }> | null; error: { message: string } | null }>;
+      };
+    };
   };
-  const { error } = await updater.eq("id", row.id);
+  // Optimistic concurrency: the WHERE clause requires updated_at to still
+  // match what we read the row as. A zero-row result means another
+  // execution (a second overlapping runDeletionWorkflow() call for the same
+  // user) already wrote to this row since we read it — that is a lost race,
+  // not a database error, and the caller decides how to respond to it.
+  const { data, error } = await updater
+    .eq("id", row.id)
+    .eq("updated_at", row.updated_at)
+    .select("id");
   if (error) throw new Error(`persist: ${error.message}`);
+  if (!data || data.length === 0) throw new ConcurrentModificationError(row.id);
   return next;
 }
 
@@ -159,6 +180,12 @@ export function isPhaseCompleted(
 }
 
 export class PermanentStepError extends Error {}
+
+export class ConcurrentModificationError extends Error {
+  constructor(public readonly requestId: string) {
+    super(`deletion_requests row ${requestId} was modified by another execution`);
+  }
+}
 
 async function stepValidating(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
   if (!row.user_id || typeof row.user_id !== "string" || row.user_id.trim() === "") {
@@ -399,70 +426,85 @@ export async function runDeletionWorkflow(
   let cursor = STATE_ORDER.indexOf(resumeStartStatus(row));
   if (cursor === -1) cursor = 0;
 
-  for (; cursor < STATE_ORDER.length; cursor++) {
-    const status = STATE_ORDER[cursor];
+  try {
+    for (; cursor < STATE_ORDER.length; cursor++) {
+      const status = STATE_ORDER[cursor];
 
-    if (status === "completed") {
-      row = await persist(supabase, row, { status: "completed", completed_at: nowIso() });
-      log("completed", row);
-      return { requestId: row.id, status: row.status, summary, resumed };
-    }
-
-    row = await persist(supabase, row, { status });
-
-    let entries: CheckpointEntry[] | null;
-    try {
-      entries = await runStep(supabase, row, status);
-    } catch (err) {
-      if (err instanceof PermanentStepError) {
-        row = await persist(supabase, row, {
-          status: "failed",
-          checkpoint: [
-            ...row.checkpoint,
-            checkpointEntry(status, "workflow.step", "failed", { error: err.message }),
-          ],
-        });
-        log("failed", row, { at: status, error: err.message });
-        summary.push(`failed at ${status}: ${err.message}`);
+      if (status === "completed") {
+        row = await persist(supabase, row, { status: "completed", completed_at: nowIso() });
+        log("completed", row);
         return { requestId: row.id, status: row.status, summary, resumed };
       }
-      throw err;
-    }
 
-    if (entries === null) {
-      log("halted", row, { at: status });
-      return { requestId: row.id, status: row.status, summary, resumed };
-    }
+      row = await persist(supabase, row, { status });
 
-    const nextCheckpoint = [...row.checkpoint, ...entries];
-    summary.push(
-      ...entries.map(
-        (e) => `${e.phase}/${e.resourceId}: ${e.resourceStatus}${e.error ? ` (${e.error})` : ""}`
-      )
-    );
-    const failed = entries.filter((e) => e.resourceStatus === "failed");
+      let entries: CheckpointEntry[] | null;
+      try {
+        entries = await runStep(supabase, row, status);
+      } catch (err) {
+        if (err instanceof PermanentStepError) {
+          row = await persist(supabase, row, {
+            status: "failed",
+            checkpoint: [
+              ...row.checkpoint,
+              checkpointEntry(status, "workflow.step", "failed", { error: err.message }),
+            ],
+          });
+          log("failed", row, { at: status, error: err.message });
+          summary.push(`failed at ${status}: ${err.message}`);
+          return { requestId: row.id, status: row.status, summary, resumed };
+        }
+        throw err;
+      }
 
-    if (failed.length > 0 && CRITICAL_STEPS.includes(status)) {
-      const retryCount = row.retry_count + 1;
-      const nextStatus: DeletionWorkflowStatus =
-        retryCount > MAX_RETRY_COUNT ? "failed" : "retry_pending";
-      row = await persist(supabase, row, {
-        status: nextStatus,
-        checkpoint: nextCheckpoint,
-        retry_count: retryCount,
-      });
-      log(nextStatus === "failed" ? "failed" : "retry", row, { at: status, retryCount });
-      return { requestId: row.id, status: row.status, summary, resumed };
-    }
+      if (entries === null) {
+        log("halted", row, { at: status });
+        return { requestId: row.id, status: row.status, summary, resumed };
+      }
 
-    if (failed.length > 0) {
-      log("best_effort_step_failed", row, {
-        at: status,
-        resources: failed.map((f) => f.resourceId),
-      });
+      const nextCheckpoint = [...row.checkpoint, ...entries];
+      summary.push(
+        ...entries.map(
+          (e) => `${e.phase}/${e.resourceId}: ${e.resourceStatus}${e.error ? ` (${e.error})` : ""}`
+        )
+      );
+      const failed = entries.filter((e) => e.resourceStatus === "failed");
+
+      if (failed.length > 0 && CRITICAL_STEPS.includes(status)) {
+        const retryCount = row.retry_count + 1;
+        const nextStatus: DeletionWorkflowStatus =
+          retryCount > MAX_RETRY_COUNT ? "failed" : "retry_pending";
+        row = await persist(supabase, row, {
+          status: nextStatus,
+          checkpoint: nextCheckpoint,
+          retry_count: retryCount,
+        });
+        log(nextStatus === "failed" ? "failed" : "retry", row, { at: status, retryCount });
+        return { requestId: row.id, status: row.status, summary, resumed };
+      }
+
+      if (failed.length > 0) {
+        log("best_effort_step_failed", row, {
+          at: status,
+          resources: failed.map((f) => f.resourceId),
+        });
+      }
+      row = await persist(supabase, row, { checkpoint: nextCheckpoint });
+      log("step_completed", row, { status });
     }
-    row = await persist(supabase, row, { checkpoint: nextCheckpoint });
-    log("step_completed", row, { status });
+  } catch (err) {
+    if (err instanceof ConcurrentModificationError) {
+      const current = await findActiveDeletionRequest(supabase, userId);
+      log("conceded_to_concurrent_execution", row, { at: STATE_ORDER[cursor] });
+      summary.push("stopped: another concurrent execution already advanced this deletion workflow");
+      return {
+        requestId: row.id,
+        status: current?.status ?? row.status,
+        summary,
+        resumed,
+      };
+    }
+    throw err;
   }
 
   return { requestId: row.id, status: row.status, summary, resumed };

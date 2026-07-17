@@ -86,11 +86,18 @@ describe("POST /api/emma/gdpr delete — Phase 3 workflow wiring", () => {
             }),
           }),
           update: (patch: Partial<FakeRow>) => ({
-            eq: async (_col: string, id: string) => {
-              const row = rows.find((r) => r.id === id);
-              if (row) Object.assign(row, patch);
-              return { data: null, error: null };
-            },
+            eq: (_col1: string, id: string) => ({
+              eq: (_col2: string, updatedAt: string) => ({
+                select: async (_cols: string) => {
+                  const row = rows.find((r) => r.id === id);
+                  if (!row || row.updated_at !== updatedAt) {
+                    return { data: [], error: null };
+                  }
+                  Object.assign(row, patch);
+                  return { data: [{ id: row.id }], error: null };
+                },
+              }),
+            }),
           }),
         };
       }),
