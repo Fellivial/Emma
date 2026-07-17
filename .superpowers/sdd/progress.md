@@ -45,7 +45,7 @@ relative to what Phase 3 actually shipped.
 
 ## Tasks
 
-- [ ] Task 1: Fix the proven concurrent-execution race (optimistic concurrency in persist())
-- [ ] Task 2: Live database validation against the linked Emma Supabase project
+- [x] Task 1: Fix the proven concurrent-execution race (commit 86195fb..83a6014, review clean — Approved, no Critical/Important findings, 2 cosmetic Minors accepted as-is)
+- [x] Task 2: Live database validation (commit 83a6014..d6decc6, controller-run directly, not via subagent, given real service-role credentials + live mutations — see rationale below). 7/7 scenarios pass: PostgREST .not() filter, retry-to-permanent-failure escalation, checkpoint persistence with real RPC error capture, permanently-failed-row no-restart, concurrent-request safety (Task 1's fix confirmed under real network latency), RLS enforcement (write + cross-user read). MAJOR FINDING (user-confirmed handling: document only, do not touch live schema): the live Emma project is missing document_chunks.user_id (same gap the Phase 2.1 TDD already flagged for document_chunks/personas/push_subscriptions/proactive_daily — schema.sql-only, never a tracked migration), so the real deleteUserOwnedData() RPC cannot currently succeed end-to-end on this environment. Original plan's "full run reaches completed" scenario was replaced with retry-to-failure scenarios instead of touching live schema. Flag for Task 3.1 Production Readiness Report: this may be a real production blocker if prod has the same migration gap — needs the user/ops to confirm prod schema state, out of this phase's ability to check.
 - [ ] Task 3: Documentation synchronization (ADR-0004, TDD, Phase 3 PRR addendum)
 - [ ] Task 4: Final regression pass and repository consistency check
