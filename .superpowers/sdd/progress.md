@@ -23,3 +23,29 @@ import cycle). Both fixed in c4292ea, confirmed by a targeted re-check. Ready to
 per final review. Full suite 725 passed/3 skipped, tsc clean, lint clean (0 errors,
 10 pre-existing unrelated warnings) — independently re-verified by the controller,
 not just trusted from subagent reports.
+
+Merged to main via PR #129 (origin/main @ 21ea8aa).
+
+---
+
+# Account Deletion Phase 3.1 — Hardening & Production Validation — SDD Progress
+
+Worktree: .claude/worktrees/account-deletion-p3.1-hardening
+Branch: feat/account-deletion-p3.1-hardening
+Plan: docs/superpowers/plans/2026-07-17-account-deletion-phase3.1-hardening.md
+Base commit: 21ea8aa (main, post-PR-#129)
+Started: 2026-07-17
+
+Commissioned by independent verification of Phase 3, which found: (1) a
+concurrent-execution race in persist() — not proven at verification time,
+proven before this plan was written (jittered-mock repro: the atomic delete
+RPC fires twice for two overlapping runDeletionWorkflow() calls on the same
+user); (2) zero live-database validation; (3) ADR-0004/TDD/PRR gone stale
+relative to what Phase 3 actually shipped.
+
+## Tasks
+
+- [ ] Task 1: Fix the proven concurrent-execution race (optimistic concurrency in persist())
+- [ ] Task 2: Live database validation against the linked Emma Supabase project
+- [ ] Task 3: Documentation synchronization (ADR-0004, TDD, Phase 3 PRR addendum)
+- [ ] Task 4: Final regression pass and repository consistency check
