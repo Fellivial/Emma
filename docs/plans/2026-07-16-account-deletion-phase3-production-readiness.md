@@ -128,3 +128,15 @@ Only Task 1 (the smallest, purely additive task) was approved on first review wi
 ## Explicit architecture compliance statement
 
 No conflict was found during this phase that required stopping and escalating architectural authority to the user, **except the one resolved before implementation began**: the commissioning instruction's `deletion_requests` field list didn't match the actual, already-accepted schema, and the resolution (map onto the existing `checkpoint`/`requested_at` mechanism, no migration) was confirmed with the user up front. One additional judgment call — treating a `failed` row as terminal rather than resumable — was made during implementation (caught by task review, not anticipated by the plan) and is recorded here rather than treated as a silent fix. Every other decision in this phase either follows the plan directly or is one of the five disclosed interpretation calls listed above; none of them change the Registry, the transactional SQL engine, or the `DeletionAdapter` interface, per the instruction's explicit constraints.
+
+---
+
+## Addendum (2026-07-17, Phase 3.1)
+
+Two things in this report are now stale as written:
+
+1. **Known limitation #6** (client-side false-success gap in `privacy/page.tsx`) was fixed one commit after this report was written, in `c4292ea` — this report was never updated to reflect that at the time. Recorded here rather than silently edited away.
+2. **The "not yet fully production-ready" recommendation** in this report's own **Production readiness** section named two gaps: no live-database validation, and an implicit trust that the untested concurrent-request path was safe. Phase 3.1 closed both — see the Phase 3.1 Hardening Report and Live Production Validation Report for what was found and fixed, including a real, measured double-execution bug in this exact code that this report did not know to look for.
+3. **Live validation (Phase 3.1, Task 2) found the real `deleteUserOwnedData()` RPC call cannot currently complete successfully on the linked "Emma" Supabase project** — it is missing `document_chunks.user_id` (and, per the same disclosed gap as `document_chunks`/`personas`/`push_subscriptions`/`proactive_daily` above, likely the other three as well), so every real deletion request against this environment retries 3 times and then permanently fails at `deleting_database`. This was not fixed here — touching the live schema was explicitly out of scope for this phase — but it is a real, live-verified result, not a hypothetical one. See the Phase 3.1 Live Production Validation Report for the full evidence log. Whether production has the same gap is unknown and needs separate confirmation before this workflow can be considered safe to rely on there.
+
+This report's **Workflow design**, **File changes**, **Design rationale**, and **Compliance with ADR-0004** sections remain accurate as a historical record of what Phase 3 shipped and are not edited further.

@@ -21,6 +21,8 @@
 - Reconciliation, metrics pipelines, or an operator dashboard.
 - OAuth or background-job deletion adapters — only Storage adapters exist today.
 
+> **Superseded by Phase 3 for the items above marked "these consume `deletion_requests`."** Workflow orchestration, the state machine, checkpoint execution, and retry now exist — see `src/core/account-deletion/workflow.ts` and the **Future Orchestration Boundary** section below, which documents what actually shipped. This document's own scope (Phases 1/2/2.1) is otherwise still accurate for the Registry, transactional RPC, and adapter lifecycle it describes — those were not changed by Phase 3 or 3.1.
+
 ---
 
 ## Architecture
@@ -158,7 +160,7 @@ A durable, resumable deletion (the reason `deletion_requests` exists at all) can
 
 ## Future Orchestration Boundary
 
-`deletion_requests` (Phase 1, `supabase/migrations/20260715000001_deletion_requests.sql`) is a persistence table with a 14-state status column (`requested` → `validating` → `waiting_grace_period` → `locked` → `deleting_database` → `deleting_storage` → `deleting_oauth` → `deleting_background_jobs` → `verify_database` → `verify_storage` → `verify_external` → `completed` | `retry_pending` | `failed` | `cancelled`), a `checkpoint jsonb` array, and `workflow_version`. **Nothing reads or writes this table.** It was created in Phase 1 as a foundation and remains, after Phase 2 and Phase 2.1, exactly that — a foundation, not yet a workflow.
+`deletion_requests` (Phase 1, `supabase/migrations/20260715000001_deletion_requests.sql`) is a persistence table with a 14-state status column (`requested` → `validating` → `waiting_grace_period` → `locked` → `deleting_database` → `deleting_storage` → `deleting_oauth` → `deleting_background_jobs` → `verify_database` → `verify_storage` → `verify_external` → `completed` | `retry_pending` | `failed` | `cancelled`), a `checkpoint jsonb` array, and `workflow_version`. **Phase 3 built the orchestrator this section anticipated** (`src/core/account-deletion/workflow.ts`): it creates a `deletion_requests` row on a delete request, drives the adapter lifecycle per resource per phase, writes `checkpoint` after each step, and implements the grace-period check and retry logic this section named as the next phase's job. Phase 3.1 added optimistic concurrency control so two overlapping requests for the same user can't corrupt or duplicate that progress. What remains genuinely unbuilt, per Phase 3's own disclosed scope: grace-period _scheduling_ (the check is real, nothing sets the trigger or wakes a halted workflow), OAuth/background-job adapters, and real per-table verification (every `verificationAdapter` in the Registry is still `null`) — these stay Phase 4 scope, not something this document should claim exists.
 
 The boundary this document draws, explicitly: everything above — the Registry, the transactional function, the adapter lifecycle, the synchronous `POST /api/emma/gdpr` endpoint — is the **execution foundation**. A future phase's orchestrator is expected to:
 

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-16
-- **Phase:** 1 ("Foundation") → 2 ("Execution Foundation") → 2.1 ("Hardening & Production Validation")
+- **Phase:** 1 ("Foundation") → 2 ("Execution Foundation") → 2.1 ("Hardening & Production Validation") → 3 ("Workflow Orchestrator & Durable Execution") → 3.1 ("Hardening & Production Validation")
 - **Implementation:** `src/core/account-deletion/`, `src/app/api/emma/gdpr/route.ts`, `supabase/migrations/20260715000001_deletion_requests.sql`, `supabase/migrations/20260716000001_transactional_deletion.sql`
 - **Companion:** [Account Deletion Technical Design Document](../plans/2026-07-16-account-deletion-technical-design.md) — the implementation-level detail this ADR does not repeat.
 
@@ -23,7 +23,7 @@ Account deletion is built as a **registry-driven, transactional execution founda
 1. A single **Deletion Resource Registry** (`registry.ts`) is the only inventory of what may need deleting, verifying, or reporting on for a user.
 2. Database deletion for all 32 directly user-owned tables executes as **one atomic Postgres transaction**, not a sequence of independent auto-committing statements.
 3. Non-database resources (Storage today) are deleted through a **shared four-stage adapter lifecycle** (`prepare`/`delete`/`verify`/`cleanup`), so future resource types (OAuth, background jobs) extend the same shape instead of inventing their own.
-4. A **persistence table** (`deletion_requests`) exists as a foundation for future durable, resumable deletion, but nothing reads or writes it yet — workflow orchestration is explicitly deferred, not designed here.
+4. A **workflow orchestrator** (`src/core/account-deletion/workflow.ts`, Phase 3) now reads and writes the `deletion_requests` table this architecture reserved for it: `POST /api/emma/gdpr {action:"delete"}` creates or resumes a row and drives it through the Registry-derived state machine, with optimistic concurrency control (Phase 3.1) preventing two overlapping requests for the same user from duplicating work against it.
 
 ---
 
@@ -60,7 +60,7 @@ This was disclosed as an explicit interpretation call in the Phase 2 implementat
 This architecture is built to be extended, not replaced, by whatever implements orchestration next:
 
 - **New resource types** (OAuth, background jobs) add a Registry entry and, if they need real deletion, an adapter implementing the existing `DeletionAdapter` interface — not a new pattern.
-- **A future orchestrator** is expected to consume `deletion_requests` (already shaped: 14-state status enum, `checkpoint jsonb`, `workflow_version`) and drive the adapter lifecycle per resource, per phase, rather than replace the transactional database step or the adapter contract. The status enum's `deleting_storage`/`deleting_oauth`/`deleting_background_jobs`/`verify_*` states already reserve the shape orchestration will need.
+- **The orchestrator** (Phase 3, `src/core/account-deletion/workflow.ts`) consumes `deletion_requests` exactly as this section anticipated: a state machine over the existing 14-state status enum, `checkpoint jsonb` progress, driving the adapter lifecycle per resource per phase. It does not replace the transactional database step or the adapter contract — it coordinates them.
 - **`workflowVersion`** exists so a resumed, in-flight deletion can tell whether the Registry it started against still matches the Registry it's resuming into — see the Technical Design Document for the full rationale. It is inert today (pinned at `1` everywhere) and becomes load-bearing only once something reads `deletion_requests`.
 - **Real verification** (Phase 3, per the instruction that commissioned this ADR) is expected to implement the `verify()` stage each adapter already declares but stubs — not add a parallel verification mechanism outside the lifecycle.
 
@@ -83,6 +83,7 @@ What this architecture does _not_ anticipate, and would require a new ADR to cha
 - The transactional function's use of dynamic SQL (`EXECUTE format(...)`) is a pattern with no precedent elsewhere in this codebase's migrations; its safety rests on identifier validation and parameter binding that must be maintained carefully if the function is ever extended.
 - Storage deletion's best-effort posture means a Storage failure is _reported_, not _guaranteed resolved_ — an orchestrator with real retry logic (not built yet) is what eventually closes that gap completely.
 - The `deletion_requests` table has now existed, unused, across three phases. This is an accepted, deliberate trade-off (see **Future Orchestration Boundary** in the Technical Design Document) — building its shape early keeps the orchestration boundary explicit — but it is worth naming as a trade-off, not a free foundation: schema that exists before its consumer is schema that can drift out of sync with what that consumer eventually needs.
+- Phase 3's first shipped version of the orchestrator had no protection against two overlapping `runDeletionWorkflow()` calls for the same user both driving the same row — proven via a jittered-mock reproduction during Phase 3.1's independent-verification follow-up (measured: the atomic delete RPC fired twice for one logical request). Phase 3.1 closed this with optimistic concurrency control (compare-and-swap on the existing `updated_at` column) rather than a new lock table or queue — see the Phase 3.1 Hardening Report for the full analysis.
 
 **Process consequence, worth recording plainly:** this account-deletion effort shipped two full phases of implementation and two rounds of independent verification before a TDD or ADR existed for it to be checked against. That gap was not a one-time lapse — the same failure mode ("no audit report/design doc was ever persisted") was already on record for an earlier, unrelated phase of this project (Phase 5) before account deletion repeated it twice. This ADR and its companion TDD exist as the fix, and their existence is itself the strongest argument for writing the next phase's design record _before_, not after, implementation begins.
 
