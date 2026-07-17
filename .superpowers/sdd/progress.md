@@ -48,4 +48,24 @@ relative to what Phase 3 actually shipped.
 - [x] Task 1: Fix the proven concurrent-execution race (commit 86195fb..83a6014, review clean — Approved, no Critical/Important findings, 2 cosmetic Minors accepted as-is)
 - [x] Task 2: Live database validation (commit 83a6014..d6decc6, controller-run directly, not via subagent, given real service-role credentials + live mutations — see rationale below). 7/7 scenarios pass: PostgREST .not() filter, retry-to-permanent-failure escalation, checkpoint persistence with real RPC error capture, permanently-failed-row no-restart, concurrent-request safety (Task 1's fix confirmed under real network latency), RLS enforcement (write + cross-user read). MAJOR FINDING (user-confirmed handling: document only, do not touch live schema): the live Emma project is missing document_chunks.user_id (same gap the Phase 2.1 TDD already flagged for document_chunks/personas/push_subscriptions/proactive_daily — schema.sql-only, never a tracked migration), so the real deleteUserOwnedData() RPC cannot currently succeed end-to-end on this environment. Original plan's "full run reaches completed" scenario was replaced with retry-to-failure scenarios instead of touching live schema. Flag for Task 3.1 Production Readiness Report: this may be a real production blocker if prod has the same migration gap — needs the user/ops to confirm prod schema state, out of this phase's ability to check.
 - [x] Task 3: Documentation synchronization (commit fc5381f..0ad6cb1, review clean after 1 fix round: overclaimed schema-gap scope in PRR addendum point 3). PROCESS NOTE: two consecutive subagent dispatches (Task 3 implementer, then the fix subagent) mistakenly committed into the main checkout (C:\Users\fel\emma, branch feat/account-deletion-p3-workflow-orchestrator) instead of this worktree — subagents do not reliably inherit EnterWorktree's cwd. The implementer caught and reverted its own instance; the fix subagent's stray commit (4e18694) was found by the controller and could not be `git reset --hard`'d away due to a destructive-command gate that couldn't be satisfied non-interactively — it was left in place (confirmed harmless: local-only, never pushed, sits on an already-merged/inactive branch) and the fix was reapplied directly by the controller in this worktree instead. Remaining tasks: prefer controller-direct edits for small/doc-only work rather than re-dispatching subagents for this repo's worktree setup.
-- [ ] Task 4: Final regression pass and repository consistency check
+- [x] Task 4: Final regression pass and repository consistency check (on main, no code changes needed). Full suite 726 passed/3 skipped (up from Phase 3's 725/3 baseline by exactly Task 1's new test), tsc clean, lint 0 errors/10 pre-existing warnings. No TODO/FIXME/XXX in any Phase 3.1 diff. No stray files.
+
+## MID-PHASE WORKFLOW CORRECTION (2026-07-17)
+
+User correctly flagged that Phase 3.1 (a validation/hardening gate, not a feature
+phase) should never have gotten a persistent worktree/branch. Tasks 1-4 above were
+executed in worktree .claude/worktrees/account-deletion-p3.1-hardening on branch
+feat/account-deletion-p3.1-hardening; all 8 commits (f00d635..39f2f96) were fast-
+forward-merged onto main (confirmed clean, zero-diff pre-existing CRLF noise
+discarded, byte-identical untracked plan file removed pre-merge), main re-verified
+(726/3 suite, tsc, lint all clean on main itself), then the worktree/branch were torn
+down. Going forward, this and future Hardening/Validation/Review phases execute
+directly on main; a temporary fix/ branch (optionally worktree) is created only if
+live/production validation surfaces a real implementation defect requiring code
+changes, and removed immediately after that fix merges.
+
+## Phase 3.1 complete on main — final HEAD: 39f2f96
+
+Remaining: four deliverable reports (Hardening, Live Production Validation,
+Documentation Synchronization, Production Readiness), written directly to docs/plans/
+on main, plus a final whole-branch/architecture/production-readiness review.
