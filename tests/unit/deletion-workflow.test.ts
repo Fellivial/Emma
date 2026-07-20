@@ -244,8 +244,16 @@ describe("runDeletionWorkflow", () => {
       cancelled_at: null,
       retry_count: 0,
     };
-    const rpc = vi.fn(async () => ({
-      data: [{ table_name: "messages", deleted_count: 1 }],
+    // Phase 5C: verify_database is a new step this row's checkpoint has
+    // never touched, so it legitimately calls the verify RPC once on this
+    // resume — the guarantee this test actually cares about is that the
+    // *delete* RPC is never re-invoked for a phase already checkpointed
+    // completed, which the fn-aware assertion below checks directly.
+    const rpc = vi.fn(async (fn: string) => ({
+      data:
+        fn === "verify_user_owned_data_deleted"
+          ? []
+          : [{ table_name: "messages", deleted_count: 1 }],
       error: null,
     }));
     const supabase = { ...makeFakeSupabase({ rows: [existing] }), rpc };
@@ -255,7 +263,8 @@ describe("runDeletionWorkflow", () => {
     expect(result.resumed).toBe(true);
     expect(supabase.rows).toHaveLength(1);
     expect(result.status).toBe("completed");
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("verify_user_owned_data_deleted", expect.anything());
   });
 
   it("halts at waiting_grace_period without erroring when a future grace period is set", async () => {
@@ -286,7 +295,11 @@ describe("runDeletionWorkflow", () => {
     const { runDeletionWorkflow } = await import("@/core/account-deletion/workflow");
     let attempt = 0;
     const supabase = makeFakeSupabase({
-      rpcImpl: async () => {
+      // fn-aware: `attempt` counts only the delete RPC, matching this
+      // test's own subject ("transient database failure") — verify_database
+      // now also calls rpc() (Phase 5C) and must not be conflated with it.
+      rpcImpl: async (fn: string) => {
+        if (fn === "verify_user_owned_data_deleted") return { data: [], error: null };
         attempt += 1;
         if (attempt === 1) return { data: null, error: { message: "transient failure" } };
         return { data: [{ table_name: "messages", deleted_count: 1 }], error: null };
@@ -393,7 +406,9 @@ describe("runDeletionWorkflow", () => {
 
     const first = await runDeletionWorkflow(supabase as never, "user-1");
     expect(first.status).toBe("completed");
-    expect(rpc).toHaveBeenCalledTimes(1);
+    // Phase 5C: one delete RPC call (deleting_database) + one verify RPC
+    // call (verify_database) per completed run, not just the delete alone.
+    expect(rpc).toHaveBeenCalledTimes(2);
 
     // deletion_requests_one_active_per_user excludes 'completed', so a
     // second call for the same user creates a fresh workflow — this proves
@@ -416,8 +431,9 @@ describe("runDeletionWorkflow — concurrent execution safety", () => {
     const rows: DeletionRequestRow[] = [];
     let idCounter = 0;
 
-    const rpc = vi.fn(async () => {
+    const rpc = vi.fn(async (fn: string) => {
       await jitter();
+      if (fn === "verify_user_owned_data_deleted") return { data: [], error: null };
       return { data: [{ table_name: "messages", deleted_count: 1 }], error: null };
     });
 
@@ -518,7 +534,19 @@ describe("runDeletionWorkflow — concurrent execution safety", () => {
         runDeletionWorkflow(supabase as never, "user-1"),
       ]);
 
-      expect(supabase.rpc.mock.calls.length).toBe(1);
+      // Phase 5C: the winning execution now legitimately calls rpc() twice
+      // per full run (once for the delete, once for verify_database) — the
+      // guarantee this test actually protects is that optimistic
+      // concurrency prevents either call from being duplicated by the race,
+      // checked per function name rather than as one combined total.
+      const deleteCalls = supabase.rpc.mock.calls.filter(
+        ([fn]: [string]) => fn === "delete_user_owned_data_ordered"
+      );
+      const verifyCalls = supabase.rpc.mock.calls.filter(
+        ([fn]: [string]) => fn === "verify_user_owned_data_deleted"
+      );
+      expect(deleteCalls.length).toBe(1);
+      expect(verifyCalls.length).toBe(1);
       expect(supabase.rows.length).toBe(1);
       // Both calls must resolve (not throw) even though one of them lost
       // the race partway through.
