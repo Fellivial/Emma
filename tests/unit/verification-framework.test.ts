@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import { verifyUserOwnedDataDeleted } from "@/core/account-deletion/gdpr-data";
 import { toVerificationTargets } from "@/core/account-deletion/registry";
 import { summarizeRawVerificationEvidence } from "@/core/account-deletion/verification-types";
@@ -196,22 +194,10 @@ describe("verification-types — shared framework models (Phase 5B: contracts on
   });
 });
 
-describe("Phase 5C scope boundary — workflow activated, API surface still untouched", () => {
-  // Phase 5B's own "feature isolation" checks here (workflow.ts unchanged,
-  // CRITICAL_STEPS unwidened, zero-arg verify-step pass-throughs) are
-  // deliberately retired, not merely deleted without explanation: Phase 5C
-  // is the phase whose entire purpose is to activate exactly what those
-  // checks asserted stayed inert. Real coverage for the now-wired workflow
-  // lives in verification-workflow.test.ts. What remains true, and worth
-  // keeping a regression lock on, is that WP7 (the API surface) is still
-  // untouched — route.ts gains no new response field until a later phase.
-  const routeSource = readFileSync(
-    resolve(process.cwd(), "src/app/api/emma/gdpr/route.ts"),
-    "utf8"
-  );
-
-  it("route.ts does not reference a new 'verification' response field yet (WP7, not yet in scope)", () => {
-    expect(routeSource).not.toContain("verification:");
-    expect(routeSource).not.toContain("verifyUserOwnedDataDeleted");
-  });
-});
+// Phase 5C's own scope-boundary check here (route.ts gains no new response
+// field, WP7 not yet in scope) is deliberately retired, not merely deleted
+// without explanation: Phase 5D is the phase whose entire purpose is to
+// build exactly what that check asserted stayed untouched. Real coverage
+// for the now-wired API surface lives in tests/unit/gdpr.test.ts
+// (computeVerificationRollup) and tests/unit/gdpr-workflow-integration.test.ts
+// (the full request/response cycle).
