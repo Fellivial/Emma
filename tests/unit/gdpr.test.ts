@@ -2,9 +2,28 @@ import { describe, expect, it, vi } from "vitest";
 import {
   GDPR_EXPORT_TABLES,
   USER_OWNED_DELETE_ORDER,
+  computeVerificationRollup,
   deleteUserOwnedData,
   exportUserOwnedData,
 } from "@/app/api/emma/gdpr/route";
+import type { CheckpointEntry } from "@/core/account-deletion/workflow-types";
+
+function entry(
+  phase: CheckpointEntry["phase"],
+  resourceId: string,
+  resourceStatus: CheckpointEntry["resourceStatus"],
+  recordedAt: string,
+  extra: Partial<CheckpointEntry> = {}
+): CheckpointEntry {
+  return {
+    phase,
+    resourceId,
+    subResourceMarker: null,
+    resourceStatus,
+    recordedAt,
+    ...extra,
+  };
+}
 
 describe("GDPR deletion coverage", () => {
   it("passes the full ordered table list to the atomic delete RPC in one call", async () => {
@@ -168,5 +187,178 @@ describe("GDPR export coverage", () => {
     );
     expect(exported.profile).toEqual({ id: "profiles-1", user_id: userId });
     expect(exported.affiliateReferrals).toEqual([{ id: "ref-1", affiliate_id: "affiliate-1" }]);
+  });
+});
+
+describe("computeVerificationRollup — Phase 5D (WP7, TDD §7.1)", () => {
+  it("returns all-zero counts for all three buckets on an empty checkpoint", () => {
+    expect(computeVerificationRollup([])).toEqual({
+      database: { verified: 0, failed: 0, inconclusive: 0, skipped: 0 },
+      storage: { verified: 0, failed: 0, inconclusive: 0, skipped: 0 },
+      external: { verified: 0, failed: 0, inconclusive: 0, skipped: 0 },
+    });
+  });
+
+  it("maps each resourceStatus to its API-level counter, per phase bucket", () => {
+    const checkpoint: CheckpointEntry[] = [
+      entry("verify_database", "db.memories", "completed", "2026-07-21T00:00:00.000Z"),
+      entry("verify_database", "db.tasks", "failed", "2026-07-21T00:00:01.000Z", {
+        remainingCount: 3,
+      }),
+      entry("verify_database", "db.audit_log", "inconclusive", "2026-07-21T00:00:02.000Z"),
+      entry(
+        "verify_storage",
+        "storage.document-ingestion",
+        "completed",
+        "2026-07-21T00:00:03.000Z"
+      ),
+      entry("verify_storage", "storage.task-documents", "failed", "2026-07-21T00:00:04.000Z", {
+        remainingCount: 1,
+      }),
+      entry("verify_external", "oauth.client_integrations", "skipped", "2026-07-21T00:00:05.000Z"),
+      entry(
+        "verify_external",
+        "background.document_process",
+        "skipped",
+        "2026-07-21T00:00:06.000Z"
+      ),
+    ];
+
+    expect(computeVerificationRollup(checkpoint)).toEqual({
+      database: { verified: 1, failed: 1, inconclusive: 1, skipped: 0 },
+      storage: { verified: 1, failed: 1, inconclusive: 0, skipped: 0 },
+      external: { verified: 0, failed: 0, inconclusive: 0, skipped: 2 },
+    });
+  });
+
+  it("excludes synthetic marker entries from the counts (a clean 32-table run reports 32, not 33)", () => {
+    const checkpoint: CheckpointEntry[] = [
+      ...Array.from({ length: 32 }, (_, i) =>
+        entry(
+          "verify_database",
+          `db.table-${i}`,
+          "completed",
+          `2026-07-21T00:00:${String(i).padStart(2, "0")}.000Z`
+        )
+      ),
+      entry("verify_database", "db.verification-batch", "completed", "2026-07-21T00:00:32.000Z", {
+        detail: "batch verification executed",
+      }),
+    ];
+
+    const rollup = computeVerificationRollup(checkpoint);
+    expect(rollup.database.verified).toBe(32);
+  });
+
+  it("excludes the external synthetic marker from the counts", () => {
+    const checkpoint: CheckpointEntry[] = [
+      entry("verify_external", "oauth.client_integrations", "skipped", "2026-07-21T00:00:00.000Z"),
+      entry(
+        "verify_external",
+        "background.document_process",
+        "skipped",
+        "2026-07-21T00:00:01.000Z"
+      ),
+      entry(
+        "verify_external",
+        "external.verification-batch",
+        "completed",
+        "2026-07-21T00:00:02.000Z"
+      ),
+    ];
+
+    expect(computeVerificationRollup(checkpoint).external).toEqual({
+      verified: 0,
+      failed: 0,
+      inconclusive: 0,
+      skipped: 2,
+    });
+  });
+
+  it("deduplicates retried database verification by keeping only the latest recordedAt per resourceId (scenario 16)", () => {
+    // First attempt: db.tasks confirmed non-empty (failed). Marker written failed.
+    const firstAttempt: CheckpointEntry[] = [
+      entry("verify_database", "db.memories", "completed", "2026-07-21T00:00:00.000Z"),
+      entry("verify_database", "db.tasks", "failed", "2026-07-21T00:00:01.000Z", {
+        remainingCount: 2,
+      }),
+      entry("verify_database", "db.verification-batch", "failed", "2026-07-21T00:00:02.000Z"),
+    ];
+    // Retry: the whole batch re-runs (aggregate guard), this time clean. Marker written completed.
+    const retryAttempt: CheckpointEntry[] = [
+      entry("verify_database", "db.memories", "completed", "2026-07-21T00:01:00.000Z"),
+      entry("verify_database", "db.tasks", "completed", "2026-07-21T00:01:01.000Z"),
+      entry("verify_database", "db.verification-batch", "completed", "2026-07-21T00:01:02.000Z"),
+    ];
+
+    const rollup = computeVerificationRollup([...firstAttempt, ...retryAttempt]);
+
+    // Not verified: 1, failed: 1 (summed across both attempts) — only the latest
+    // execution's evidence counts, for exactly 2 real resources.
+    expect(rollup.database).toEqual({ verified: 2, failed: 0, inconclusive: 0, skipped: 0 });
+  });
+
+  it("does not need dedup for storage — the guard pushes no entry on skip, so retries never duplicate an entry (scenario 17)", () => {
+    // Attempt 1: bucket A verified clean; bucket B fails.
+    // Attempt 2 (retry, triggered by an unrelated database failure): bucket A's
+    // guard fires and pushes nothing; bucket B is genuinely re-verified clean.
+    const checkpoint: CheckpointEntry[] = [
+      entry(
+        "verify_storage",
+        "storage.document-ingestion",
+        "completed",
+        "2026-07-21T00:00:00.000Z"
+      ),
+      entry("verify_storage", "storage.task-documents", "failed", "2026-07-21T00:00:01.000Z", {
+        remainingCount: 4,
+      }),
+      // Only bucket B produces a second entry on retry — bucket A's guard fired and pushed nothing.
+      entry("verify_storage", "storage.task-documents", "completed", "2026-07-21T00:01:00.000Z"),
+    ];
+
+    expect(computeVerificationRollup(checkpoint).storage).toEqual({
+      verified: 2,
+      failed: 0,
+      inconclusive: 0,
+      skipped: 0,
+    });
+  });
+
+  it("keeps database, storage, and external counts independent of one another", () => {
+    const checkpoint: CheckpointEntry[] = [
+      entry("verify_database", "db.memories", "failed", "2026-07-21T00:00:00.000Z", {
+        remainingCount: 1,
+      }),
+      entry(
+        "verify_storage",
+        "storage.document-ingestion",
+        "completed",
+        "2026-07-21T00:00:01.000Z"
+      ),
+      entry("verify_external", "oauth.client_integrations", "skipped", "2026-07-21T00:00:02.000Z"),
+    ];
+
+    const rollup = computeVerificationRollup(checkpoint);
+    expect(rollup.database.failed).toBe(1);
+    expect(rollup.storage.verified).toBe(1);
+    expect(rollup.external.skipped).toBe(1);
+    expect(rollup.database.verified).toBe(0);
+    expect(rollup.storage.failed).toBe(0);
+  });
+
+  it("ignores non-verification checkpoint entries (deleting_database, etc.)", () => {
+    const checkpoint: CheckpointEntry[] = [
+      entry("deleting_database", "db.batch", "completed", "2026-07-21T00:00:00.000Z"),
+      entry(
+        "deleting_storage",
+        "storage.document-ingestion",
+        "completed",
+        "2026-07-21T00:00:01.000Z"
+      ),
+      entry("verify_database", "db.memories", "completed", "2026-07-21T00:00:02.000Z"),
+    ];
+
+    const rollup = computeVerificationRollup(checkpoint);
+    expect(rollup.database.verified).toBe(1);
   });
 });

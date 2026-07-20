@@ -491,7 +491,38 @@ action.
 
 **Auth:** Required
 
-**Response:** `{ "success": true, "deletedAt": "...", "summary": ["table: count"] }`
+**Response:**
+
+```
+{
+  "success": true,
+  "status": "completed",
+  "deletedAt": "...",
+  "summary": ["table: count", ...],
+  "verification": {
+    "database": { "verified": 32, "failed": 0, "inconclusive": 0, "skipped": 0 },
+    "storage":  { "verified": 2,  "failed": 0, "inconclusive": 0, "skipped": 0 },
+    "external": { "verified": 0,  "failed": 0, "inconclusive": 0, "skipped": 2 }
+  },
+  "note": "..."
+}
+```
+
+`verification` (added Phase 5D, WP7) is additive — a client written before this
+field existed simply never reads it, and every other field keeps its exact
+prior type and truthy/falsy meaning (`success`/`status` already reflect
+verification outcome, not just deletion, since Phase 5C). It reports, per
+resource category, how many resources the workflow's own independent
+re-check (not the deletion step's self-report) found in each of four states:
+
+- `verified` — confirmed empty (deletion held).
+- `failed` — confirmed non-empty (deletion did not hold; drives `retry_pending`/`failed`).
+- `inconclusive` — the check itself couldn't run (e.g. a transient RPC/Storage error) — evidence the check didn't happen, not evidence of leftover data.
+- `skipped` — no verification adapter exists yet for this resource (currently always true for `external`, since no OAuth/background-job deletion adapter is implemented).
+
+Clients should treat `verification` as informational detail alongside
+`status`/`success`, not as a replacement for them — a verification failure
+already changes `status` to `retry_pending`/`failed` on its own.
 
 ---
 

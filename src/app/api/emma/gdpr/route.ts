@@ -9,6 +9,10 @@ import {
   deleteUserOwnedData,
   exportUserOwnedData,
 } from "@/core/account-deletion/gdpr-data";
+import type {
+  CheckpointEntry,
+  DeletionWorkflowStatus,
+} from "@/core/account-deletion/workflow-types";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,6 +29,103 @@ function getSupabase() {
 // hardening: removes the core-module → route-handler import cycle with
 // src/core/account-deletion/workflow.ts).
 export { USER_OWNED_DELETE_ORDER, GDPR_EXPORT_TABLES, deleteUserOwnedData, exportUserOwnedData };
+
+// ── Verification rollup (Phase 5D, WP7 — TDD §7.1-§7.5) ──────────────────
+//
+// Presentation-only reshaping of runDeletionWorkflow()'s own
+// DeletionWorkflowResult.checkpoint (Phase 5C, TDD §4.6) into API-ergonomic
+// counts. Computes nothing the workflow didn't already decide — every
+// resourceStatus here was assigned by workflow.ts's step functions; this
+// function only counts and groups what's already there. No workflow logic
+// is duplicated or reimplemented.
+
+export interface VerificationCounts {
+  verified: number;
+  failed: number;
+  inconclusive: number;
+  skipped: number;
+}
+
+export interface VerificationRollup {
+  database: VerificationCounts;
+  storage: VerificationCounts;
+  external: VerificationCounts;
+}
+
+// Synthetic aggregate-marker resourceIds workflow.ts writes for the
+// verify_database/verify_external skip guards (workflow.ts's
+// DB_VERIFICATION_MARKER/EXTERNAL_VERIFICATION_MARKER) — not real Registry
+// resources, and excluded from the counts before anything else (TDD §7.1
+// step 1). Without this, a clean run would report 33 verified database
+// resources instead of 32.
+const VERIFICATION_MARKER_IDS = new Set(["db.verification-batch", "external.verification-batch"]);
+
+const VERIFICATION_PHASE_BUCKET: Partial<Record<DeletionWorkflowStatus, keyof VerificationRollup>> =
+  {
+    verify_database: "database",
+    verify_storage: "storage",
+    verify_external: "external",
+  };
+
+function emptyVerificationCounts(): VerificationCounts {
+  return { verified: 0, failed: 0, inconclusive: 0, skipped: 0 };
+}
+
+/**
+ * TDD §7.1's two-step reduction algorithm, applied in order: (1) exclude
+ * synthetic marker entries, (2) deduplicate by keeping only the
+ * latest-recordedAt entry per (phase, resourceId) — a retried
+ * verify_database batch produces multiple entries per resource across
+ * attempts (no per-table skip guard, only the aggregate marker), so naive
+ * counting would report retry-count-scaled, potentially self-contradictory
+ * totals (Revision 2). verify_storage never needs this dedup step by
+ * construction — its per-adapter guard pushes no entry when it fires
+ * (Revision 3), so at most one real entry ever exists per resourceId there.
+ */
+export function computeVerificationRollup(
+  checkpoint: readonly CheckpointEntry[]
+): VerificationRollup {
+  const rollup: VerificationRollup = {
+    database: emptyVerificationCounts(),
+    storage: emptyVerificationCounts(),
+    external: emptyVerificationCounts(),
+  };
+
+  const latestByKey = new Map<string, CheckpointEntry>();
+  for (const entry of checkpoint) {
+    if (VERIFICATION_MARKER_IDS.has(entry.resourceId)) continue;
+    const bucket = VERIFICATION_PHASE_BUCKET[entry.phase];
+    if (!bucket) continue;
+
+    const key = `${entry.phase}::${entry.resourceId}`;
+    const existing = latestByKey.get(key);
+    if (!existing || entry.recordedAt >= existing.recordedAt) {
+      latestByKey.set(key, entry);
+    }
+  }
+
+  for (const entry of latestByKey.values()) {
+    const bucket = VERIFICATION_PHASE_BUCKET[entry.phase];
+    if (!bucket) continue;
+    const counts = rollup[bucket];
+    switch (entry.resourceStatus) {
+      case "completed":
+        counts.verified++;
+        break;
+      case "failed":
+        counts.failed++;
+        break;
+      case "inconclusive":
+        counts.inconclusive++;
+        break;
+      case "skipped":
+        counts.skipped++;
+        break;
+    }
+  }
+
+  return rollup;
+}
 
 /**
  * GDPR Right-to-Erasure endpoint.
@@ -112,6 +213,9 @@ export async function POST(req: NextRequest) {
         status: result.status,
         deletedAt: result.status === "completed" ? new Date().toISOString() : null,
         summary: result.summary,
+        // Phase 5D (WP7): sibling of summary, not nested inside it or
+        // replacing it — an additive field an old client simply never reads.
+        verification: computeVerificationRollup(result.checkpoint),
         note: "Auth account preserved. Contact support to fully delete your login credentials.",
       });
     }
