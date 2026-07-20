@@ -188,42 +188,29 @@ describe("verification-types — shared framework models (Phase 5B: contracts on
   });
 
   it("summarizeRawVerificationEvidence() on empty evidence returns all zero", () => {
-    expect(summarizeRawVerificationEvidence([])).toEqual({ verified: 0, failed: 0, inconclusive: 0 });
+    expect(summarizeRawVerificationEvidence([])).toEqual({
+      verified: 0,
+      failed: 0,
+      inconclusive: 0,
+    });
   });
 });
 
-describe("Phase 5B feature isolation — no accidental workflow activation", () => {
-  const workflowSource = readFileSync(
-    resolve(process.cwd(), "src/core/account-deletion/workflow.ts"),
-    "utf8"
-  );
+describe("Phase 5C scope boundary — workflow activated, API surface still untouched", () => {
+  // Phase 5B's own "feature isolation" checks here (workflow.ts unchanged,
+  // CRITICAL_STEPS unwidened, zero-arg verify-step pass-throughs) are
+  // deliberately retired, not merely deleted without explanation: Phase 5C
+  // is the phase whose entire purpose is to activate exactly what those
+  // checks asserted stayed inert. Real coverage for the now-wired workflow
+  // lives in verification-workflow.test.ts. What remains true, and worth
+  // keeping a regression lock on, is that WP7 (the API surface) is still
+  // untouched — route.ts gains no new response field until a later phase.
   const routeSource = readFileSync(
     resolve(process.cwd(), "src/app/api/emma/gdpr/route.ts"),
     "utf8"
   );
 
-  it("workflow.ts's CRITICAL_STEPS is still exactly the pre-Phase-5B, deletion-only list", () => {
-    expect(workflowSource).toContain(
-      'const CRITICAL_STEPS: DeletionWorkflowStatus[] = ["deleting_database"];'
-    );
-  });
-
-  it("workflow.ts's verify-step functions are still the pre-Phase-5B zero-arg pass-throughs", () => {
-    expect(workflowSource).toMatch(
-      /async function stepVerifyDatabase\(\): Promise<CheckpointEntry\[\]>/
-    );
-    expect(workflowSource).toMatch(
-      /async function stepVerifyExternal\(\): Promise<CheckpointEntry\[\]>/
-    );
-  });
-
-  it("workflow.ts does not import anything from the new verification framework yet", () => {
-    expect(workflowSource).not.toContain("verifyUserOwnedDataDeleted");
-    expect(workflowSource).not.toContain("toVerificationTargets");
-    expect(workflowSource).not.toContain("verification-types");
-  });
-
-  it("route.ts does not reference a new 'verification' response field yet", () => {
+  it("route.ts does not reference a new 'verification' response field yet (WP7, not yet in scope)", () => {
     expect(routeSource).not.toContain("verification:");
     expect(routeSource).not.toContain("verifyUserOwnedDataDeleted");
   });

@@ -13,7 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { deleteUserOwnedData } from "@/core/account-deletion/gdpr-data";
+import { deleteUserOwnedData, verifyUserOwnedDataDeleted } from "@/core/account-deletion/gdpr-data";
 import { getStorageDeletionAdapters } from "./adapters/registry-adapters";
 import type { DeletionPhase } from "./registry";
 import { getResourcesByPhase } from "./registry";
@@ -49,7 +49,12 @@ export function checkpointEntry(
   phase: DeletionWorkflowStatus,
   resourceId: string,
   resourceStatus: CheckpointResourceStatus,
-  opts: { subResourceMarker?: string | null; detail?: string; error?: string } = {}
+  opts: {
+    subResourceMarker?: string | null;
+    detail?: string;
+    error?: string;
+    remainingCount?: number;
+  } = {}
 ): CheckpointEntry {
   return {
     phase,
@@ -59,6 +64,7 @@ export function checkpointEntry(
     detail: opts.detail,
     error: opts.error,
     recordedAt: nowIso(),
+    remainingCount: opts.remainingCount,
   };
 }
 
@@ -286,33 +292,190 @@ function skippedNoAdapterEntries(phase: DeletionPhase & DeletionWorkflowStatus):
   );
 }
 
-async function stepVerifyDatabase(): Promise<CheckpointEntry[]> {
-  // Every database resource's verificationAdapter is null in the Registry
-  // today — real per-table verification is deferred until a future phase
-  // populates it, per ADR 0004. Recorded explicitly, not silently skipped.
-  return getResourcesByPhase("deleting_database").map((entry) =>
-    checkpointEntry("verify_database", entry.resourceId, "skipped", {
-      detail: "no verificationAdapter configured in the Registry",
-    })
-  );
+// Synthetic, aggregate resourceIds for the two batched verify phases' skip
+// guards (TDD §4.4). Neither can collide with a real Registry resourceId
+// ("db.<table>"/no "external." prefix exists on any real entry), and
+// critically, neither was ever written by the pre-Phase-5C pass-through
+// (which wrote per-resource "skipped" placeholders, never these markers) —
+// so a deletion_requests row that transited verify_database/verify_external
+// before this phase shipped always finds the guard absent on its first
+// resume post-deploy, and correctly re-runs the real check exactly once.
+const DB_VERIFICATION_MARKER = "db.verification-batch";
+const EXTERNAL_VERIFICATION_MARKER = "external.verification-batch";
+
+/**
+ * The conditional marker-status formula (TDD §4.1 step 3, §4.3 — the single
+ * most important correction in the Phase 4B TDD's review chain). NOT
+ * unconditionally "completed": if any per-resource entry in this run
+ * confirmed a defect ("failed"), the marker must also be "failed", so
+ * isPhaseCompleted()'s `!== "failed"` guard test correctly stays
+ * absent-equivalent on the next resume/retry and the real check runs again
+ * — reproducing the same confirmed defect deterministically instead of
+ * silently converging on a false "completed". Reused by both
+ * stepVerifyDatabase and stepVerifyExternal so the fix isn't duplicated.
+ */
+function verificationMarkerStatus(entries: readonly CheckpointEntry[]): {
+  status: CheckpointResourceStatus;
+  detail: string;
+} {
+  const failedCount = entries.filter((e) => e.resourceStatus === "failed").length;
+  return failedCount > 0
+    ? {
+        status: "failed",
+        detail: `batch verification executed; ${failedCount} resource(s) confirmed non-empty`,
+      }
+    : { status: "completed", detail: "batch verification executed" };
+}
+
+async function stepVerifyDatabase(
+  supabase: WorkflowSupabase,
+  row: DeletionRequestRow
+): Promise<CheckpointEntry[]> {
+  // Aggregate marker guard, not a per-resource guard (TDD §4.4): the batch
+  // runs as one call, so it needs one guard, not 32 individual ones — and,
+  // critically, this specific resourceId is the only one that distinguishes
+  // "already verified for real" from "the old pass-through's stale
+  // placeholder entries," which a per-resource guard cannot do.
+  if (isPhaseCompleted(row, "verify_database", DB_VERIFICATION_MARKER)) {
+    return [
+      checkpointEntry("verify_database", DB_VERIFICATION_MARKER, "skipped", {
+        detail: "already completed",
+      }),
+    ];
+  }
+
+  log("verification_started", row, { phase: "verify_database" });
+
+  let entries: CheckpointEntry[];
+  try {
+    const results = await verifyUserOwnedDataDeleted(supabase, row.user_id);
+    entries = results.map((result) => {
+      if (!result.checked) {
+        return checkpointEntry("verify_database", result.resourceId, "inconclusive", {
+          error: result.errorDetail,
+        });
+      }
+      // Non-null whenever checked === true (gdpr-data.ts's own contract).
+      const remainingCount = result.remainingCount ?? 0;
+      return remainingCount === 0
+        ? checkpointEntry("verify_database", result.resourceId, "completed", { remainingCount })
+        : checkpointEntry("verify_database", result.resourceId, "failed", { remainingCount });
+    });
+  } catch (err) {
+    // Whole-call failure (network error, RPC not found, permission denied):
+    // evidence verification didn't run, not evidence of leftover data — an
+    // "inconclusive" marker, not "failed". Mirrors stepDeletingDatabase's
+    // catch shape one level down (per-resource entries are never produced
+    // here, since the RPC never returned any).
+    log("verification_inconclusive", row, {
+      phase: "verify_database",
+      error: (err as Error).message,
+    });
+    return [
+      checkpointEntry("verify_database", DB_VERIFICATION_MARKER, "inconclusive", {
+        error: (err as Error).message,
+      }),
+    ];
+  }
+
+  // Marker written LAST, after every per-resource entry — a crash between
+  // the per-resource mapping above and this line leaves the guard absent,
+  // so a resume correctly re-runs the whole batch rather than falsely
+  // believing it finished (TDD §4.1 step 3).
+  const { status: markerStatus, detail: markerDetail } = verificationMarkerStatus(entries);
+  const marker = checkpointEntry("verify_database", DB_VERIFICATION_MARKER, markerStatus, {
+    detail: markerDetail,
+  });
+
+  log(markerStatus === "failed" ? "verification_failed" : "verification_completed", row, {
+    phase: "verify_database",
+    checked: entries.length,
+    failed: entries.filter((e) => e.resourceStatus === "failed").length,
+  });
+  log("aggregate_marker_created", row, {
+    phase: "verify_database",
+    resourceId: DB_VERIFICATION_MARKER,
+    status: markerStatus,
+  });
+
+  return [...entries, marker];
 }
 
 async function stepVerifyStorage(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
   const entries: CheckpointEntry[] = [];
   for (const adapter of getStorageDeletionAdapters()) {
+    // Per-resource guard, unlike verify_database/verify_external's
+    // aggregate marker (TDD §4.2) — verify_storage has always produced
+    // genuine, non-placeholder results (unlike the old verify_database/
+    // verify_external pass-through), so a pre-existing entry for this
+    // resourceId is already trustworthy evidence it was actually checked.
+    //
+    // Deliberately pushes NO entry when it fires (Revision 3) — diverging
+    // from stepDeletingStorage's adjacent, structurally similar guard,
+    // which does push a "skipped" placeholder. That placeholder-pushing
+    // convention would, under the "keep latest recordedAt" retry-dedup rule
+    // a later phase's API rollup uses, let a fresh "skipped" placeholder
+    // outrank and silently discard genuine, earlier "completed" evidence
+    // for the same bucket. Pushing nothing here closes the gap at its
+    // source: at most one real entry ever exists per resourceId for this
+    // phase, so there is never a placeholder to lose real evidence to.
+    if (isPhaseCompleted(row, "verify_storage", adapter.resourceId)) {
+      continue;
+    }
     const ctx = { userId: row.user_id, resourceId: adapter.resourceId };
+    log("verification_started", row, { phase: "verify_storage", resourceId: adapter.resourceId });
     try {
       const result = await adapter.verify(ctx);
-      entries.push(
-        result.success
-          ? checkpointEntry("verify_storage", adapter.resourceId, "completed", {
-              detail: result.detail,
-            })
-          : checkpointEntry("verify_storage", adapter.resourceId, "failed", { error: result.error })
-      );
+      if (result.success) {
+        log("verification_completed", row, {
+          phase: "verify_storage",
+          resourceId: adapter.resourceId,
+        });
+        entries.push(
+          checkpointEntry("verify_storage", adapter.resourceId, "completed", {
+            detail: result.detail,
+          })
+        );
+      } else if (result.itemsProcessed > 0) {
+        // Confirmed, real leftover objects — the actual defect this phase
+        // exists to catch. Distinct from the branch below: "confirmed a
+        // problem" vs. "could not determine."
+        log("verification_failed", row, {
+          phase: "verify_storage",
+          resourceId: adapter.resourceId,
+          remainingCount: result.itemsProcessed,
+        });
+        entries.push(
+          checkpointEntry("verify_storage", adapter.resourceId, "failed", {
+            error: result.error,
+            remainingCount: result.itemsProcessed,
+          })
+        );
+      } else {
+        // Storage not configured, or list() itself errored — an
+        // outage/misconfiguration, not evidence of a defect.
+        log("verification_inconclusive", row, {
+          phase: "verify_storage",
+          resourceId: adapter.resourceId,
+          error: result.error,
+        });
+        entries.push(
+          checkpointEntry("verify_storage", adapter.resourceId, "inconclusive", {
+            error: result.error,
+          })
+        );
+      }
     } catch (err) {
+      // An unhandled exception is evidence verification didn't run, not
+      // evidence of leftover data — mirrors stepVerifyDatabase's whole-call
+      // catch treatment exactly.
+      log("verification_inconclusive", row, {
+        phase: "verify_storage",
+        resourceId: adapter.resourceId,
+        error: (err as Error).message,
+      });
       entries.push(
-        checkpointEntry("verify_storage", adapter.resourceId, "failed", {
+        checkpointEntry("verify_storage", adapter.resourceId, "inconclusive", {
           error: (err as Error).message,
         })
       );
@@ -321,8 +484,19 @@ async function stepVerifyStorage(row: DeletionRequestRow): Promise<CheckpointEnt
   return entries;
 }
 
-async function stepVerifyExternal(): Promise<CheckpointEntry[]> {
-  return [
+async function stepVerifyExternal(row: DeletionRequestRow): Promise<CheckpointEntry[]> {
+  // Added for resume-safety consistency with verify_database (TDD §4.3) —
+  // Chosen Architecture item 7 applies to "the verify steps," plural,
+  // without carving out an exception for this currently-inert one.
+  if (isPhaseCompleted(row, "verify_external", EXTERNAL_VERIFICATION_MARKER)) {
+    return [
+      checkpointEntry("verify_external", EXTERNAL_VERIFICATION_MARKER, "skipped", {
+        detail: "already completed",
+      }),
+    ];
+  }
+
+  const entries = [
     ...getResourcesByPhase("deleting_oauth"),
     ...getResourcesByPhase("deleting_background_jobs"),
   ].map((entry) =>
@@ -330,16 +504,47 @@ async function stepVerifyExternal(): Promise<CheckpointEntry[]> {
       detail: "no verificationAdapter configured in the Registry",
     })
   );
+
+  // Same conditional formula as stepVerifyDatabase's marker (TDD §4.3):
+  // today this is always "completed" (no adapter exists, so no entry above
+  // can ever be "failed"), specified conditionally so it is already correct
+  // — not a second place needing this same fix later — the day an
+  // OAuth/background-job deletion adapter eventually ships.
+  const { status: markerStatus, detail: markerDetail } = verificationMarkerStatus(entries);
+  const marker = checkpointEntry("verify_external", EXTERNAL_VERIFICATION_MARKER, markerStatus, {
+    detail: markerDetail,
+  });
+
+  log("aggregate_marker_created", row, {
+    phase: "verify_external",
+    resourceId: EXTERNAL_VERIFICATION_MARKER,
+    status: markerStatus,
+  });
+
+  return [...entries, marker];
 }
 
 const MAX_RETRY_COUNT = 3;
 
-// Only the atomic database step is retry/fail-critical for the overall
-// workflow. Storage stays best-effort per ADR 0004 ("a Storage failure is
-// logged and reported... but never fails the request") — that trade-off
-// was already accepted for the synchronous path; this orchestrator carries
-// it forward rather than tightening it unilaterally.
-const CRITICAL_STEPS: DeletionWorkflowStatus[] = ["deleting_database"];
+// The atomic database step and all three verify phases are retry/fail-
+// critical for the overall workflow (ADR-0005 item 5, TDD §5.1 — Phase 5C).
+// Widening this from ["deleting_database"] is the single mechanism that
+// makes a verification failure load-bearing for the final status/success:
+// the branch this constant feeds (below) is otherwise unmodified — a
+// verify_database/verify_storage/verify_external "failed" entry now
+// escalates through the identical retry_pending → (after MAX_RETRY_COUNT)
+// failed path deletion failures already used, while an "inconclusive"-only
+// result set (excluded from the `failed` filter by construction, since
+// "inconclusive" !== "failed") does not. Deletion (deleting_storage,
+// deleting_oauth, deleting_background_jobs) stays best-effort per ADR 0004
+// ("a Storage failure is logged and reported... but never fails the
+// request") — that trade-off is unchanged by this phase.
+const CRITICAL_STEPS: DeletionWorkflowStatus[] = [
+  "deleting_database",
+  "verify_database",
+  "verify_storage",
+  "verify_external",
+];
 
 const STATE_ORDER: DeletionWorkflowStatus[] = [
   "validating",
@@ -376,11 +581,11 @@ async function runStep(
     case "deleting_background_jobs":
       return skippedNoAdapterEntries("deleting_background_jobs");
     case "verify_database":
-      return stepVerifyDatabase();
+      return stepVerifyDatabase(supabase, row);
     case "verify_storage":
       return stepVerifyStorage(row);
     case "verify_external":
-      return stepVerifyExternal();
+      return stepVerifyExternal(row);
     default:
       return [];
   }
@@ -419,6 +624,7 @@ export async function runDeletionWorkflow(
       status: row.status,
       summary: ["workflow previously failed permanently; not auto-restarting"],
       resumed: true,
+      checkpoint: row.checkpoint,
     };
   }
 
@@ -433,7 +639,13 @@ export async function runDeletionWorkflow(
       if (status === "completed") {
         row = await persist(supabase, row, { status: "completed", completed_at: nowIso() });
         log("completed", row);
-        return { requestId: row.id, status: row.status, summary, resumed };
+        return {
+          requestId: row.id,
+          status: row.status,
+          summary,
+          resumed,
+          checkpoint: row.checkpoint,
+        };
       }
 
       row = await persist(supabase, row, { status });
@@ -452,14 +664,26 @@ export async function runDeletionWorkflow(
           });
           log("failed", row, { at: status, error: err.message });
           summary.push(`failed at ${status}: ${err.message}`);
-          return { requestId: row.id, status: row.status, summary, resumed };
+          return {
+            requestId: row.id,
+            status: row.status,
+            summary,
+            resumed,
+            checkpoint: row.checkpoint,
+          };
         }
         throw err;
       }
 
       if (entries === null) {
         log("halted", row, { at: status });
-        return { requestId: row.id, status: row.status, summary, resumed };
+        return {
+          requestId: row.id,
+          status: row.status,
+          summary,
+          resumed,
+          checkpoint: row.checkpoint,
+        };
       }
 
       const nextCheckpoint = [...row.checkpoint, ...entries];
@@ -480,7 +704,13 @@ export async function runDeletionWorkflow(
           retry_count: retryCount,
         });
         log(nextStatus === "failed" ? "failed" : "retry", row, { at: status, retryCount });
-        return { requestId: row.id, status: row.status, summary, resumed };
+        return {
+          requestId: row.id,
+          status: row.status,
+          summary,
+          resumed,
+          checkpoint: row.checkpoint,
+        };
       }
 
       if (failed.length > 0) {
@@ -502,10 +732,11 @@ export async function runDeletionWorkflow(
         status: current?.status ?? row.status,
         summary,
         resumed,
+        checkpoint: current?.checkpoint ?? row.checkpoint,
       };
     }
     throw err;
   }
 
-  return { requestId: row.id, status: row.status, summary, resumed };
+  return { requestId: row.id, status: row.status, summary, resumed, checkpoint: row.checkpoint };
 }
