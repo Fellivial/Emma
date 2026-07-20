@@ -1366,6 +1366,94 @@ $$;
 revoke all on function public.delete_user_owned_data_ordered(uuid, jsonb) from public, anon, authenticated;
 grant execute on function public.delete_user_owned_data_ordered(uuid, jsonb) to service_role;
 
+-- Phase 5B: read-only, Registry-parameterized verification counterpart to
+-- delete_user_owned_data_ordered. Infrastructure only -- not yet called by
+-- any application code. See
+-- supabase/migrations/20260720000001_verify_user_owned_data_deleted.sql and
+-- docs/plans/2026-07-18-account-deletion-phase4b-technical-design.md §3.
+create or replace function public.verify_user_owned_data_deleted(
+  p_user_id uuid,
+  p_tables jsonb
+) returns table(table_name text, remaining_count integer, checked boolean, error_detail text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_entry jsonb;
+  v_table text;
+  v_column text;
+  v_column_type text;
+  v_count integer;
+begin
+  if p_user_id is null then
+    raise exception 'p_user_id is required';
+  end if;
+
+  for v_entry in select * from jsonb_array_elements(p_tables)
+  loop
+    v_table := v_entry->>'table';
+    v_column := coalesce(v_entry->>'column', 'user_id');
+
+    -- malformed identifier: abort the whole call (same as
+    -- delete_user_owned_data_ordered) -- this is a registry/deployment bug,
+    -- not a runtime data condition, and should fail loudly rather than be
+    -- swallowed into a per-table "not checked" result.
+    if v_table !~ '^[a-zA-Z_][a-zA-Z0-9_]*$' then
+      raise exception 'invalid table identifier: %', v_table;
+    end if;
+    if v_column !~ '^[a-zA-Z_][a-zA-Z0-9_]*$' then
+      raise exception 'invalid column identifier: %', v_column;
+    end if;
+
+    begin
+      -- qualified as "c.table_name" deliberately: this function's own
+      -- returns table(table_name text, ...) makes "table_name" a plpgsql
+      -- variable in scope here too, so a bare reference to
+      -- information_schema.columns' table_name column is ambiguous without
+      -- the alias (identical reasoning to delete_user_owned_data_ordered).
+      select c.data_type into v_column_type
+      from information_schema.columns c
+      where c.table_schema = 'public' and c.table_name = v_table and c.column_name = v_column;
+
+      if v_column_type is null then
+        raise exception 'unknown column: %.%', v_table, v_column;
+      end if;
+
+      if v_column_type = 'uuid' then
+        execute format('select count(*) from public.%I where %I = $1', v_table, v_column)
+          into v_count
+          using p_user_id;
+      else
+        execute format('select count(*) from public.%I where %I = $1', v_table, v_column)
+          into v_count
+          using p_user_id::text;
+      end if;
+
+      table_name := v_table;
+      remaining_count := v_count;
+      checked := true;
+      error_detail := null;
+      return next;
+    exception when others then
+      -- per-table catch, not a whole-call abort: an unknown column (the
+      -- document_chunks.user_id condition) or a transient query failure on
+      -- one table must not prevent reporting on the other tables.
+      table_name := v_table;
+      remaining_count := null;
+      checked := false;
+      error_detail := sqlerrm;
+      return next;
+    end;
+  end loop;
+
+  return;
+end;
+$$;
+
+revoke all on function public.verify_user_owned_data_deleted(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.verify_user_owned_data_deleted(uuid, jsonb) to service_role;
+
 -- ─── user_files / user_mcp_servers (documentation sync, Phase 2.1) ──────────
 -- Both tables have existed since migrations/20260522000001_user_files.sql and
 -- migrations/20260522000002_user_mcp_servers.sql, and are already part of the
