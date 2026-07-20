@@ -90,7 +90,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "legacy_chat_migration_ledger",
     exportKey: "legacyChatMigrationLedger",
@@ -102,7 +102,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "user_mcp_servers",
     exportKey: "userMcpServers",
@@ -114,7 +114,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "user_files",
     exportKey: "userFiles",
@@ -126,7 +126,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "message_feedback",
     exportKey: "messageFeedback",
@@ -138,7 +138,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "messages",
     exportKey: "messages",
@@ -151,7 +151,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "chat_messages",
     exportKey: "chatMessages",
@@ -163,7 +163,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "conversations",
     exportKey: "conversations",
@@ -175,7 +175,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "document_chunks",
     exportKey: "documentChunks",
@@ -187,7 +187,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "ingested_documents",
     exportKey: "ingestedDocuments",
@@ -200,7 +200,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "email_sequences",
     exportKey: "emailSequences",
@@ -213,7 +213,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "trial_events",
     exportKey: "trialEvents",
@@ -225,7 +225,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "trials",
     exportKey: "trials",
@@ -238,7 +238,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "referrals",
     column: "referrer_id",
@@ -254,7 +254,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "affiliates",
     exportKey: "affiliates",
@@ -269,7 +269,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "approvals",
     exportKey: "approvals",
@@ -282,7 +282,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "action_log",
     exportKey: "actionLog",
@@ -295,7 +295,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "agent_task_summaries",
     exportKey: "agentTaskSummaries",
@@ -307,7 +307,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "provenance_chains",
     exportKey: "provenanceChains",
@@ -320,7 +320,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "pattern_detections",
     exportKey: "patternDetections",
@@ -333,7 +333,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "tasks",
     exportKey: "tasks",
@@ -346,7 +346,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "push_subscriptions",
     exportKey: "pushSubscriptions",
@@ -358,7 +358,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "proactive_daily",
     exportKey: "proactiveDaily",
@@ -370,7 +370,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "companion_state",
     exportKey: "companionState",
@@ -383,7 +383,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "oauth_states",
     exportKey: "oauthStates",
@@ -395,7 +395,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "usage_windows",
     exportKey: "usageWindows",
@@ -408,7 +408,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "extra_packs",
     exportKey: "extraPacks",
@@ -420,7 +420,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "personas",
     exportKey: "personas",
@@ -433,7 +433,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "memories",
     exportKey: "memories",
@@ -446,7 +446,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "usage",
     exportKey: "usage",
@@ -458,7 +458,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "client_members",
     exportKey: "clientMembers",
@@ -470,7 +470,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "audit_log",
     exportKey: "auditLog",
@@ -483,7 +483,7 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
     owner: "gdpr-route",
     enumerable: false,
     deletionAdapter: "legacy-table-delete",
-    verificationAdapter: null,
+    verificationAdapter: "database-row-count-verify",
     introducedInWorkflowVersion: 1,
     table: "profiles",
     column: "id",
@@ -495,8 +495,23 @@ const DATABASE_RESOURCES: DatabaseResourceEntry[] = [
 
 /**
  * Resources the current synchronous GDPR path does NOT delete — Phase 0B's
- * findings, made explicit in code. deletionAdapter/verificationAdapter stay
- * null until a later phase implements them; nothing reads these yet.
+ * findings, made explicit in code. deletionAdapter stays null until a later
+ * phase implements a real adapter for OAuth/background-job resources;
+ * nothing reads that yet.
+ *
+ * verificationAdapter stays null on every entry here, deliberately, per
+ * Phase 4B TDD §1.1 — not an oversight the database entries above already
+ * moved past:
+ *   - storage.* — DeletionAdapter.verify() is already real
+ *     (adapters/storage-bucket-adapter.ts) and resolved through
+ *     deletionAdapter === "storage-bucket-delete"
+ *     (adapters/registry-adapters.ts), not through this field. Populating a
+ *     verificationAdapter value here would imply a second resolution
+ *     mechanism exists for Storage verification; none is being built.
+ *   - oauth.client_integrations / background.document_process — no deletion
+ *     adapter exists for either (deletionAdapter is also null); verifying
+ *     the absence of something nothing deletes is not meaningful.
+ *   - excluded.ingested_whatsapp — out of scope, unchanged.
  */
 const OTHER_RESOURCES: OtherResourceEntry[] = [
   {
@@ -611,4 +626,47 @@ export function toGdprExportTables(): ReadonlyArray<ExportSpec> {
  */
 export function getResourcesByPhase(phase: DeletionPhase): ReadonlyArray<DeletionResourceEntry> {
   return DELETION_RESOURCE_REGISTRY.filter((entry) => entry.phase === phase);
+}
+
+/**
+ * The Registry-side validation rule for verification (Phase 4B TDD §1.3): a
+ * database resource is verification-eligible if and only if its
+ * verificationAdapter is non-null — mirroring how
+ * getStorageDeletionAdapters() (adapters/registry-adapters.ts) already
+ * filters on deletionAdapter === "storage-bucket-delete" rather than
+ * assuming every OTHER_RESOURCES entry has a real adapter. Today this
+ * returns all 32 database entries (every one carries
+ * "database-row-count-verify"); the filter exists so a future database
+ * resource added with verificationAdapter: null (e.g. one intentionally
+ * excluded from verification for a documented reason) is handled correctly
+ * without a code change here.
+ *
+ * Phase 5B infrastructure only — nothing in workflow.ts calls this yet.
+ */
+export function getVerifiableDatabaseResources(): ReadonlyArray<DatabaseResourceEntry> {
+  return DATABASE_RESOURCES.filter((entry) => entry.verificationAdapter !== null);
+}
+
+/**
+ * Phase 4B TDD §3.2 — the Registry-side payload for the new read-only
+ * verify_user_owned_data_deleted SQL function. Filters through
+ * getVerifiableDatabaseResources() and, unlike toUserOwnedDeleteOrder(),
+ * carries resourceId through so the caller
+ * (verifyUserOwnedDataDeleted() in gdpr-data.ts) can map SQL rows back to a
+ * Registry resourceId without a second lookup — the delete function's
+ * caller doesn't need this because it never has to report per-resource
+ * results back.
+ *
+ * Phase 5B infrastructure only — nothing in workflow.ts calls this yet.
+ */
+export function toVerificationTargets(): ReadonlyArray<{
+  resourceId: string;
+  table: string;
+  column?: string;
+}> {
+  return getVerifiableDatabaseResources().map(({ resourceId, table, column }) => ({
+    resourceId,
+    table,
+    column,
+  }));
 }
