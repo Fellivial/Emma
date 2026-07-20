@@ -3,8 +3,10 @@ import {
   DELETION_RESOURCE_REGISTRY,
   getDatabaseResources,
   getResourcesByPhase,
+  getVerifiableDatabaseResources,
   toGdprExportTables,
   toUserOwnedDeleteOrder,
+  toVerificationTargets,
   type ResourceOwnership,
 } from "@/core/account-deletion/registry";
 
@@ -38,9 +40,43 @@ describe("Deletion Resource Registry", () => {
       expect(entry.phase).toBe("deleting_database");
       expect(entry.criticality).toBe("critical");
       expect(entry.deletionAdapter).toBe("legacy-table-delete");
-      expect(entry.verificationAdapter).toBeNull();
+      expect(entry.verificationAdapter).toBe("database-row-count-verify");
       expect(entry.enumerable).toBe(false);
     }
+  });
+
+  it("leaves verificationAdapter null on every non-database resource (Phase 4B TDD §1.1)", () => {
+    const nonDatabase = DELETION_RESOURCE_REGISTRY.filter(
+      (entry) => entry.phase !== "deleting_database"
+    );
+    expect(nonDatabase).toHaveLength(5);
+    for (const entry of nonDatabase) {
+      expect(entry.verificationAdapter).toBeNull();
+    }
+  });
+
+  it("getVerifiableDatabaseResources() returns all 32 database entries (all populated today)", () => {
+    const verifiable = getVerifiableDatabaseResources();
+    expect(verifiable).toHaveLength(32);
+    for (const entry of verifiable) {
+      expect(entry.verificationAdapter).toBe("database-row-count-verify");
+    }
+  });
+
+  it("toVerificationTargets() mirrors getVerifiableDatabaseResources()'s table/column, plus resourceId, in order", () => {
+    const targets = toVerificationTargets();
+    const resources = getVerifiableDatabaseResources();
+    expect(targets).toHaveLength(resources.length);
+    targets.forEach((entry, i) => {
+      expect(entry.resourceId).toBe(resources[i].resourceId);
+      expect(entry.table).toBe(resources[i].table);
+      expect(entry.column).toBe(resources[i].column);
+    });
+  });
+
+  it("toVerificationTargets() has no duplicate resourceId", () => {
+    const ids = toVerificationTargets().map((entry) => entry.resourceId);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("the out-of-scope resource has no phase or criticality", () => {

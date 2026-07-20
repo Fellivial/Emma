@@ -1,5 +1,5 @@
 import { decrypt } from "../security/encryption";
-import { toUserOwnedDeleteOrder, toGdprExportTables } from "./registry";
+import { toUserOwnedDeleteOrder, toGdprExportTables, toVerificationTargets } from "./registry";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Derived from the Deletion Resource Registry (src/core/account-deletion/registry.ts)
@@ -38,6 +38,75 @@ export async function deleteUserOwnedData(
   return ((data ?? []) as DeleteUserOwnedDataRow[]).map(
     ({ table_name, deleted_count }) => `${table_name}: ${deleted_count}`
   );
+}
+
+/**
+ * One database resource's verification outcome (Phase 4B TDD §2.3). Always
+ * present for every verification-eligible resource, whether or not that
+ * resource's own check succeeded — an inconclusive check is itself
+ * evidence, not an absence of evidence.
+ */
+export interface DatabaseVerificationResult {
+  resourceId: string;
+  table: string;
+  checked: boolean;
+  remainingCount: number | null;
+  errorDetail?: string;
+}
+
+interface VerifyUserOwnedDataRow {
+  table_name: string;
+  remaining_count: number | null;
+  checked: boolean;
+  error_detail: string | null;
+}
+
+/**
+ * Phase 5B infrastructure (TDD §2.3) — the verification counterpart to
+ * deleteUserOwnedData(), following its exact shape: same (supabase, userId)
+ * parameter injection, same re-throw-on-whole-call-failure contract. Issues
+ * exactly one supabase.rpc() call for every verification-eligible resource
+ * (the batching requirement, ADR-0005 item 6) and maps the read-only
+ * verify_user_owned_data_deleted RPC's tabular result back to Registry
+ * resourceIds via a table→resourceId lookup built once from
+ * toVerificationTargets() — never in SQL, exactly as
+ * delete_user_owned_data_ordered's caller never resolves resourceIds either.
+ *
+ * Does not decide workflow outcome — it only reports what it found; that is
+ * a future stepVerifyDatabase's job (not yet built — workflow.ts is
+ * unmodified by Phase 5B). Does not catch a whole-call RPC failure itself —
+ * it re-throws, exactly like deleteUserOwnedData() (gdpr-data.ts:36),
+ * leaving that to the same future caller. Not called by any workflow code
+ * today.
+ */
+export async function verifyUserOwnedDataDeleted(
+  supabase: Pick<SupabaseClient, "rpc">,
+  userId: string
+): Promise<DatabaseVerificationResult[]> {
+  const targets = toVerificationTargets();
+  const resourceIdByTable = new Map(targets.map(({ table, resourceId }) => [table, resourceId]));
+
+  const { data, error } = await supabase.rpc("verify_user_owned_data_deleted", {
+    p_user_id: userId,
+    p_tables: targets.map(({ table, column = "user_id" }) => ({ table, column })),
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as VerifyUserOwnedDataRow[]).map((row) => {
+    const resourceId = resourceIdByTable.get(row.table_name);
+    if (!resourceId) {
+      throw new Error(
+        `verify_user_owned_data_deleted returned an unrecognized table: ${row.table_name}`
+      );
+    }
+    return {
+      resourceId,
+      table: row.table_name,
+      checked: row.checked,
+      remainingCount: row.remaining_count,
+      errorDetail: row.error_detail ?? undefined,
+    };
+  });
 }
 
 function decryptExportValue(value: unknown): unknown {
