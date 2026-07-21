@@ -39,6 +39,7 @@ jobs:
 
       - name: Migration-before-code sequencing reminder
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         run: |
           git fetch origin ${{ github.base_ref }} --depth=50
           if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^supabase/migrations/'; then

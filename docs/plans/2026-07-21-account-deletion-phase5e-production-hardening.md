@@ -101,7 +101,20 @@ A separate, fresh-context adversarial review — commissioned specifically to va
 
 ## Decision
 
-Pending the Independent Production Hardening Review's verdict — see that document and the Decision section it feeds into below once complete.
+### ACCEPT WITH MINOR FOLLOW-UPS
+
+The [Independent Production Hardening Review](2026-07-21-account-deletion-phase5e-independent-review.md) found zero CRITICAL findings and independently reproduced every quantitative claim in this report and the runbook (typecheck, lint, full test suite, the four regression-test locations, the SQL-behavior claims cross-checked against the actual migration files, and the feature-freeze diff scope). One MAJOR finding — the new CI reminder step could fail its job under a `git`-command error, contradicting its "non-blocking" framing — was fixed same-session (`continue-on-error: true` added to `.github/workflows/ci.yml`). One MINOR finding (a stale in-database `COMMENT ON FUNCTION` string in a historical migration file) was consciously left as-is, consistent with this repo's append-only migration convention.
+
+**Phase 5E is complete.** All eleven items in this phase's own Validation Checklist are satisfied, all four mandatory regression tests are confirmed present and merge-blocking, and the Independent Production Hardening Review has no unresolved CRITICAL or MAJOR finding — the phase's own stated exit criteria.
+
+**Carried forward, explicitly not resolved by this phase (Ops/future-phase ownership, not Phase 5E gaps):**
+
+1. **The linked "Emma" Supabase project is missing 4 of 32 Registry tables** (`document_chunks`, `personas`, `push_subscriptions`, `proactive_daily`), confirmed this phase to make every real GDPR deletion request against that project's current schema fail deterministically. This is the single highest-impact finding of this phase — not a Phase 5E-introduced defect, but a pre-existing condition (Phase 4C Risk Register item #1) now confirmed with maximum specificity. **Before this feature is relied on for real user deletions on this project, Ops must create these 4 tables or explicitly document this project as a reduced-schema validation environment rather than a production proxy.**
+2. **Migration-before-code sequencing has no automated pipeline enforcement**, only a non-blocking CI reminder and this runbook's documented manual discipline — an explicitly accepted residual risk, not a resolved one, because building real enforcement would require Supabase deploy secrets this repo's CI does not currently have.
+3. Clean-database migration deployment was reasoned, not independently tested (residual gap, non-blocking).
+4. The pre-existing delete RPC's live timing was not re-measured this phase (it cannot currently complete on the linked project per finding #1 above) — no code changed that would alter its performance, so this is not a regression, just an unmeasured pre-existing quantity.
+
+None of these four items block Phase 5E's own completion — they are the exact kind of "outstanding accepted operational risk" this phase's brief anticipated recording, not resolving. The feature is ready to enter the roadmap's final Production Readiness Review, with finding #1 above as that review's most important open input.
 
 ---
 
