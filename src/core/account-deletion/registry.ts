@@ -641,7 +641,9 @@ export function getResourcesByPhase(phase: DeletionPhase): ReadonlyArray<Deletio
  * excluded from verification for a documented reason) is handled correctly
  * without a code change here.
  *
- * Phase 5B infrastructure only — nothing in workflow.ts calls this yet.
+ * Introduced as Phase 5B infrastructure; consumed since Phase 5C via
+ * toVerificationTargets() below, which workflow.ts's stepVerifyDatabase
+ * calls (through gdpr-data.ts's verifyUserOwnedDataDeleted()).
  */
 export function getVerifiableDatabaseResources(): ReadonlyArray<DatabaseResourceEntry> {
   return DATABASE_RESOURCES.filter((entry) => entry.verificationAdapter !== null);
@@ -657,7 +659,8 @@ export function getVerifiableDatabaseResources(): ReadonlyArray<DatabaseResource
  * caller doesn't need this because it never has to report per-resource
  * results back.
  *
- * Phase 5B infrastructure only — nothing in workflow.ts calls this yet.
+ * Introduced as Phase 5B infrastructure; consumed since Phase 5C by
+ * workflow.ts's stepVerifyDatabase.
  */
 export function toVerificationTargets(): ReadonlyArray<{
   resourceId: string;

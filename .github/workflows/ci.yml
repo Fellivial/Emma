@@ -37,6 +37,15 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Migration-before-code sequencing reminder
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=50
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^supabase/migrations/'; then
+            echo "::warning::This PR adds/changes a Supabase migration. Deployment safety requires the migration to be applied to the target database BEFORE this PR's code reaches production — this pipeline does not apply migrations automatically. See docs/runbooks/account-deletion-deployment.md."
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-latest
