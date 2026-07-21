@@ -1,0 +1,47 @@
+# Account Deletion — Phase 5F Independent Remediation Review
+
+**Date:** 2026-07-21
+**Reviewer:** fresh-context subagent, no participation in any prior design, implementation, hardening, or review work on this feature. Instructed to independently verify every claimed blocking-condition resolution against the actual code, not take any prior document's claims on faith.
+
+This document is reproduced verbatim from the subagent's own report (light formatting only) so its independence is auditable.
+
+---
+
+## Verification methodology (what was actually run)
+
+- `npx vitest run` → **787 passed, 3 skipped, 0 failed** (66 test files passed, 1 skipped). Matches the claimed 783→787 (+4, exactly the 2+2 new tests in the two new test files — arithmetic checks out).
+- `npx tsc --noEmit -p tsconfig.json` → **0 errors, no output.**
+- `npm run lint` → **0 errors, 10 warnings**, all pre-existing React-hooks warnings in unrelated files (`app/page.tsx`, `settings/billing`, `settings/notifications`, `settings/usage`, `InputBar.tsx`) — none touch account-deletion code.
+- `git diff 1fd5298 HEAD -- src/core/account-deletion/ src/app/api/emma/gdpr/route.ts supabase/migrations/ .github/workflows/ci.yml docs/adr/ vercel.json` → **empty** for every one of these paths. This is the strongest evidence available that the frozen architecture (workflow.ts, registry.ts, workflow-types.ts, the three SQL migrations, the ADRs, the API route, the CI pipeline) was not touched at all this phase — not "touched but equivalent," literally zero diff.
+- Actual changed/added files this phase: `docs/reference-api.md`, `docs/runbooks/account-deletion-deployment.md`, `src/app/settings/privacy/page.tsx` (2-line diff), `supabase/schema.sql` (+41 lines), plus two new test files. Nothing else.
+
+## Per-condition verdicts
+
+**1. R-15 (misleading UI copy) — RESOLVED.** `page.tsx:65-70` now reads "Deletion hit an issue while confirming some data was removed. Please click Delete again to continue — this does not restart the process from the beginning." The old "will retry automatically" claim is gone (confirmed by direct read and by the new locking test). I independently re-derived the backend behavior from `workflow.ts`: `resumeStartStatus()` (line 594-600) resumes a `retry_pending` row at its last checkpoint's phase — i.e., a fresh click re-runs only the failed verify step, not the whole workflow. The new copy is accurate to this. `tests/unit/privacy-settings-copy.test.ts` locks both the absence of the false claim and the presence of the corrected instruction; both assertions pass.
+
+**2. R-14 (retry doesn't remediate) — RESOLVED (via the documented Option A decision, correctly not touching the state machine).** Confirmed no diff to `workflow.ts`/`registry.ts`/`workflow-types.ts` since Phase 5E — `resumeStartStatus`, `STATE_ORDER`, `CRITICAL_STEPS` are byte-identical, so the runbook's description of retry semantics matches the actual, unchanged code. The runbook's §2.3 addition is complete against what was asked: operator responsibilities (5-step numbered procedure), expected workflow for the requesting user (tied correctly to the corrected copy and the unchanged support fallback), and the explicit reasoning for rejecting Option B (would require revisiting an already-`completed` phase in `STATE_ORDER`, which is a state-machine change, correctly identified as out of scope). Minor: the runbook attributes this to "the Final Production Readiness Review's WP2," but the FPRR document doesn't use "WP" numbering (it uses numbered Production Decision conditions) — "WP2" is actually Phase 5F's own internal work-package label. This is a confusing cross-reference, not a factual error (MINOR).
+
+**3. R-18 (no alerting) — RESOLVED.** Runbook §8 is concrete: a copy-pasteable SQL detection query against `deletion_requests`, a weekly review cadence with reasoning (GDPR statutory timelines), named ownership (Ops), and an escalation path back to §2.3's remediation procedure. This is a real, usable interim process, not vague language.
+
+**4. R-1 (production schema state) — CORRECTLY NOT RESOLVED, and honestly documented as such.** Runbook §4.1's Phase 5F re-confirmation paragraph explicitly states the same 4 tables (`document_chunks`, `personas`, `push_subscriptions`, `proactive_daily`) are still missing on the linked project, that this is "documented, not resolved," and that creating tables on a live project is explicitly out of scope / Ops' call. No spin toward "resolved" anywhere I could find. This is the correct outcome per the phase's own stated boundary.
+
+**5. R-17 (schema-drift test) — RESOLVED, and the two-table discovery claim is verified.** I read `tests/unit/registry-schema-drift.test.ts` and manually cross-checked its regex (`/create table if not exists (?:public\.)?(\w+)/gi`) against every literal `create table` occurrence in `schema.sql` (I grepped them all — 44 statements). The regex correctly matches both the `public.`-qualified and unqualified (`user_files`/`user_mcp_servers`) conventions actually used in the file, and I confirmed by hand that all 32 Registry tables are present in the matched set, so the test is not vacuously passing. I separately verified `chat_messages` and `message_feedback` were genuinely absent from `schema.sql`'s old text via `git diff supabase/schema.sql`, and that the added definitions match their source migrations (`20260523000002_chat_messages.sql`, `20260523000001_message_feedback.sql`) column-for-column, including the RLS policy semantics (schema.sql uses `drop policy if exists` + `create policy`, the migrations use an idempotent `do $$ ... if not exists ... $$` guard — functionally equivalent, consistent with schema.sql's existing house style elsewhere in the file, not a regression). The test's own "sanity check" guard (`schemaTables.size > 30`, `has("chat_messages")`) protects against the regex silently matching zero tables.
+
+## Findings
+
+- **MINOR** — `docs/runbooks/account-deletion-deployment.md` (and its own Related section, plus the registry-schema-drift test's docstring reference) link to `docs/plans/2026-07-21-account-deletion-phase5f-production-readiness-remediation.md`, which **does not exist on disk** (I searched `docs/plans/` directly — only the Final PRR and Final Independent Review from that date exist, no Phase 5F report). This repeats a pattern already flagged repeatedly across this feature's history (docs asserting deliverables that were never persisted). Not blocking — the runbook's inline content substantively covers the same ground — but it's a broken reference and a missing artifact that should either be written or de-linked.
+- **MINOR** — The runbook's §2.3 attributes the Option A decision to "the Final Production Readiness Review's WP2," but the FPRR uses numbered conditions (1-4), not "WP" labels; "WP2" is Phase 5F's own internal numbering. Confusing cross-reference, not a factual error.
+- **OBSERVATION** — R-16 (raw SQL/driver error text in the customer-facing `summary` field) was correctly left unaddressed — it was marked non-blocking/"before wider customer exposure" in the FPRR, and this phase's scope was the 4 blocking conditions plus R-17. `route.ts`'s `summary: result.summary` is unchanged and still passes raw error strings through; not a regression, just still open exactly as disclosed.
+- **OBSERVATION** — `MAX_RETRY_COUNT`/`CRITICAL_STEPS`/`STATE_ORDER` and all SQL functions are confirmed byte-identical to Phase 5E via `git diff`, which is the cleanest possible evidence of "no architectural drift" — better than a review of the current file alone, since it rules out even reintroducing the same content via a different-but-equivalent edit.
+
+## Overall verdict
+
+**This remediation phase closes out the blocking conditions without introducing architectural drift.** All three of the required checks I ran directly (tests, `tsc`, lint) reproduce the claimed numbers. The zero-diff confirmation on every architecturally-frozen file (workflow.ts, registry.ts, workflow-types.ts, all three migrations, both ADRs, the GDPR route, CI config) is unambiguous — nothing structural moved. R-15, R-18, and R-17 are genuinely resolved with working code/tests. R-14 is resolved the only way it honestly could be without violating the phase's own freeze constraint (a documented Product decision, correctly reasoned as to why the alternative would require an ADR amendment). R-1 is honestly left unresolved and documented as such rather than spun.
+
+No unresolved CRITICAL or MAJOR findings. The two MINOR findings (missing Phase 5F report file that the runbook links to; a confusing "WP2" attribution) are documentation-hygiene issues, not functional or architectural problems, and don't affect the production-readiness conclusion.
+
+---
+
+## Note from the primary reviewer
+
+Both MINOR findings above were fixed in this same session, before this document and its companion report were finalized: the Phase 5F Production Readiness Remediation Report now exists at the path the runbook already referenced, and the runbook's §2.3 attribution was corrected to name Phase 5F's own WP2 rather than misattributing the label to the Final Production Readiness Review. No further action was needed — this reviewer's own verdict already stood at "no unresolved CRITICAL or MAJOR findings" before these two documentation-hygiene fixes; they are recorded here for completeness, not because they changed the outcome.

@@ -59,9 +59,25 @@ No `down` migrations exist for this subsystem (consistent with the rest of this 
 
 Every migration in this subsystem uses `CREATE OR REPLACE FUNCTION` / `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` — confirmed idempotent by direct reading. Re-running any of them against a database that already has the object is a safe no-op, which also makes **re-applying after a bad rollback** low-risk.
 
-### 2.3 No retry/cancel endpoint exists
+### 2.3 No retry/cancel endpoint exists — and what "retry" actually means (Phase 5F decision)
 
-A `deletion_requests` row that reaches `status = 'failed'` (permanent failure after `MAX_RETRY_COUNT = 3`) has no product-facing recovery path today — this was named as an open item in Phase 4C's Risk Register (item #12) and remains true. The only recovery today is a direct database operation: either manually resolve the underlying condition and reset `status`/`retry_count`/relevant `checkpoint` entries, or leave the row `failed` (it still blocks a new deletion request for that user, per `deletion_requests_one_active_per_user`'s deliberate inclusion of `failed`). **This is an accepted, disclosed gap, not a Phase 5E regression** — building a retry/cancel endpoint would be new product surface, out of Phase 5E's feature-freeze scope.
+A `deletion_requests` row that reaches `status = 'failed'` (permanent failure after `MAX_RETRY_COUNT = 3`) has no product-facing recovery path today — this was named as an open item in Phase 4C's Risk Register (item #12) and remains true. The only recovery today is a direct database operation: either manually resolve the underlying condition and reset `status`/`retry_count`/relevant `checkpoint` entries, or leave the row `failed` (it still blocks a new deletion request for that user, per `deletion_requests_one_active_per_user`'s deliberate inclusion of `failed`).
+
+**Phase 5F's Product/engineering decision (Option A, per Phase 5F's own WP2, scoped to close the Final Production Readiness Review's R-14): verification failure remains manual remediation.** This is a decision recorded here, not a new behavior — the code was already built this way; what changed in Phase 5F is that this is now an explicit, named decision rather than an implicit consequence nobody signed off on. The alternative (Option B — automated remediation, i.e. having a retry actually re-run the delete/adapter step when a verify phase confirms a real defect) was evaluated and explicitly rejected for this phase: implementing it would mean `resumeStartStatus()` (`workflow.ts:594-600`) revisiting an earlier, already-`completed`-marked phase in `STATE_ORDER` — a change to the workflow state machine, which is frozen architecture per ADR-0005 and out of scope for a remediation phase. Building it would require an ADR-0005 amendment and a new architecture proposal, not a bug fix.
+
+**What "retry_pending" actually means, precisely, now that this is a recorded decision:** when a `verify_database`/`verify_storage`/`verify_external` step confirms a real leftover resource, every subsequent call to `POST /api/emma/gdpr {action:"delete"}` re-runs **only the verification check for that phase**, never the delete/adapter step that already ran once. If the underlying data was already gone by the time of the re-check (e.g. a transient replica-lag false positive, or the leftover was independently cleaned up), the re-check will find it clean and the workflow proceeds. If the leftover is real and persistent (e.g. the disclosed in-flight-background-job race, `registry.ts:556-568`), it will never resolve itself — the workflow will exhaust `MAX_RETRY_COUNT` and reach permanent `status:"failed"` with the leftover data never targeted for deletion again.
+
+**Operator responsibilities when a row reaches permanent `failed` status following a confirmed (not `inconclusive`) verification defect:**
+
+1. Identify the specific resource(s) that failed via the row's `checkpoint` array (`resourceStatus:"failed"` entries, not `"inconclusive"`).
+2. Manually confirm via a direct query whether the data genuinely still exists (don't trust the checkpoint alone if significant time has passed — the underlying condition may have resolved).
+3. If data still exists, manually delete it for that specific resource/user (a scoped, targeted `DELETE`/Storage removal — not a re-run of the whole workflow).
+4. Once manually confirmed clean, either reset the row (`status`, `retry_count`, and append a manual-remediation `checkpoint` entry noting what was done and by whom) so a future resume can reach `completed`, or mark it resolved out-of-band and communicate completion to the user directly.
+5. Record the remediation (who, when, what was found, what was done) — there is no product-facing audit trail for manual remediation today; this is a process discipline, not a system guarantee.
+
+**Expected workflow for the requesting user:** the corrected UI copy (`src/app/settings/privacy/page.tsx`, Phase 5F WP1) now tells the user to click "Delete" again themselves rather than claiming the system will retry on its own — this is accurate to how the mechanism works (a fresh identical request is exactly what advances a `retry_pending` row), but it does not by itself resolve a _confirmed_ defect, only a transient one. A user whose request reaches permanent `failed` status sees "Deletion could not be completed. Please contact support." (`page.tsx`'s existing fallback branch, unchanged) — support intervention, following the operator procedure above, is the actual recovery path.
+
+**This remains an accepted, disclosed gap, not a defect requiring urgent code change** — building a retry/cancel endpoint or automated remediation would be new product/architecture surface, explicitly out of scope for Phase 5F (a remediation-only phase). See §8 for the monitoring process that makes sure this gap doesn't mean requests are silently forgotten.
 
 ---
 
@@ -88,6 +104,12 @@ Direct query against `information_schema.tables` confirmed: **`document_chunks`,
 `verify_user_owned_data_deleted` behaves better by design (per-table catch, ADR-0005's explicit divergence from the delete function): the same 4 tables return `checked: false, error_detail: "unknown column: <table>.user_id"` without affecting the other 28 tables' results — confirmed directly this session.
 
 **Action needed before this feature is relied on for real users on this project:** create the 4 missing tables (their migrations exist elsewhere in `supabase/migrations/` for the main schema — this is a matter of applying them, not designing them) or, if this project is deliberately a reduced-schema validation environment rather than a production proxy, document that explicitly so this finding isn't mistaken for a code defect. This is Ops' call (per ADR-0005's Risk Register item #1 owner), not a Phase 5E decision — Phase 5E's job was to make the gap concrete and current, which it now is.
+
+**Re-confirmed, unchanged, Phase 5F (2026-07-21):** the Final Production Readiness Review's WP4 re-ran this exact `information_schema.tables` check against the same linked project, this time against the Registry's complete, current 32-table list (including `chat_messages`/`message_feedback`, which Phase 5F discovered were missing from `schema.sql`'s own text — see §4.4 — but _do_ exist on this live project). Result: **the same 4 tables are still missing** (`document_chunks`, `personas`, `push_subscriptions`, `proactive_daily`) — `exists_in_information_schema: false` for all four, `true` for the other 28, confirmed via a direct query, not the migration ledger. This discrepancy is documented, not resolved, per Phase 5F's explicit scope boundary (WP4: "if discrepancies remain, document them, do not modify architecture") — creating tables on a live project is a production-database write, not a documentation or code change, and remains Ops' call. **Whether this linked project is "production" or a validation environment has still never been formally decided by anyone with the authority to decide it** — this ambiguity, not just the missing tables themselves, is the actual open item blocking a clean answer to WP4.
+
+### 4.4 Additional schema.sql/Registry drift found by Phase 5F's static check (WP5)
+
+Independently of the live-database check above, Phase 5F's new static Registry-vs-`schema.sql` test (`tests/unit/registry-schema-drift.test.ts`) found that **`schema.sql`'s own text was missing `create table` statements for `chat_messages` and `message_feedback`** — both tables exist live (confirmed in §4.1's re-run above) via their own standalone migrations (`20260523000002_chat_messages.sql`, `20260523000001_message_feedback.sql`), but neither definition was ever folded into the consolidated `schema.sql` snapshot, the same class of gap `user_files`/`user_mcp_servers` had before Phase 2.1 backfilled them. Both were fixed in `schema.sql` this phase (see §9). This is a distinct finding from the 4-table live-schema gap above: that one is "the live database is missing tables the Registry expects," this one was "`schema.sql`'s documentation was incomplete even though the live tables existed." Both classes of drift are now covered going forward — see §9.
 
 ### 4.2 Verify-function behavior matrix (all confirmed this session)
 
@@ -155,12 +177,59 @@ These four are already merge-blocking via `.github/workflows/ci.yml`'s existing 
 
 ---
 
+## 8. Operational monitoring for terminal failures (Phase 5F, WP3)
+
+This closes the gap the Final Production Readiness Review's R-18 named: §7 above gives an operator the ability to diagnose a _specific_ stuck request, but nothing previously defined how an operator finds out one exists in the first place. Real, automated alerting (a dashboard, a paging integration) is out of scope for Phase 5F — it's Phase 7 (Production Operations) roadmap territory, requiring infrastructure this repo doesn't have today. What Phase 5F adds is a documented, ownable manual process to serve as an interim backstop, consistent with the Final PRR's condition 4.
+
+### 8.1 Detection procedure and monitoring query
+
+Run this query manually against the target database (or wire it into any ad-hoc dashboard tool already in use — it requires no new infrastructure):
+
+```sql
+select
+  id, user_id, status, retry_count, requested_at, updated_at,
+  checkpoint -> -1 ->> 'phase' as last_phase,
+  checkpoint -> -1 ->> 'resourceStatus' as last_resource_status
+from deletion_requests
+where status in ('failed', 'retry_pending')
+order by requested_at asc;
+```
+
+- Rows with `status = 'failed'` are permanent — per §2.3, these need operator remediation now, not later.
+- Rows with `status = 'retry_pending'` where `updated_at` is more than a few minutes old (adjust the threshold to your own traffic patterns) likely mean the user never returned to click "Delete" again (per the corrected UI copy, §2.3) — these aren't broken, but a very old `retry_pending` row combined with a `last_resource_status` of `failed` (not `inconclusive`) is the same underlying condition as a `failed` row for GDPR-timeliness purposes and should be reviewed the same way.
+- `last_resource_status = 'inconclusive'` rows are lower priority — they represent a transient check that hasn't resolved yet, not a confirmed defect (see §2.3's distinction).
+
+### 8.2 Review cadence
+
+**Weekly, minimum, until real alerting exists** (per the Final PRR's explicit condition — this is an interim commitment, not a permanent posture). Given GDPR erasure requests carry statutory time expectations, a longer cadence than weekly is not recommended without real automated alerting to compensate.
+
+### 8.3 Ownership
+
+Ops (same owner named in ADR-0005's Risk Register for schema-state confirmation, §4.1/§4.3) is responsible for running this query on the stated cadence until Phase 7 builds automated alerting. This is a named, accepted interim responsibility, not an unowned gap.
+
+### 8.4 Escalation path
+
+Any row found with `status = 'failed'`, or `status = 'retry_pending'` with a confirmed (non-`inconclusive`) `last_resource_status = 'failed'` older than one review cycle, should be escalated to whoever owns the manual remediation procedure in §2.3 for that specific user, with the query's output (row `id`, `user_id`, `last_phase`, `last_resource_status`) attached. There is no automated ticket creation for this today — escalation is a manual handoff.
+
+---
+
+## 9. Registry/schema.sql drift prevention (Phase 5F, WP5)
+
+`tests/unit/registry-schema-drift.test.ts` (new this phase) statically parses `supabase/schema.sql` for every `create table if not exists [public.]<name>` statement and asserts every one of the Registry's 32 database resources (`registry.ts`'s `getDatabaseResources()`) has a matching entry. It requires no live database access or credentials and runs as part of the existing `npm test` suite — already merge-blocking via `.github/workflows/ci.yml`'s `npm test` step, no CI configuration change needed.
+
+**What this check does and does not prove:** it proves `schema.sql`'s _text_ claims to define every table the Registry expects (this phase's own §4.4 finding — `chat_messages`/`message_feedback` were missing from that text and have been fixed). It does **not** prove any particular deployed database actually has those tables — that's what §4.1's live `information_schema.tables` check is for, and is a distinct, ongoing gap (still true for 4 tables on the linked project, per §4.1's Phase 5F re-confirmation). Both checks are necessary; neither is sufficient alone. This is the automated regression-prevention half of R-17 from the Final PRR; the live-validation half remains manual and is covered by §8's monitoring process plus whatever future live-validation phase re-runs §4.1's query.
+
+---
+
 ## Related
 
 - [ADR-0004: Account Deletion Architecture](../adr/0004-account-deletion-architecture.md)
 - [ADR-0005: Account Deletion Verification Architecture](../adr/0005-account-deletion-verification-architecture.md)
 - [Phase 4C Production Readiness Review](../plans/2026-07-20-account-deletion-phase4c-production-readiness.md) (Risk Register items 1, 2, 12 — this document's primary source of open risks)
 - [Phase 5E Production Hardening Report](../plans/2026-07-21-account-deletion-phase5e-production-hardening.md)
+- [Final Production Readiness Review](../plans/2026-07-21-account-deletion-final-production-readiness-review.md) — source of R-14 through R-18, the blocking conditions this document's §2.3/§8/§9 close out
+- [Phase 5F Production Readiness Remediation Report](../plans/2026-07-21-account-deletion-phase5f-production-readiness-remediation.md)
 - [reference-api.md](../reference-api.md#gdpr) — API contract
 - `src/core/account-deletion/{registry,workflow,workflow-types,gdpr-data}.ts`
 - `vercel.json`, `.github/workflows/ci.yml`
+- `tests/unit/registry-schema-drift.test.ts`, `tests/unit/privacy-settings-copy.test.ts`

@@ -66,7 +66,7 @@ export default function PrivacySettingsPage() {
         setStatus({
           type: "error",
           message:
-            "Deletion is in progress and will retry automatically. Please check back shortly.",
+            "Deletion hit an issue while confirming some data was removed. Please click Delete again to continue — this does not restart the process from the beginning.",
         });
       } else {
         setStatus({
