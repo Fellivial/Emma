@@ -524,6 +524,16 @@ Clients should treat `verification` as informational detail alongside
 `status`/`success`, not as a replacement for them — a verification failure
 already changes `status` to `retry_pending`/`failed` on its own.
 
+**`retry_pending` requires a repeat client request (Phase 5F clarification):**
+nothing server-side automatically advances a `retry_pending` deletion request
+— there is no cron, queue, or scheduler watching `deletion_requests`. A
+subsequent identical `POST` to this endpoint is what re-runs the failed
+step's verification check. If the underlying resource genuinely still has
+data, repeated calls will keep returning `retry_pending` (up to 3 attempts
+total) and then `status: "failed"` permanently — a confirmed defect is not
+self-healing, only re-detected. See the deployment runbook's §2.3 for the
+full retry semantics and operator remediation procedure.
+
 ---
 
 ## MCP Servers (Unavailable)

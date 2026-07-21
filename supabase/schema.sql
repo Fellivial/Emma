@@ -123,6 +123,47 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+-- Its own migration (20260523000002_chat_messages.sql) was never folded into
+-- this consolidated schema.sql — discovered during Phase 5F's Registry/
+-- schema.sql drift-prevention check (docs/plans/2026-07-21-account-deletion-
+-- phase5f-production-readiness-remediation.md), the same class of gap
+-- user_files/user_mcp_servers had below before Phase 2.1 backfilled them.
+create table if not exists public.chat_messages (
+  id          uuid        primary key,
+  user_id     uuid        not null references auth.users on delete cascade,
+  role        text        not null check (role in ('user', 'assistant')),
+  content     text        not null,
+  display     text        not null,
+  expression  text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists chat_messages_user_created
+  on public.chat_messages (user_id, created_at desc);
+alter table public.chat_messages enable row level security;
+drop policy if exists "Users manage own messages" on public.chat_messages;
+create policy "Users manage own messages"
+  on public.chat_messages for all
+  using  (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Same gap as chat_messages above: its own migration
+-- (20260523000001_message_feedback.sql) was never folded into schema.sql —
+-- also caught by Phase 5F's Registry/schema.sql drift-prevention check.
+create table if not exists public.message_feedback (
+  id         uuid        primary key default gen_random_uuid(),
+  user_id    uuid        not null references auth.users on delete cascade,
+  message_id text        not null,
+  rating     text        not null check (rating in ('up', 'down')),
+  created_at timestamptz not null default now(),
+  unique (user_id, message_id)
+);
+alter table public.message_feedback enable row level security;
+drop policy if exists "Users manage own feedback" on public.message_feedback;
+create policy "Users manage own feedback"
+  on public.message_feedback for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Service-role-only provenance for the manual legacy plaintext chat backfill.
 -- This table intentionally contains no message content and has no user policies.
 create table if not exists public.legacy_chat_migration_ledger (
