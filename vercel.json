@@ -30,6 +30,9 @@
     "src/app/api/emma/webhook/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/emma/gdpr/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/emma/cron/email-sequences/route.ts": {
       "maxDuration": 60
     },

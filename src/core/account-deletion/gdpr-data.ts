@@ -73,11 +73,9 @@ interface VerifyUserOwnedDataRow {
  * delete_user_owned_data_ordered's caller never resolves resourceIds either.
  *
  * Does not decide workflow outcome — it only reports what it found; that is
- * a future stepVerifyDatabase's job (not yet built — workflow.ts is
- * unmodified by Phase 5B). Does not catch a whole-call RPC failure itself —
- * it re-throws, exactly like deleteUserOwnedData() (gdpr-data.ts:36),
- * leaving that to the same future caller. Not called by any workflow code
- * today.
+ * stepVerifyDatabase's job (workflow.ts, wired since Phase 5C). Does not
+ * catch a whole-call RPC failure itself — it re-throws, exactly like
+ * deleteUserOwnedData() (gdpr-data.ts:36), leaving that to the caller.
  */
 export async function verifyUserOwnedDataDeleted(
   supabase: Pick<SupabaseClient, "rpc">,
