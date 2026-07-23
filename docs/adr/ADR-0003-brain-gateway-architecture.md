@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-14
 - **Phase:** 7A → 7B — "Brain Gateway"
-- **Implementation:** None yet. This ADR is the architectural contract for Phase 7B; it does not itself change any code.
+- **Implementation:** Shipped in Phase 7B (`src/core/brain/`, all 16 inference call sites migrated) — see [Phase 7B Implementation Report](../phase7b-brain-gateway-implementation-report.md). Header corrected 2026-07-23 during [ADR-0006](0006-provider-registry-capabilities-descriptor-adapter-layer.md)'s authoring pass, closing the drift Phase 2's Gap Analysis identified as GAP-14 (see [Phase 3.1 Architecture Freeze](../phase3-1-brain-gateway-architecture-freeze.md) §2.9 governance action item and [ADR-0014](0014-brain-gateway-extension-model.md)).
 - **Precursor:** [Phase 7A — Brain Architecture Readiness Review](../phase7a-brain-architecture-readiness.md) (verdict: CONDITIONAL GO, 6/10)
 
 ---
