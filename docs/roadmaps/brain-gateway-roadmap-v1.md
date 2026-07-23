@@ -1,14 +1,22 @@
-# Emma Brain Gateway Roadmap v1.0 (Frozen)
+# Emma Brain Gateway Roadmap v1.1
 
 ## Document Status
 
-Version: 1.0 (Frozen)
+Version: 1.1 (extends v1.0 Frozen)
 
-Status: Roadmap Freeze — Approved Baseline
+Status: Roadmap Freeze — Approved Baseline, extended per Roadmap Freeze Rule 5 ("Any scope expansion after this freeze requires... a Roadmap revision")
 
-Scope: Brain Gateway architecture initiative (Phase 0 – Phase 7)
+Scope: Brain Gateway architecture initiative (Phase 0 – Phase 8.1)
 
 Owner: Emma Engineering
+
+### Revision Note (v1.0 → v1.1)
+
+v1.0 froze Phase 0 – Phase 4.1 (Required Input Review through Independent Technical Review) and left Phase 5 ("Implementation Planning"), Phase 6 ("Incremental Implementation"), and Phase 7 ("Production Readiness Review") as short placeholder descriptions, since implementation planning was not yet in scope when the architecture-and-design roadmap was written.
+
+v1.1 is a **scope-expansion revision, not an architectural one**: it replaces those three placeholder phases with a fully specified Implementation & Production Validation extension — decomposing them into Phase 5, Phase 5.1, Phase 6, Phase 6.1, Phase 7, Phase 8, and Phase 8.1. No ADR is superseded, no Architecture Freeze content is altered, and Phase 0 – Phase 4.1 are unchanged below. This revision governs everything **after** the implementation-ready Technical Design that Phase 4.1 approved (PR #157, merged) — implementation planning, implementation execution, implementation verification, production hardening, live validation, and production readiness.
+
+All architectural decisions remain governed exclusively by the Architecture Freeze (Phase 3.1) and ADR-0006–ADR-0014. Phases 5–8.1 introduce no architecture decisions.
 
 ## Objective
 
@@ -22,7 +30,7 @@ This roadmap defines the official execution plan for the Brain Gateway initiativ
 
 This document becomes the official source of truth for the Brain Gateway project. The following rules apply throughout the project lifecycle.
 
-1. This roadmap is considered Brain Gateway Roadmap v1.0 (Frozen).
+1. This roadmap is considered Brain Gateway Roadmap v1.0 (Frozen), extended by this v1.1 revision (§Revision Note).
 2. Every phase must be completed before moving to the next phase unless explicitly stated otherwise.
 3. Major architectural decisions must be documented through ADRs rather than implementation.
 4. Implementation must follow the approved architecture, not redefine it.
@@ -34,21 +42,25 @@ This document becomes the official source of truth for the Brain Gateway project
 
 ## Current Status
 
-| Phase     | Name                              | Objective                                        | Deliverable                 | Status      |
-| --------- | --------------------------------- | ------------------------------------------------ | --------------------------- | ----------- |
-| —         | Roadmap Freeze                    | Establish this document as source of truth       | Frozen Roadmap              | Complete    |
-| Phase 0   | Required Input Review             | Understand the existing AI architecture          | Review Report               | Not Started |
-| Phase 1   | Brain Gateway Architecture Review | Analyze the current implementation               | Architecture Review Report  | Not Started |
-| Phase 2   | Gap Analysis                      | Compare current architecture against target      | Gap Analysis Report         | Not Started |
-| Phase 3   | Architecture Discovery            | Design the future Brain Gateway architecture     | Architecture Design Package | Not Started |
-| Phase 3.1 | Architecture Freeze               | Finalize architecture and ADR approval           | Architecture Freeze Report  | Not Started |
-| Phase 4   | Technical Design                  | Produce implementation specifications            | Technical Design Documents  | Not Started |
-| Phase 4.1 | Independent Technical Review      | Validate technical design before coding          | Technical Review Report     | Not Started |
-| Phase 5   | Implementation Planning           | Create implementation roadmap and execution plan | Implementation Plan         | Not Started |
-| Phase 6   | Incremental Implementation        | Implement Brain Gateway incrementally            | Pull Requests               | Not Started |
-| Phase 7   | Production Readiness Review       | Validate production readiness                    | Production Readiness Report | Not Started |
+| Phase     | Name                                       | Objective                                                                                       | Deliverable                                                                                                                                                 | Status      |
+| --------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| —         | Roadmap Freeze                             | Establish this document as source of truth                                                      | Frozen Roadmap                                                                                                                                              | Complete    |
+| Phase 0   | Required Input Review                      | Understand the existing AI architecture                                                         | Review Report                                                                                                                                               | Not Started |
+| Phase 1   | Brain Gateway Architecture Review          | Analyze the current implementation                                                              | Architecture Review Report                                                                                                                                  | Not Started |
+| Phase 2   | Gap Analysis                               | Compare current architecture against target                                                     | Gap Analysis Report                                                                                                                                         | Not Started |
+| Phase 3   | Architecture Discovery                     | Design the future Brain Gateway architecture                                                    | Architecture Design Package                                                                                                                                 | Not Started |
+| Phase 3.1 | Architecture Freeze                        | Finalize architecture and ADR approval                                                          | Architecture Freeze Report                                                                                                                                  | Not Started |
+| Phase 4   | Technical Design                           | Produce implementation specifications                                                           | Technical Design Documents                                                                                                                                  | Complete    |
+| Phase 4.1 | Independent Technical Review               | Validate technical design before coding                                                         | Technical Review Report                                                                                                                                     | Complete    |
+| Phase 5   | Implementation Planning                    | Transform the approved Technical Design into an executable implementation plan                  | Implementation Plan (WBS, dependency graph, PR/branch strategy, migration/rollback/test-gate strategy, risk register, sprint breakdown, completion report)  | Not Started |
+| Phase 5.1 | Independent Implementation Planning Review | Independently verify Phase 5 produces a safe, complete implementation plan                      | Planning Review Report, Dependency/Rollout/Risk assessments, Planning Traceability Matrix                                                                   | Not Started |
+| Phase 6   | Implementation                             | Implement every approved Technical Design specification                                         | Implementation PRs, Implementation Report, Migration Report, Testing Report                                                                                 | Not Started |
+| Phase 6.1 | Independent Implementation Review          | Verify implementation faithfully matches Technical Design, ADRs, and Architecture Freeze        | Implementation Review Report, Architecture Compliance Report, Code Quality Report, Regression Assessment                                                    | Not Started |
+| Phase 7   | Integration Verification                   | Verify the implemented Brain Gateway works correctly integrated with the complete Emma platform | Integration Report, Compatibility Matrix, Regression Report, Performance Baseline, Integration Summary                                                      | Not Started |
+| Phase 8   | Production Hardening & Live Validation     | Validate Brain Gateway under realistic operating conditions before production release           | Production Hardening Report, Load/Chaos Test Reports, Observability Report, Performance Benchmark, Operational Risk Register, Production Validation Summary | Not Started |
+| Phase 8.1 | Independent Production Readiness Review    | Conduct the final independent review before production deployment                               | Production Readiness Review, Deployment Risk Assessment, Go/No-Go Report, Production Checklist, Operational Acceptance Report                               | Not Started |
 
-No implementation work has started. No code changes, git operations, or pull requests have been made under this initiative.
+Phase 0 – Phase 4.1 are complete (PRs #145–#157, merged); no Phase 5–8.1 implementation work has started. No production code changes have been made under this initiative — only architecture, ADR, and technical-design documentation.
 
 ## Phase Descriptions
 
@@ -266,70 +278,236 @@ Perform an independent review of the technical design.
 
 **Objective**
 
-Create an execution strategy.
+Transform the approved Technical Design into an executable implementation plan.
+
+The implementation must be decomposed into independently reviewable, low-risk work packages.
+
+No production code may be written.
 
 **Deliverables**
 
-- Sprint Plan
-- Dependency Order
-- Risk Plan
+- Work Breakdown Structure (WBS)
+- Implementation Dependency Graph
+- Module Implementation Order
+- Pull Request Strategy
+- Branch Strategy
 - Migration Plan
-- Rollback Plan
-- Testing Plan
+- Rollback Strategy
+- Test Gate Strategy
+- Risk Register
+- Sprint Breakdown
+- Phase 5 Completion Report
 
 **Exit Criteria**
 
-- Implementation sequence finalized.
+- Every Technical Design section assigned to implementation tasks.
+- Dependency order verified.
+- Rollback defined.
+- Implementation sequence approved.
 
-### Phase 6 — Incremental Implementation
-
-**Objective**
-
-Implement Brain Gateway incrementally.
-
-Each implementation phase must include:
-
-- Unit tests
-- Integration tests
-- Documentation updates
-- ADR updates (if required)
-- Architecture conformance verification
-
-Every completed implementation phase must finish with:
-
-- Commit
-- Push to GitHub
-- Pull Request
-- Review before merge
-
-No direct implementation should bypass the approved architecture.
-
-### Phase 7 — Production Readiness Review
+### Phase 5.1 — Independent Implementation Planning Review
 
 **Objective**
 
-Validate Brain Gateway for production deployment.
+Independently verify that Phase 5 produces a safe, complete implementation plan.
 
-**Scope**
+**Review**
 
-Review:
+- WBS
+- Dependency graph
+- Rollout order
+- Rollback safety
+- Sprint boundaries
+- Implementation feasibility
 
-- Reliability
-- Performance
-- Scalability
-- Observability
-- Cost management
-- Security
-- Failure recovery
-- Monitoring
-- Documentation completeness
-- Operational readiness
+No implementation.
 
 **Deliverables**
 
-- Production Readiness Report
-- Final Risk Assessment
-- Go / No-Go Recommendation
+- Planning Review Report
+- Dependency Validation
+- Rollout Validation
+- Risk Assessment
+- Planning Traceability Matrix
+- Review Summary
+
+### Phase 6 — Implementation
+
+**Objective**
+
+Implement every approved Technical Design specification.
+
+Architecture changes are prohibited.
+
+ADR modifications are prohibited.
+
+Implementation must follow the approved execution plan.
+
+**Deliverables**
+
+- Implementation PRs
+- Implementation Report
+- Migration Report
+- Testing Report
+
+**Exit Criteria**
+
+- Implementation complete.
+- Tests passing.
+- Migration complete.
+- Documentation updated.
+
+### Phase 6.1 — Independent Implementation Review
+
+**Objective**
+
+Verify implementation faithfully matches:
+
+- Technical Design
+- ADRs
+- Architecture Freeze
+
+**Review**
+
+- Implementation fidelity
+- Interface correctness
+- Architectural compliance
+- Coding standards
+- Regression risk
+
+**Deliverables**
+
+- Implementation Review Report
+- Architecture Compliance Report
+- Code Quality Report
+- Regression Assessment
+
+### Phase 7 — Integration Verification
+
+**Objective**
+
+Verify the implemented Brain Gateway works correctly when integrated with the complete Emma platform.
+
+**Focus**
+
+- End-to-end behavior
+- Subsystem integration
+- Compatibility
+
+**Verification Areas**
+
+UI → API → Brain Gateway → Providers → Memory → Context → Prompt → Validation → TTS → Avatar
+
+**Deliverables**
+
+- Integration Report
+- Compatibility Matrix
+- Regression Report
+- Performance Baseline
+- Integration Summary
+
+**Exit Criteria**
+
+- No blocking integration issues.
+
+### Phase 8 — Production Hardening & Live Validation
+
+**Objective**
+
+Validate Brain Gateway under realistic operating conditions before production release.
+
+Unlike previous phases, this phase evaluates operational behavior rather than implementation correctness.
+
+**Validation Areas**
+
+- **Live Traffic Validation** — realistic request simulation.
+- **Multi-Provider Validation** — verify every supported provider.
+- **Load Testing** — concurrent requests, burst traffic, queue behavior.
+- **Soak Testing** — 24-hour, 48-hour, 72-hour continuous execution.
+- **Chaos Testing** — provider outage, network interruption, timeout, partial failure, retry exhaustion, malformed responses, streaming interruption.
+- **Observability Validation** — logging, metrics, tracing, correlation IDs, Sentry, health monitoring.
+- **Memory Validation** — ranking, retrieval, deduplication, context quality.
+- **Prompt Validation** — persona stability, prompt composition, instruction ordering, tool prompts.
+- **Context Validation** — budget enforcement, summarization, priority resolution, overflow behavior.
+- **Cost Validation** — token usage, provider cost, retry cost, caching effectiveness.
+- **Performance Benchmark** — P50, P90, P95, P99 latency, throughput.
+- **Security Validation** — provider credentials, secrets, boundary enforcement, data isolation.
+- **Real User Validation** — internal testing, closed beta, controlled production users, feedback analysis.
+
+**Deliverables**
+
+- Production Hardening Report
+- Load Test Report
+- Chaos Test Report
+- Observability Report
+- Performance Benchmark
+- Operational Risk Register
+- Production Validation Summary
+
+**Exit Criteria**
+
+- No Critical production issues.
+- Operational risks documented.
+- All required validation scenarios executed.
+
+### Phase 8.1 — Independent Production Readiness Review
+
+**Objective**
+
+Conduct the final independent review before production deployment.
+
+This phase determines deployment readiness.
+
+**Review Areas**
+
+- Implementation quality
+- Operational readiness
+- Performance
+- Reliability
+- Observability
+- Maintainability
+- Operational risk
+- Documentation
+- Deployment readiness
+- Rollback readiness
+
+**Deliverables**
+
+- Production Readiness Review
+- Deployment Risk Assessment
+- Go / No-Go Report
+- Production Checklist
+- Operational Acceptance Report
+
+**Possible Outcomes**
+
+- **GO** — Production deployment approved.
+- **GO WITH CONDITIONS** — Deployment permitted after specified conditions.
+- **NO GO** — Deployment blocked until critical issues resolved.
+
+## Governance Rules (Phases 5–8.1)
+
+Throughout Phases 5–8.1:
+
+- Architecture decisions remain frozen.
+- No ADR modifications unless a formal ADR supersedes an existing decision.
+- Technical Design changes require review.
+- Architecture changes require a new ADR.
+
+## Final Completion Criteria
+
+The Brain Gateway initiative is considered complete only when all of the following have been achieved:
+
+1. Architecture approved.
+2. ADRs approved.
+3. Technical Design approved.
+4. Implementation completed.
+5. Independent implementation review completed.
+6. Integration verification passed.
+7. Production hardening completed.
+8. Live validation completed.
+9. Independent production readiness review returns GO or GO WITH CONDITIONS.
+10. Deployment completed successfully.
 
 ## Guiding Principles
 
@@ -345,7 +523,7 @@ The following principles apply throughout every phase of this roadmap:
 
 ## Finalization Requirements
 
-Upon completion of each implementation phase (Phase 6 and any subsequent implementation sub-phases), the work must conclude with the following finalization tasks:
+Upon completion of each implementation phase (Phase 6, Phase 7, Phase 8, and any subsequent implementation sub-phases), the work must conclude with the following finalization tasks:
 
 1. Verify all implementation deliverables and tests are complete.
 2. Commit changes with clear, descriptive commit messages.
@@ -363,7 +541,7 @@ These finalization tasks are mandatory and are considered part of the completion
 
 This roadmap is the single source of truth for the Brain Gateway initiative.
 
-Changes to the roadmap may only be made through a Roadmap revision (v1.1, v1.2, etc.) or an approved ADR that explicitly supersedes or amends previous decisions.
+Changes to the roadmap may only be made through a Roadmap revision (v1.1, v1.2, etc.) or an approved ADR that explicitly supersedes or amends previous decisions. This document is itself the v1.1 revision that expanded Phase 5–7 into Phase 5, 5.1, 6, 6.1, 7, 8, 8.1 (§Revision Note); any future scope expansion requires v1.2 or later.
 
 Implementation details must not be added to this roadmap; all technical details must reside in the ADRs and Technical Design Documents for each respective phase.
 
