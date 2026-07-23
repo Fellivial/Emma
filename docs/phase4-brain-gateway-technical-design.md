@@ -52,11 +52,13 @@ Reviewed directly against the repository, not assumed from ADR prose.
 ### 1.2 Dependency graph (as it exists today)
 
 ```
-Application Layer (15 files import from @/core/brain/gateway or @/lib/embeddings)
+Application Layer (16 files import from @/core/brain/gateway or @/lib/embeddings —
+independently re-counted in Phase 4.1 §5.1; the original count below omitted
+ingest/document/route.ts and src/inngest/functions.ts, both embeddings.ts consumers)
   route.ts, vision/route.ts, summarize/route.ts, ingest/whatsapp/route.ts,
-  history/route.ts, emotion/route.ts, persona/route.ts, memory/route.ts,
-  cron/reflection/route.ts, agent-loop.ts, tool-registry.ts,
-  task-summarizer.ts, pattern-detector.ts, embeddings.ts
+  ingest/document/route.ts, history/route.ts, emotion/route.ts, persona/route.ts,
+  memory/route.ts, cron/reflection/route.ts, agent-loop.ts, tool-registry.ts,
+  task-summarizer.ts, pattern-detector.ts, inngest/functions.ts, embeddings.ts
         │  imports brainChat / brainChatStream / brainEmbed (never provider-shaped types)
         ▼
 src/core/brain/gateway.ts  ──imports──►  src/core/brain/providers/openrouter.ts
@@ -83,7 +85,7 @@ src/core/brain/types.ts (imported by both gateway.ts and openrouter.ts; zero run
 ### 1.4 Extension points that exist today
 
 - `BrainProvider` interface (four methods) — the only substitutability seam in the Brain domain.
-- `CostGateDependencies` (`src/core/cost-gate.ts`) — the **only** other place in the Application Layer using dependency inversion (a DI-shaped dependencies object with a `defaultDependencies` production implementation, injectable for tests). This is the concrete precedent Technical Design reuses for every new DI-shaped interface below, per ADR-0013's decision to make DI a systemic convention.
+- `CostGateDependencies` (`src/core/cost-gate.ts`) — a DI-shaped dependencies object with a `defaultDependencies` production implementation, injectable for tests. `McpTransportDependencies` (`src/core/integrations/mcp-client.ts`) is a second, independently-verified instance of the same pattern (optional injectable `resolve`/`send` functions), corrected here in Phase 4.1 §5.1 — GAP-11's "applied in only 2 places" finding already accounted for both, but the original Phase 4 text understated this to "the only other place." Together these two are the concrete precedent Technical Design reuses for every new DI-shaped interface below, per ADR-0013's decision to make DI a systemic convention.
 - `document_chunks` table (`supabase/schema.sql:1153-1187`) — an existing pgvector pipeline: `extensions.vector(1536)` column, `hnsw (embedding extensions.vector_cosine_ops)` index, a `match_document_chunks(query_embedding, match_user_id, match_threshold, match_count)` SQL RPC returning ranked rows. **This is a proven, shipped precedent for exactly the database-side ranking mechanism ADR-0009 requires** — Memory Ranking Infrastructure (§7) is designed as a direct structural analog, not a novel mechanism.
 
 ### 1.5 Configuration model (today)
@@ -92,7 +94,7 @@ src/core/brain/types.ts (imported by both gateway.ts and openrouter.ts; zero run
 
 ### 1.6 Testing infrastructure (today)
 
-Vitest (`vitest.config.ts`): `tests/**/*.test.ts`, `@` alias to `src`, `node` environment, coverage over `src/core/**` and `src/lib/**`. 63 existing test files in `tests/unit/`, flat structure, no subdirectories. Relevant existing coverage: `brain-gateway.test.ts`, `openrouter.test.ts`, `context-manager.test.ts`, `memory-relevance.test.ts`, `personas-custom-routines.test.ts`, `errors.test.ts`, `env-validation.test.ts`. No provider-conformance suite exists (cannot exist — `n=1`, per every ADR's accepted "n=1 evidentiary risk"). ESLint (`eslint.config.mjs`) is a flat config extending `eslint-config-next/core-web-vitals` with a small custom rules block; **no import-boundary or dependency-inversion lint plugin is installed today** (confirmed: no `eslint-plugin-boundaries`, no `eslint-plugin-import` restricted-paths rule configured) — ADR-0013's lint rules are new tooling, not an extension of existing tooling.
+Vitest (`vitest.config.ts`): `tests/**/*.test.ts`, `@` alias to `src`, `node` environment, coverage over `src/core/**` and `src/lib/**`. 65 existing test files in `tests/unit/` (independently recounted in Phase 4.1 §5.1; the original figure of 63 undercounted by 2), flat structure, no subdirectories. Relevant existing coverage: `brain-gateway.test.ts`, `openrouter.test.ts`, `context-manager.test.ts`, `memory-relevance.test.ts`, `personas-custom-routines.test.ts`, `errors.test.ts`, `env-validation.test.ts`. No provider-conformance suite exists (cannot exist — `n=1`, per every ADR's accepted "n=1 evidentiary risk"). ESLint (`eslint.config.mjs`) is a flat config extending `eslint-config-next/core-web-vitals` with a small custom rules block; **no import-boundary or dependency-inversion lint plugin is installed today** (confirmed: no `eslint-plugin-boundaries`, no `eslint-plugin-import` restricted-paths rule configured) — ADR-0013's lint rules are new tooling, not an extension of existing tooling.
 
 ---
 
@@ -245,7 +247,7 @@ When `requiredCapabilities` is omitted or `{}`: `routeRequest` returns `registry
 
 ### 5.3 Layer 2 — Capability routing (frozen target, structurally present, inert until n≥2)
 
-When `requiredCapabilities` is non-empty: `routeRequest` calls `registry.findByCapability(requiredCapabilities)`, restricted to `getConfigured()` results, and returns the first match tagged `resolvedBy: "capability"`, or `null` if none match. **"No match, pass through" contract (resolves Freeze §7/ADR-0007's deferred item):** a `null` result is _not_ silently widened to "return any configured provider anyway" — that would defeat the purpose of a hard capability requirement. Callers (Gateway functions) translate `null` into a `BrainRequestError` with the new `PROVIDER_UNAVAILABLE` code (§17.1) rather than guessing. No caller populates `requiredCapabilities` yet (n=1 — there is exactly one provider, so any requirement it satisfies is trivially true and any it doesn't makes the field pointless today); Layer 2 ships present-but-unexercised-by-production-traffic, exercised only by the provider-conformance suite (§19.3) using fake registered providers. This is precisely the "Layer 2 frozen as the target but not yet activatable" state ADR-0007 describes.
+When `requiredCapabilities` is non-empty: `routeRequest` calls `registry.findByCapability(requiredCapabilities)`, restricted to `getConfigured()` results, and returns the first match tagged `resolvedBy: "capability"`, or `null` if none match. **"No match, pass through" contract (resolves Freeze §7/ADR-0007's deferred item):** ADR-0007's own phrase admits two readings, both considered here — (a) an _absent_ layer passes its input through unchanged to the layer below (this is what "pass through" means for Layer 3 today, and for Layer 2 when `requiredCapabilities` is omitted, §5.2); (b) a _populated, active_ Layer 2 that finds zero qualifying providers could either hard-fail or gracefully degrade to Layer 1's answer. This design selects hard-fail for reading (b): a `null` result is _not_ silently widened to "return any configured provider anyway" — that would defeat the purpose of a capability requirement ADR-0007 itself calls "hard" ("narrows further... to providers that satisfy hard capability requirements"), and would let a caller silently receive a provider it explicitly said could not serve the request. Callers (Gateway functions) translate `null` into a `BrainRequestError` with the new `PROVIDER_UNAVAILABLE` code (§17.1) rather than guessing. No caller populates `requiredCapabilities` yet (n=1 — there is exactly one provider, so any requirement it satisfies is trivially true and any it doesn't makes the field pointless today); Layer 2 ships present-but-unexercised-by-production-traffic, exercised only by the provider-conformance suite (§19.3) using fake registered providers. This is precisely the "Layer 2 frozen as the target but not yet activatable" state ADR-0007 describes.
 
 ### 5.4 Layer 3 — Policy routing (explicitly not designed)
 
