@@ -305,6 +305,7 @@ These are Phase 7B deliverables. The [Phase 7A report](../phase7a-brain-architec
 - [Phase 7A: Brain Architecture Readiness Review](../phase7a-brain-architecture-readiness.md)
 - [ADR 0001: Behavior Flags](0001-behavior-flags.md)
 - [ADR 0002: Companion State Persistence](0002-companion-state-persistence.md)
+- [ADR 0006: Provider Registry, Capabilities Descriptor, and Adapter Layer](0006-provider-registry-capabilities-descriptor-adapter-layer.md) — extends this ADR's Provider Layer section (Phase 3.2)
 - [Explanation: Architecture](../explanation-architecture.md)
 - [Explanation: Agent](../explanation-agent.md)
 - [Product Identity](../product-identity.md)
