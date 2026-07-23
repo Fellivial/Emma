@@ -17,6 +17,8 @@ Phase 1 and Phase 2 independently identified `BrainTask` as "exactly the right a
 
 The Phase 2 Independent Review's Gap Dependency Map (§2.1) established GAP-01 → GAP-02 as a genuine prerequisite relationship: a Routing Engine selects _between_ provider implementations, so the contract it routes across (GAP-01, addressed by [ADR-0006](0006-provider-registry-capabilities-descriptor-adapter-layer.md)) must be shown to actually abstract more than one backend before capability routing can be soundly designed.
 
+The Freeze's own Architecture Traceability Matrix (§4) additionally names this domain as informing GAP-07 (per-site retry policy; provider-specific vocabulary in shared code): while [ADR-0006](0006-provider-registry-capabilities-descriptor-adapter-layer.md)'s Provider Adapter Layer is GAP-07's primary closure, the Freeze records that "Layered Routing informs future retry-policy placement" — Layer 3 (Policy Routing), once designed, is the layer where a future per-provider retry policy would be expressed, though this ADR does not design that placement.
+
 ## Decision
 
 **Routing is adopted as a layered composition — task routing, capability routing, policy routing — each layer activated only once its precondition is met, rather than as a single mechanism chosen among the three.**
@@ -70,9 +72,10 @@ Each layer is independently addable — a partial router (task-only, or task + c
 ## Traceability
 
 ```
-GAP-02 (no routing/registry exists) ──► Phase 3.1 Freeze §2.2 ──► ADR-0007 ──► Technical Design (Phase 4):
-                                                                                layer-to-layer interface contract
-                                                                                Layer-2 activation precondition check
+GAP-02 (no routing/registry exists)            ─┐
+GAP-07 (routing-relevant portion — future       ├──► Phase 3.1 Freeze §2.2 ──► ADR-0007 ──► Technical Design (Phase 4):
+         retry-policy placement, secondary to   │                                          layer-to-layer interface contract
+         ADR-0006's primary GAP-07 closure)     ─┘                                          Layer-2 activation precondition check
 ```
 
 ## References
