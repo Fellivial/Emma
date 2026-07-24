@@ -12,13 +12,17 @@
  * memory ranking, behavior flags, `[emotion:]`/`[EMMA_ROUTINE]` conventions,
  * Sentry capture policy, and Emma's client-facing SSE envelope.
  *
- * Provider selection: OpenRouter is the sole provider today. Future providers
- * (Ollama, vLLM, LM Studio, an Emma-owned model) are added by implementing
- * `BrainProvider` and extending the selection below — never by touching
- * callers. Routing/registry logic is explicitly out of scope until a second
- * provider exists (ADR 0003, Out of Scope).
+ * Provider selection: OpenRouter is the sole registered provider today,
+ * looked up through the Provider Registry (`registry.ts`, ADR 0006). Future
+ * providers (Ollama, vLLM, LM Studio, an Emma-owned model) are added by
+ * implementing `BrainProvider`, authoring a `CapabilitiesDescriptor`, and
+ * registering both here — never by touching callers. This module's own
+ * provider selection is still a direct Registry lookup, not yet a routing
+ * decision (Wave 6C, ADR 0007, Technical Design §5, introduces the Routing
+ * Engine that supersedes it).
  */
 
+import { createProviderRegistry } from "@/core/brain/registry";
 import { createOpenRouterProvider } from "@/core/brain/providers/openrouter";
 import type {
   BrainChatRequest,
@@ -27,6 +31,7 @@ import type {
   BrainEmbedResult,
   BrainProvider,
   BrainStreamResult,
+  CapabilitiesDescriptor,
 } from "@/core/brain/types";
 
 export type {
@@ -46,26 +51,64 @@ export type {
   BrainToolCall,
   BrainToolDefinition,
   BrainUsage,
+  CapabilitiesDescriptor,
 } from "@/core/brain/types";
+export type { ProviderRegistry, RegisteredProvider } from "@/core/brain/registry";
 
-const provider: BrainProvider = createOpenRouterProvider();
+// Conservative (minimum) advertised context window across BRAIN_MODELS/
+// VISION_MODELS/UTILITY_MODELS' fallback entries (Technical Design §4.3).
+// Static, hand-maintained estimate, not derived from a live OpenRouter API
+// call (out of scope for this phase — the "n=1" accepted risk every ADR in
+// this initiative carries, ADR-0006 Consequences). See Technical Debt
+// Register TD-6A-1 for the verification follow-up.
+const OPENROUTER_CAPABILITIES: CapabilitiesDescriptor = {
+  supportsStreaming: true,
+  supportsVision: true,
+  supportsToolCalling: true,
+  supportsEmbeddings: true,
+  supportsStructuredOutput: true,
+  contextWindowTokens: 128_000,
+};
+
+const registry = createProviderRegistry();
+registry.register(createOpenRouterProvider(), OPENROUTER_CAPABILITIES);
+
+/**
+ * Resolves the provider to invoke. Interim, pre-Routing-Engine lookup
+ * (Wave 6C replaces this with `routeRequest()`, Technical Design §5) — a
+ * direct, zero-behavior-change stand-in for today's module-level `const`.
+ *
+ * Falls through to the sole registered provider when none report
+ * `isConfigured() === true`, so an unconfigured environment (e.g. no
+ * `OPENROUTER_API_KEY` in dev) still reaches that provider's own
+ * configuration error exactly as it did before this wave, rather than a
+ * different Gateway-level error. Wave 6C's `PROVIDER_UNAVAILABLE` contract
+ * (Technical Design §5.3, §17.1) is the intended long-term replacement for
+ * this fallback, once a real routing decision (not just a lookup) exists.
+ */
+function selectedProvider(): BrainProvider {
+  const [configured] = registry.getConfigured();
+  if (configured) return configured.provider;
+  const [fallback] = registry.list();
+  return fallback.provider;
+}
 
 /** One-shot chat/structured/vision completion. */
 export function brainChat(request: BrainChatRequest): Promise<BrainChatResult> {
-  return provider.chat(request);
+  return selectedProvider().chat(request);
 }
 
 /** Streamed completion as normalized events (see BrainStream). */
 export function brainChatStream(request: BrainChatRequest): Promise<BrainStreamResult> {
-  return provider.chatStream(request);
+  return selectedProvider().chatStream(request);
 }
 
 /** Vector embeddings for one or more texts. */
 export function brainEmbed(request: BrainEmbedRequest): Promise<BrainEmbedResult> {
-  return provider.embed(request);
+  return selectedProvider().embed(request);
 }
 
 /** Whether an inference provider is configured in this environment. */
 export function isBrainConfigured(): boolean {
-  return provider.isConfigured();
+  return registry.getConfigured().length > 0;
 }
