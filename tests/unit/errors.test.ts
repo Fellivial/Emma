@@ -66,3 +66,40 @@ describe("fetchWithRetry", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   }, 2000);
 });
+
+describe("fetchWithRetry — shared default retryOn list (Wave 6B, §17.3)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("no longer retries a 529 response by default (relocated to the OpenRouter adapter)", async () => {
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(new Response("overloaded", { status: 529 }));
+
+    const result = await fetchWithRetry(
+      "https://example.test/chat",
+      { method: "POST" },
+      { maxRetries: 2, baseDelay: 1, maxDelay: 5 }
+    );
+
+    expect(result.status).toBe(529);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  }, 2000);
+
+  it("still retries a 500 response by default (unchanged, genuinely cross-provider status)", async () => {
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response("boom", { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const result = await fetchWithRetry(
+      "https://example.test/chat",
+      { method: "POST" },
+      { maxRetries: 2, baseDelay: 1, maxDelay: 5 }
+    );
+
+    expect(result.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  }, 2000);
+});

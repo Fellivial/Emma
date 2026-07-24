@@ -13,8 +13,13 @@
  *   - extractUsage() returns 0s when usage is absent
  */
 
-import { describe, it, expect, afterEach } from "vitest";
-import { openRouterHeaders, extractText, extractUsage } from "@/core/brain/providers/openrouter";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import {
+  openRouterHeaders,
+  extractText,
+  extractUsage,
+  createOpenRouterProvider,
+} from "@/core/brain/providers/openrouter";
 
 describe("openRouterHeaders", () => {
   const ORIGINAL_KEY = process.env.OPENROUTER_API_KEY;
@@ -98,4 +103,43 @@ describe("extractUsage", () => {
     expect(result.inputTokens).toBe(0);
     expect(result.outputTokens).toBe(0);
   });
+});
+
+describe("createOpenRouterProvider — 529 retry override (Wave 6B, §17.3)", () => {
+  const ORIGINAL_KEY = process.env.OPENROUTER_API_KEY;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (ORIGINAL_KEY === undefined) {
+      delete process.env.OPENROUTER_API_KEY;
+    } else {
+      process.env.OPENROUTER_API_KEY = ORIGINAL_KEY;
+    }
+  });
+
+  it("retries a 529 response via its own provider-supplied retryOn override, unaffected by the shared default's 529 removal", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-test-529";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 529,
+        text: () => Promise.resolve("overloaded"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ choices: [{ message: { content: "ok" } }] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createOpenRouterProvider().chat({
+      task: "utility",
+      messages: [],
+      maxRetries: 1,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.ok).toBe(true);
+  }, 5000);
 });

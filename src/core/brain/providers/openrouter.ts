@@ -40,6 +40,11 @@ const TASK_MODELS: Record<BrainTask, string[]> = {
   utility: UTILITY_MODELS,
 };
 
+// 529 is an Anthropic-via-OpenRouter "overloaded" status — provider-specific
+// vocabulary that stays inside this Adapter Layer rather than the shared,
+// genuinely-cross-provider retry default (Wave 6B, Technical Design §17.3).
+const OPENROUTER_RETRY_ON = [429, 500, 502, 503, 529];
+
 export function openRouterHeaders(): Record<string, string> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
@@ -162,6 +167,7 @@ async function sendChatRequest(request: BrainChatRequest, stream: boolean): Prom
     },
     {
       maxRetries: request.maxRetries ?? 0,
+      retryOn: OPENROUTER_RETRY_ON,
       ...(request.timeoutMs !== undefined ? { connectionTimeoutMs: request.timeoutMs } : {}),
     }
   );
@@ -292,7 +298,7 @@ export function createOpenRouterProvider(): BrainProvider {
           headers: openRouterHeaders(),
           body: JSON.stringify({ model: EMBEDDING_MODEL, input: request.texts }),
         },
-        { maxRetries: 0 }
+        { maxRetries: 0, retryOn: OPENROUTER_RETRY_ON }
       );
 
       if (!res.ok) {

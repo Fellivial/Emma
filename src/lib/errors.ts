@@ -48,11 +48,16 @@ interface RetryOptions {
   connectionTimeoutMs?: number; // Abort if no response headers within this window
 }
 
+// 529 (an Anthropic-via-OpenRouter-specific "overloaded" status) is NOT a
+// cross-provider status — it is supplied as a per-call retryOn override by
+// the OpenRouter adapter instead (Wave 6B, Technical Design §17.3, ADR-0006
+// GAP-07). This shared default now contains only genuinely cross-provider
+// retryable statuses.
 const DEFAULT_RETRY: RetryOptions = {
   maxRetries: 3,
   baseDelay: 1000,
   maxDelay: 10000,
-  retryOn: [429, 500, 502, 503, 529],
+  retryOn: [429, 500, 502, 503],
 };
 
 /**
