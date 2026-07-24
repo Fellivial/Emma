@@ -34,4 +34,25 @@ export default [
       "react-hooks/gating": "warn",
     },
   },
+  {
+    // Provider boundary (ADR-0013, Technical Design §11.1): provider
+    // implementations are internal to the Brain Gateway. Everything outside
+    // src/core/brain/ must go through gateway.ts's exported functions.
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: ["src/core/brain/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/core/brain/providers/*"],
+              message:
+                "Provider implementations are internal to the Brain Gateway (ADR-0003 Principle 1, ADR-0013). Import from @/core/brain/gateway instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

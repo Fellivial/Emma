@@ -153,6 +153,28 @@ export type BrainStreamResult =
   | { ok: true; stream: BrainStream }
   | { ok: false; error: BrainRequestError };
 
+// ─── Capabilities ────────────────────────────────────────────────────────────
+
+/**
+ * Declared, queryable capabilities of a registered provider (ADR 0006).
+ *
+ * Boolean-per-capability, provider-level (not per-model) — every capability
+ * the codebase exercises today is used as a hard yes/no gate at each call
+ * site, so a negotiation protocol would be speculative machinery for a
+ * distinction (partial capability support) that does not exist anywhere in
+ * the current code (Technical Design §4.1).
+ */
+export interface CapabilitiesDescriptor {
+  supportsStreaming: boolean;
+  supportsVision: boolean;
+  supportsToolCalling: boolean;
+  supportsEmbeddings: boolean;
+  /** responseFormat / json_schema generation. */
+  supportsStructuredOutput: boolean;
+  /** Conservative (minimum) context window across this provider's task-tier model set, in tokens. */
+  contextWindowTokens: number;
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 /**
